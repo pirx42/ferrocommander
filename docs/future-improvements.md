@@ -34,11 +34,12 @@ The keymap table and the navigation targets are unit-tested, but the wiring
 between a physical keypress and those functions — the GTK controller, its
 capture phase, the focus handling — has no test behind it.
 
-Manually confirmed working by the owner on 2026-08-28: `Tab`, `Enter`,
-`Backspace`, `Home`/`End` and the arrow cursors. `Ctrl+Q` has not been
-exercised. That same session found a real bug the unit tests could not see —
-stepping up left the cursor on `..` instead of the directory just left —
-which is the argument for this gap mattering. So the wiring is known good today; what is missing is a regression
+Every phase-1 binding was manually confirmed by the owner on 2026-08-28. That
+same session also found a bug no unit test could see — stepping up left the
+cursor on `..` instead of the directory just left — while 74 tests passed.
+Each unit was correct; the composition was not. That is the argument for this
+gap mattering, and for the manual pass being repeated whenever the shell
+grows. So the wiring is known good today; what is missing is a regression
 net, and a future refactor could break it silently.
 *Home:* would need a way to synthesize keystrokes in the session, or
 `gtk::test` smoke tests as the design doc's testing section anticipates.
