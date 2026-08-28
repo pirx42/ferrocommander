@@ -1,6 +1,6 @@
 # Phase 1 Implementation Plan — Walking Skeleton
 
-Status: In Progress — sub-phase 0 done
+Status: In Progress — sub-phases 0, A done
 
 *2026-08-28 — implements phase 1 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -75,6 +75,18 @@ Each sub-phase is independently green (`cargo fmt --all -- --check`,
 `cargo test --workspace`, `cargo build --release`) and ends in a
 conventional commit (skill [31](../skills/31-conventional-commit.md)).
 
+**Both platforms are build targets** (owner spec, 2026-08-28). Since a Linux
+build never compiles the `cfg(windows)` half, the gate carries a fifth
+command:
+
+```bash
+cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+```
+
+`cargo check`-style verification needs no Windows linker, so this runs on the
+Linux box. It is not ceremony — it caught a Windows-only build break on its
+first run in sub-phase A.
+
 ### 0 — Workspace bootstrap
 
 *Commit:* `chore(workspace): initialize cargo workspace tc-core + tc-app`
@@ -113,8 +125,17 @@ itself.
   boundary type that later lets `ArchiveFs` reuse the same addressing without
   a `PathBuf` leaking archive-internal paths into `std::fs` calls.
 - `LocalFs` — `std::fs` implementation. Symlinks are reported as
-  `EntryKind::Symlink` with the *target's* size/kind resolved separately, so
-  the UI can show them without following broken links.
+  `EntryKind::Symlink(SymlinkTarget)` where the target is `Dir`, `File` or
+  `Broken`, so the UI can show them without following broken links.
+  `Entry::is_dir()` answers "can I descend into this", true for directories
+  and symlinks to directories alike.
+- `Entry.hidden` is set by the *backend*. This changed when both platforms
+  became targets: on Windows, hidden is `FILE_ATTRIBUTE_HIDDEN`, which the
+  listing layer cannot derive from the name, so the flag must come from the
+  filesystem rather than from a dot-prefix rule in `listing`.
+- `vfs/platform.rs` holds every Linux/Windows difference behind three
+  functions (`to_std_path`, `is_hidden`, `root_entries`), so adding a
+  platform touches one file instead of scattering `cfg` blocks.
 
 **Decision — why the trait is not the full design-doc trait yet.**
 The design doc lists `open/read/write, rename, mkdir, remove` on
@@ -136,9 +157,25 @@ implementation and its conservation-invariant tests
 - Symlink to a file, symlink to a directory, broken symlink.
 - Unicode and space-containing names survive the round trip.
 
-*Docs:* `docs/vfs.md` — the trait contract, the `VfsPath` invariant, and the
-"why" of the read-only phase-1 surface (skills
-[29](../skills/29-one-topic-per-doc.md), [30](../skills/30-document-the-why.md)).
+*Docs:* [docs/vfs.md](../vfs.md) — the trait contract, the `VfsPath`
+invariant, the platform table, and the "why" of the read-only phase-1 surface
+(skills [29](../skills/29-one-topic-per-doc.md),
+[30](../skills/30-document-the-why.md)).
+
+**Done.** 28 tests green on Linux; the Windows branch clippy-clean via the
+cross-target check.
+
+*Decision — the Windows VFS root is the drive list.* Windows has no single
+filesystem root, so `/` must mean something. Making it the list of drives
+keeps `VfsPath` uniform across platforms and hands the design doc's drive
+selector to the UI for free: a pane at `/` on Windows shows `C:`, `D:`, … as
+directories, exactly as Total Commander does.
+
+*Follow-up (deliberately deferred, not forgotten).* If an entry disappears
+between `read_dir` enumerating it and `stat` reading it, the whole listing
+fails with `NotFound` rather than omitting the vanished entry. Skipping it
+would need an injection seam to be testable at all, so the version with no
+untested code shipped; phase 3's refresh logic is where this belongs.
 
 ### B — `tc-core::listing`: directory model
 
@@ -274,10 +311,13 @@ environment gate (section 3), which is owner-side setup.
   version; pin the crate feature to the version actually installed rather
   than the newest, otherwise the release build fails on the dev box while
   passing locally.
-- **Windows dev box.** The root CLAUDE.md notes development currently happens
-  on Windows while the target is Linux. `LocalFs` is written against Linux
-  semantics (dot-file hiding, symlinks, permission errors); if Windows must
-  build too, that is a separate decision, not a phase-1 silent accommodation.
+- ~~**Windows dev box.**~~ **Resolved 2026-08-28 (owner spec): Windows and
+  Linux are both supported targets.** Consequences already absorbed in
+  sub-phase A — `Entry.hidden` comes from the backend, `vfs/platform.rs`
+  isolates the divergence, the VFS root is the drive list on Windows, and the
+  gate cross-compiles the Windows branch. Still unverified on real hardware:
+  nothing here has been *run* on Windows, only compile-checked. GTK4 on
+  Windows (sub-phase C) is the next place this needs attention.
 - **Branch workflow.** Skill [10](../skills/10-plan-lifecycle.md) prescribes a
   topic branch on `dev`, but skill 64 is marked Chimera-only and this repo has
   only `main`. Decide before sub-phase 0 whether to adopt `dev` + topic
@@ -294,5 +334,6 @@ environment gate (section 3), which is owner-side setup.
   `cargo test --workspace`, `cargo build --release` all green.
 - `docs/vfs.md`, `docs/listing.md`, `docs/ui-shell.md`, `docs/keymap.md`
   exist and are linked from [docs/CLAUDE.md](../CLAUDE.md).
+- The Windows cross-target clippy check is green alongside the Linux gate.
 - Sub-phase E is done, and this document's Status becomes `Implemented`
   with the commit hashes, per skill [10](../skills/10-plan-lifecycle.md).

@@ -5,6 +5,8 @@
 //! plain `cargo test` against tempdirs, which is what keeps the UI layer thin
 //! enough to be verified by hand.
 
+pub mod vfs;
+
 /// Version of the engine, taken from the crate manifest.
 ///
 /// The UI reports this rather than carrying its own version string, so the two
