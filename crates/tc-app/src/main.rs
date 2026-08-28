@@ -4,6 +4,11 @@
 //! keystroke up in the keymap, and forwards to `tc-core`, which owns every
 //! decision about what a directory contains and how it is ordered.
 
+/// Compiled only for the tests. `build.rs` is the one that uses it, through
+/// `include!`; the crate pulls it in so its rule gets ordinary unit tests,
+/// which a build script's own never are.
+#[cfg(test)]
+mod build_stamp;
 mod constants;
 mod dialogs;
 mod jobs;
@@ -26,7 +31,7 @@ use tc_core::ops::{DeleteMode, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
-    APP_ID, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, LEFT_PANE, PANE_COUNT,
+    APP_ID, APP_TITLE, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, LEFT_PANE, PANE_COUNT,
     PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
     PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY,
     SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
@@ -633,7 +638,7 @@ fn build_window(app: &gtk::Application) {
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title(constants::window_title())
+        .title(APP_TITLE)
         .default_width(settings.window.width)
         .default_height(settings.window.height)
         .child(&layout)

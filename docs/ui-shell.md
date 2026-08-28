@@ -214,12 +214,35 @@ read off a title bar and long enough to find the commit. Read from git rather
 than kept in a file, because a number somebody has to remember to bump is a
 number that stops describing the binary.
 
+**`APP_TITLE` is a `&'static str` constant**, not a function. The build script
+hands over the finished tail (` #527 (ef8b326)`) through one environment
+variable and `concat!` joins it to the product name at compile time. The
+complete string lands in the binary's rodata as one literal, and nothing
+assembles it when the app runs.
+
+The name is a `macro_rules!` returning a literal, because `concat!` takes
+literals — that keeps its spelling in one place rather than once as a constant
+and once inside the concatenation.
+
+Nothing is written into the source tree. A build script that edited
+`constants.rs` would leave the working tree dirty after every build and put a
+generated value under version control, where the next commit either carries a
+stale number or a real one that is wrong the moment anything else is
+committed.
+
 **A missing git is not a build failure.** Building from a source tarball, or
 in an image without git, leaves both values empty and the title falls back to
 the bare product name — not to a placeholder like `#0 (unknown)`, which looks
 like a build that exists when the point of the title is that it names one that
-does. There is a unit test for that fallback and another asserting *this*
-binary was stamped, which is the half that actually breaks.
+does.
+
+That rule lives in `crates/tc-app/src/build_stamp.rs`, which **two things
+compile**: `build.rs` pulls it in with `include!`, and the crate compiles it
+under `cfg(test)`. A build script's own tests are never run by `cargo test`,
+and the no-git case is exactly the one that cannot be reproduced by building
+this crate a second way — so the rule is shared rather than the test given up.
+A separate test asserts *this* binary was stamped at all, which is the half
+that actually breaks.
 
 The build script rebuilds on a commit and not otherwise: it watches
 `.git/HEAD` and the branch file HEAD points at. Watching `.git/index` instead
