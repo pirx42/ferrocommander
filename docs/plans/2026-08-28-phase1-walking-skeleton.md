@@ -1,6 +1,6 @@
 # Phase 1 Implementation Plan — Walking Skeleton
 
-Status: Draft
+Status: In Progress — sub-phase 0 done
 
 *2026-08-28 — implements phase 1 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -52,24 +52,21 @@ fully testable without a display server.
 
 ## 3. Environment gate (blocking, before phase 0)
 
-Verified 2026-08-28 on the Linux dev box: **absent.**
-
-```
-cargo    → not found
-rustc    → not found
-gtk4.pc  → not found by pkg-config
-```
-
-Needed before any build:
+**Satisfied 2026-08-28.** The box had none of it; installed since:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # rustup + stable
-sudo apt install libgtk-4-dev build-essential pkg-config          # GTK4 headers
+sudo apt install -y build-essential pkg-config libgtk-4-dev       # linker + GTK4 headers
 ```
 
-Installing system packages is the owner's call, not an agent action — this
-gate is checked off explicitly before sub-phase 0 starts. Verification:
-`cargo --version && pkg-config --modversion gtk4` both succeed.
+Resulting versions: rustc/cargo **1.98.0**, GTK **4.22.4**.
+
+`build-essential` is not optional garnish: rustc links through the `cc`
+driver, so without it every `cargo test` and `cargo build` fails with
+``linker `cc` not found`` while `fmt` and `clippy` still pass — a green-looking
+gate that never linked anything.
+
+Verification: `cargo --version && pkg-config --modversion gtk4` both succeed.
 
 ## 4. Sub-phases
 
@@ -96,6 +93,11 @@ conventional commit (skill [31](../skills/31-conventional-commit.md)).
   `crates/CLAUDE.md` with the `← Parent` link describing the two-layer split.
 
 *Exit criterion:* the four gate commands pass on an empty workspace.
+
+**Done.** The smoke tests are deliberately wired across the crate boundary —
+`tc-app` renders its banner from `tc_core::version()` — so they fail if the
+workspace dependency edge breaks, rather than asserting a constant against
+itself.
 
 ### A — `tc-core::vfs`: trait + `LocalFs` (read side)
 

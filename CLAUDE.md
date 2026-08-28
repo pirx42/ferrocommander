@@ -40,12 +40,15 @@ The project is in its build-up phase; this table grows with the code.
 | Task | Entry point |
 |---|---|
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
+| What is being built right now | [docs/plans/2026-08-28-phase1-walking-skeleton.md](docs/plans/2026-08-28-phase1-walking-skeleton.md) |
+| Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |
 | New plan document | `docs/plans/YYYY-MM-DD-<topic>.md` (skill [10](docs/skills/10-plan-lifecycle.md)) |
 
 ## Documentation
 
 Entry point: [docs/CLAUDE.md](docs/CLAUDE.md) — index of all doc files.
+Workspace layout and the tc-core/tc-app boundary: [crates/CLAUDE.md](crates/CLAUDE.md).
 Every directory with its own semantics gets its own `CLAUDE.md` with a
 `← Parent` link (pattern adopted from the Chimera project).
 

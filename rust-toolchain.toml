@@ -1,0 +1,5 @@
+# Pins the channel and the components the green gate needs, so `cargo fmt` and
+# `cargo clippy` behave identically on every machine that checks out the repo.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
