@@ -78,6 +78,26 @@ impl VfsPath {
     pub fn as_str(&self) -> &str {
         &self.inner
     }
+
+    /// Whether this path lies strictly below `directory`.
+    ///
+    /// Compared by whole components, not as text: `/home/pirx2` is not inside
+    /// `/home/pirx`, and reading it as one is how a copy comes to refuse a
+    /// perfectly good target — or, worse, to accept a job that writes into its
+    /// own source. A path is not inside itself.
+    ///
+    /// The component walk also settles the root, which a prefix test gets
+    /// wrong in the dangerous direction: stripping `/` off `/home` leaves
+    /// `home`, which starts with no separator, so `/home` read as *not* inside
+    /// `/`. Every path on Unix is under the root, and the mount rule asks
+    /// exactly that question about every path there is.
+    pub fn is_inside(&self, directory: &VfsPath) -> bool {
+        let mut mine = self.components();
+        // An empty `all` is true, which is the root having no components to
+        // match — and a path equal to `directory` runs `mine` out, so nothing
+        // is inside itself.
+        directory.components().all(|part| mine.next() == Some(part)) && mine.next().is_some()
+    }
 }
 
 impl fmt::Display for VfsPath {
@@ -89,6 +109,34 @@ impl fmt::Display for VfsPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn everything_is_inside_the_root_except_the_root() {
+        // A prefix test gets this wrong in the dangerous direction, and the
+        // mount rule asks it about every path there is.
+        for path in ["/home", "/home/pirx", "/mnt/backup/2026"] {
+            assert!(
+                VfsPath::new(path).is_inside(&VfsPath::root()),
+                "{path} is not under /"
+            );
+        }
+        assert!(!VfsPath::root().is_inside(&VfsPath::root()));
+    }
+
+    #[test]
+    fn a_neighbour_sharing_a_name_prefix_is_not_inside() {
+        // Whole components, not text. Reading it as text is how a copy comes
+        // to refuse a perfectly good target, or accept one that eats itself.
+        assert!(!VfsPath::new("/home/pirx2").is_inside(&VfsPath::new("/home/pirx")));
+        assert!(VfsPath::new("/home/pirx/notes").is_inside(&VfsPath::new("/home/pirx")));
+    }
+
+    #[test]
+    fn nothing_is_inside_itself_or_its_own_children() {
+        let path = VfsPath::new("/home/pirx");
+        assert!(!path.is_inside(&path));
+        assert!(!path.is_inside(&VfsPath::new("/home/pirx/notes")));
+    }
 
     #[test]
     fn every_input_normalizes_to_an_absolute_path() {

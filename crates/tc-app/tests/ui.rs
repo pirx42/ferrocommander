@@ -731,16 +731,17 @@ fn drive_at(index: usize) -> String {
 fn alt_f1_sends_the_left_pane_to_a_drive() {
     let app = in_src_and_dst(arrange);
 
-    app.key("alt+F1");
-    app.focus_dialog(DIALOG_DRIVES);
-    // The list opens focused with the first row selected, so Enter takes it
-    // without a click first.
-    app.key("Return");
-    app.await_dialog_closed(DIALOG_DRIVES);
+    // The second mount rather than the first: the pane is already on the
+    // first one, and a drive now remembers where it was left, so picking it
+    // would land the pane back where it started and prove nothing.
+    pick_drive(&app, 1);
 
-    app.await_mentions(SETTINGS_FILE, "directory");
-    let home = app.kill();
-    assert_eq!(recorded_directories(home.path())[0], drive_at(0));
+    // Closed rather than killed: the settings write is debounced, and
+    // `await_mentions` cannot wait for it here — the file already says
+    // "directory" from an earlier save, so there is no new text to watch for.
+    // The close handler flushes, which makes this exact rather than lucky.
+    let home = app.close();
+    assert_eq!(recorded_directories(home.path())[0], drive_at(1));
 }
 
 #[test]
@@ -753,13 +754,19 @@ fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
     // The left pane has the keyboard after `in_src_and_dst`.
     app.key("alt+F2");
     app.focus_dialog(DIALOG_DRIVES);
+    // Down to the second mount, which no pane has been on, so arriving there
+    // is visible rather than a return to where this pane already was.
+    app.key("Down");
     app.key("Return");
     app.await_dialog_closed(DIALOG_DRIVES);
 
-    app.await_mentions(SETTINGS_FILE, "directory");
-    let home = app.kill();
+    // Closed rather than killed: the settings write is debounced, and
+    // `await_mentions` cannot wait for it here — the file already says
+    // "directory" from an earlier save, so there is no new text to watch for.
+    // The close handler flushes, which makes this exact rather than lucky.
+    let home = app.close();
     let recorded = recorded_directories(home.path());
-    assert_eq!(recorded[1], drive_at(0), "the right pane did not move");
+    assert_eq!(recorded[1], drive_at(1), "the right pane did not move");
     assert!(
         recorded[0].ends_with("/src"),
         "the left pane moved too: {}",
@@ -780,9 +787,108 @@ fn the_drive_list_opens_focused_so_the_arrows_work_without_a_click() {
     app.key("Return");
     app.await_dialog_closed(DIALOG_DRIVES);
 
-    app.await_mentions(SETTINGS_FILE, "directory");
-    let home = app.kill();
+    // Closed rather than killed: the settings write is debounced, and
+    // `await_mentions` cannot wait for it here — the file already says
+    // "directory" from an earlier save, so there is no new text to watch for.
+    // The close handler flushes, which makes this exact rather than lucky.
+    let home = app.close();
     assert_eq!(recorded_directories(home.path())[0], drive_at(1));
+}
+
+/// Opens the drive list on the left pane and takes the `index`-th place.
+fn pick_drive(app: &App, index: usize) {
+    app.focus_main();
+    app.key("alt+F1");
+    app.focus_dialog(DIALOG_DRIVES);
+    for _ in 0..index {
+        app.key("Down");
+    }
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_DRIVES);
+}
+
+#[test]
+fn a_drive_remembers_the_directory_it_was_left_in() {
+    // Total Commander's behaviour with its default AlwaysToRoot=0: switching
+    // away from a drive and back is not a trip to the root and a walk down
+    // again. The pane starts in `src`, which is on the root mount.
+    let app = in_src_and_dst(arrange);
+
+    // Away to another mount, then back to the root one.
+    pick_drive(&app, 1);
+    pick_drive(&app, 0);
+
+    // Closed rather than killed: the settings write is debounced, and
+    // `await_mentions` cannot wait for it here — the file already says
+    // "directory" from an earlier save, so there is no new text to watch for.
+    // The close handler flushes, which makes this exact rather than lucky.
+    let home = app.close();
+    assert!(
+        recorded_directories(home.path())[0].ends_with("/src"),
+        "the drive forgot where it was left: {}",
+        recorded_directories(home.path())[0]
+    );
+}
+
+#[test]
+fn the_two_panes_share_what_a_drive_remembers() {
+    // As in Total Commander, where leaving a drive in one panel is what the
+    // other finds when it arrives there.
+    let app = in_src_and_dst(arrange);
+
+    // Both panes start on the first mount — the left in src, the right in
+    // dst. Send them both to the second mount. The right pane leaves last, so
+    // the first mount's memory ends up saying `dst`.
+    pick_drive(&app, 1);
+    app.focus_main();
+    app.key("alt+F2");
+    app.focus_dialog(DIALOG_DRIVES);
+    app.key("Down");
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_DRIVES);
+
+    // Now bring the *left* pane back to the first mount. It lands in dst,
+    // which only the other pane has ever been in.
+    pick_drive(&app, 0);
+
+    // Closed rather than killed: the settings write is debounced, and
+    // `await_mentions` cannot wait for it here — the file already says
+    // "directory" from an earlier save, so there is no new text to watch for.
+    // The close handler flushes, which makes this exact rather than lucky.
+    let home = app.close();
+    assert!(
+        recorded_directories(home.path())[0].ends_with("/dst"),
+        "the pane did not inherit what the other one left on that drive: {}",
+        recorded_directories(home.path())[0]
+    );
+}
+
+#[test]
+fn a_remembered_directory_that_has_gone_falls_back_to_the_drive_itself() {
+    // An unplugged disk or a deleted folder must not leave the pane showing
+    // an error about a path the user never asked for by name.
+    let app = App::launch(|home| {
+        arrange(home);
+        std::fs::create_dir(home.join("temporary")).unwrap();
+    });
+    // Into `temporary`, so the root mount remembers it. `..`, dst, nested is
+    // not here — the home directory holds dst, src, temporary.
+    app.keys(&["Home", "Down", "Down", "Down", "Return"]);
+
+    pick_drive(&app, 1);
+    std::fs::remove_dir(app.path("temporary")).unwrap();
+    pick_drive(&app, 0);
+
+    // Closed rather than killed: the settings write is debounced, and
+    // `await_mentions` cannot wait for it here — the file already says
+    // "directory" from an earlier save, so there is no new text to watch for.
+    // The close handler flushes, which makes this exact rather than lucky.
+    let home = app.close();
+    assert_eq!(
+        recorded_directories(home.path())[0],
+        drive_at(0),
+        "a directory that had gone was not replaced by the drive itself"
+    );
 }
 
 #[test]
@@ -797,8 +903,11 @@ fn escape_leaves_the_drive_selector_without_going_anywhere() {
     app.await_dialog_closed(DIALOG_DRIVES);
 
     app.focus_main();
-    app.await_mentions(SETTINGS_FILE, "directory");
-    let home = app.kill();
+    // Closed rather than killed: the settings write is debounced, and
+    // `await_mentions` cannot wait for it here — the file already says
+    // "directory" from an earlier save, so there is no new text to watch for.
+    // The close handler flushes, which makes this exact rather than lucky.
+    let home = app.close();
     assert!(
         recorded_directories(home.path())[0].ends_with("/src"),
         "escaping the drive list still moved the pane"

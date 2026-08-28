@@ -51,6 +51,12 @@ struct Shell {
     /// What was last written. Compared against the current state so that
     /// moving the cursor around does not rewrite an identical file.
     saved: config::Settings,
+    /// Where each mount point was last showing, keyed by mount path.
+    ///
+    /// On the shell rather than on a pane, because it is shared: leaving a
+    /// drive in one pane is what the other finds when it arrives there, which
+    /// is how Total Commander behaves.
+    drives: std::collections::BTreeMap<String, String>,
     /// The default bindings with the user's own laid over them. Read on every
     /// keystroke and never changed again, so it is built once at startup.
     keymap: Keymap,
@@ -74,6 +80,7 @@ impl Shell {
             queue: JobQueue::new(),
             window: window.downgrade(),
             config_root,
+            drives: saved.drives.clone(),
             saved,
             keymap,
             save_queued: false,
@@ -116,6 +123,7 @@ impl Shell {
             // has a [keys] table, and the first keystroke of every run would
             // write their file for no reason.
             keys: self.saved.keys.clone(),
+            drives: self.drives.clone(),
             ..config::Settings::default()
         };
         settings.active_pane = self.active;
@@ -232,6 +240,41 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     remember(shell);
 }
 
+/// Sends a pane to a mount point, landing where that mount was last showing.
+///
+/// Total Commander's behaviour with its default `AlwaysToRoot=0`: a drive
+/// remembers the directory you left it in, so switching away and back is not
+/// a trip to the root and a walk down again. The memory is shared between the
+/// panes, as it is there.
+///
+/// A remembered directory that has since gone — an unplugged disk, a deleted
+/// folder — falls back to the mount itself rather than leaving the pane
+/// showing an error about a path the user never asked for by name.
+fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &VfsPath) {
+    let mut state = shell.borrow_mut();
+
+    // Where the pane is now belongs to whatever drive it is on, and has to be
+    // put away before the pane leaves it.
+    let leaving = state.panes[target].listing().dir().clone();
+    if let Some(from) = tc_core::vfs::mount_for(&leaving, &tc_core::vfs::mount_points()) {
+        state
+            .drives
+            .insert(from.as_str().to_string(), leaving.to_string());
+    }
+
+    let remembered = state
+        .drives
+        .get(mount.as_str())
+        .map(|dir| VfsPath::new(dir));
+    let arriving = remembered.unwrap_or_else(|| mount.clone());
+    state.panes[target].go_to(arriving);
+    if state.panes[target].went_wrong() {
+        state.panes[target].go_to(mount.clone());
+    }
+    drop(state);
+    remember(shell);
+}
+
 /// Alt+F1 / Alt+F2: offer `target` a list of places to go.
 ///
 /// The pane is named by the key, not by which one has the keyboard — the F-key
@@ -249,11 +292,10 @@ fn start_drive_selection(shell: &Rc<RefCell<Shell>>, target: usize) {
 
     let shell = shell.clone();
     dialogs::choose_place(&window, TITLE_DRIVES, &places, move |path| {
-        shell.borrow_mut().panes[target].go_to(VfsPath::new(&path));
-        // The pane moved, which is worth remembering — and the keystroke that
-        // opened the dialog returned long before this answer arrived, so the
-        // one call at the end of `dispatch` has already been and gone.
-        remember(&shell);
+        // `go_to_drive` remembers for us — and it has to, because the
+        // keystroke that opened this dialog returned long before the answer
+        // arrived, so the one call at the end of `dispatch` has been and gone.
+        go_to_drive(&shell, target, &VfsPath::new(&path));
     });
 }
 
@@ -634,8 +676,12 @@ fn fill_drive_bar(bar: &gtk::Box, shell: &Rc<RefCell<Shell>>) {
         let shell = shell.clone();
         let path = mount.path.clone();
         button.connect_clicked(move |_| {
-            shell.borrow_mut().active_pane().go_to(path.clone());
-            remember(&shell);
+            // The active pane, because that is the one the keyboard is in and
+            // the one the user is looking at. Through the same helper as
+            // Alt+F1, so a drive remembers where it was left however it was
+            // reached.
+            let target = shell.borrow().active;
+            go_to_drive(&shell, target, &path);
         });
         bar.append(&button);
     }

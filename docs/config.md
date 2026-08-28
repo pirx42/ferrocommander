@@ -47,6 +47,18 @@ closing it (`settings_survive_the_app_being_killed`,
 `crates/tc-app/tests/ui.rs`) — with a close handler in play, a save-on-exit
 implementation would pass a test that closed politely.
 
+## `[drives]` — where each drive was last showing
+
+A mount path to the directory a pane last had open on it, so `Alt+F1` lands
+where you were rather than at the root ([keymap.md](keymap.md)). Written by
+the app like everything but `[keys]`.
+
+Shared by both panes and keyed by the **longest** mount a path is under, since
+mounts nest: a file under `/mnt/backup` belongs to the backup drive, not to
+`/`. `vfs::mount_for` decides that, and it takes the mount list as an argument
+so the rule is tested against a made-up machine rather than whatever the test
+host has mounted.
+
 ## `[keys]` — the bindings, which belong to the user
 
 The defaults are the keymap in [keymap.md](keymap.md); a `[keys]` table in

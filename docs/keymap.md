@@ -123,6 +123,23 @@ rule to `Ctrl+←/→` below, and deliberately — an arrow has a direction to b
 relative to, and a number does not. The test presses `Alt+F2` from the left
 pane, since that is the only way to tell the two rules apart.
 
+**A drive remembers the directory it was left in.** Switching away and back
+is not a trip to the root and a walk down again — Total Commander's behaviour
+with its default `AlwaysToRoot=0`. The memory is **shared between the panes**,
+as it is there: leaving a drive in one pane is what the other finds when it
+arrives, and whichever pane left a drive most recently is the one that decides.
+It survives a restart, in the `[drives]` table of [config.md](config.md), and a
+remembered directory that has since gone falls back to the drive itself rather
+than leaving the pane showing an error about a path nobody asked for by name.
+
+The drive-bar buttons go through the same code, so a drive remembers where it
+was left however it was reached.
+
+**What is *not* carried across**, because TC does not carry it either: the
+marks are cleared and the cursor starts at the top. Leaving a directory drops
+its selection, and coming back lands on the first row — the same in TC, which
+is why this is a matching behaviour rather than a missing one.
+
 **It is a modal window, where TC has a dropdown.** A GTK popover is not a
 window the end-to-end suite can find or send keys to, and a drive selector
 that cannot be tested through a real key press is the kind of thing that ships

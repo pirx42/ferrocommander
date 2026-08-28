@@ -24,6 +24,24 @@ pub fn mount_points() -> Vec<Mount> {
     platform::mount_points()
 }
 
+/// Which mount `path` sits on: the longest one it is at or inside.
+///
+/// Longest, because mounts nest — `/mnt/backup` is inside `/`, and a file
+/// under it belongs to the backup drive rather than to the root. Taking the
+/// first match instead would put everything on `/` on Unix, where `/` is a
+/// prefix of every path there is.
+///
+/// The mounts are passed in rather than read here, so the rule can be tested
+/// against a made-up machine instead of whatever the test host happens to
+/// have mounted.
+pub fn mount_for(path: &VfsPath, mounts: &[Mount]) -> Option<VfsPath> {
+    mounts
+        .iter()
+        .filter(|mount| *path == mount.path || path.is_inside(&mount.path))
+        .max_by_key(|mount| mount.path.as_str().len())
+        .map(|mount| mount.path.clone())
+}
+
 /// The attributes of an entry, written the way the platform writes them:
 /// `rwxr-xr-x` on Unix, `RHSA` on Windows.
 pub fn render_attributes(attributes: Attributes) -> String {
@@ -101,4 +119,72 @@ pub trait VirtualFs: Send + Sync {
     /// knows whether its storage has such a thing. Phase 6's archives will
     /// not.
     fn trash(&self, path: &VfsPath) -> Result<(), VfsError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A machine with nested mounts, which is the only case where the rule
+    /// has anything to decide.
+    fn mounts() -> Vec<Mount> {
+        ["/", "/mnt/backup", "/mnt/backup/old"]
+            .iter()
+            .map(|path| Mount {
+                path: VfsPath::new(path),
+                label: path.to_string(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_path_belongs_to_the_longest_mount_it_is_under() {
+        // Taking the first match instead would put everything on `/`, which is
+        // a prefix of every path on Unix there is.
+        for (path, expected) in [
+            ("/home/pirx", "/"),
+            ("/mnt/backup", "/mnt/backup"),
+            ("/mnt/backup/2026", "/mnt/backup"),
+            ("/mnt/backup/old", "/mnt/backup/old"),
+            ("/mnt/backup/old/2019", "/mnt/backup/old"),
+        ] {
+            assert_eq!(
+                mount_for(&VfsPath::new(path), &mounts()),
+                Some(VfsPath::new(expected)),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_mount_owns_itself() {
+        // The pane standing *on* a drive's root is the ordinary case, and a
+        // rule that only matched things strictly below would miss it.
+        assert_eq!(
+            mount_for(&VfsPath::new("/mnt/backup"), &mounts()),
+            Some(VfsPath::new("/mnt/backup"))
+        );
+    }
+
+    #[test]
+    fn a_neighbour_sharing_a_name_prefix_is_not_inside() {
+        // Whole components, not text: `/mnt/backup2` is not on the backup
+        // drive, and reading it as one would file its directory under the
+        // wrong mount and send the user somewhere else entirely.
+        assert_eq!(
+            mount_for(&VfsPath::new("/mnt/backup2/2026"), &mounts()),
+            Some(VfsPath::new("/"))
+        );
+    }
+
+    #[test]
+    fn a_path_on_no_mount_at_all_belongs_nowhere() {
+        // Windows, where a path on an unlisted drive has no mount to be filed
+        // under, and inventing one would record it against the wrong disk.
+        let mounts = [Mount {
+            path: VfsPath::new("/mnt/backup"),
+            label: "backup".to_string(),
+        }];
+        assert_eq!(mount_for(&VfsPath::new("/home/pirx"), &mounts), None);
+    }
 }

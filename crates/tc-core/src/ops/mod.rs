@@ -122,12 +122,6 @@ pub fn run(
 ///
 /// Compared on whole components — `/a/bc` is not inside `/a/b`, however much
 /// the strings look alike.
-fn is_inside(path: &VfsPath, directory: &VfsPath) -> bool {
-    path.as_str()
-        .strip_prefix(directory.as_str())
-        .is_some_and(|rest| rest.starts_with(crate::vfs::constants::SEPARATOR))
-}
-
 /// Whether the job carries on after a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Flow {
@@ -269,7 +263,7 @@ impl Run<'_> {
             let target = destination.of(source);
             let refusal = if target == *source {
                 Some(ONTO_ITSELF)
-            } else if is_inside(&target, source) {
+            } else if target.is_inside(source) {
                 Some(INTO_ITSELF)
             } else {
                 None

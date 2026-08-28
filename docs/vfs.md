@@ -201,3 +201,24 @@ which is what the size and date columns are about — keep their date.
 
 Both live in [future-improvements.md](future-improvements.md) with their
 reasons.
+
+## Which drive a path is on
+
+`mount_for(path, mounts)` answers it, and answers with the **longest** mount
+the path is at or inside: mounts nest, so a file under `/mnt/backup` belongs to
+the backup drive rather than to `/`. Taking the first match instead would put
+everything on `/` on Unix, where `/` is a prefix of every path there is. The
+mounts are a parameter rather than read inside, so the rule is testable against
+a made-up machine.
+
+`VfsPath::is_inside` is what it compares with, and it compares **whole
+components**: `/home/pirx2` is not inside `/home/pirx`. Reading it as a text
+prefix is how a copy comes to refuse a perfectly good target — or, worse, to
+accept a job that writes into its own source, which is why `ops` uses the same
+function.
+
+That component walk also settles the root, which a prefix test got wrong in
+the dangerous direction: stripping `/` off `/home` leaves `home`, which starts
+with no separator, so `/home` read as *not* inside `/`. Nothing noticed while
+only `ops` used it; the mount rule asks that question about every path there
+is, and failed on the first one.

@@ -488,6 +488,11 @@ impl PaneView {
         self.filter_bar.set_visible(!filter.is_empty());
     }
 
+    /// Whether the last navigation failed and left the pane where it was.
+    pub fn went_wrong(&self) -> bool {
+        self.error.is_some()
+    }
+
     /// Where the cursor is, and the last row it could be on.
     pub fn cursor(&self) -> usize {
         self.listing.cursor()

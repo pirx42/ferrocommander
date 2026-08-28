@@ -43,6 +43,13 @@ pub struct Settings {
     pub panes: Vec<PaneSettings>,
     /// Which pane had the keyboard.
     pub active_pane: usize,
+    /// The directory each mount point was last showing, keyed by mount path.
+    ///
+    /// What makes switching to a drive land where you were on it rather than
+    /// at its root — Total Commander's behaviour with its default
+    /// `AlwaysToRoot=0`. Shared by both panes, as it is there: leaving a drive
+    /// in one pane is what the other finds when it arrives.
+    pub drives: BTreeMap<String, String>,
     /// Key bindings the user has overridden, keyed by key name.
     ///
     /// Strings on both sides, and never interpreted here: a key name is a GTK
