@@ -47,6 +47,64 @@ closing it (`settings_survive_the_app_being_killed`,
 `crates/tc-app/tests/ui.rs`) — with a close handler in play, a save-on-exit
 implementation would pass a test that closed politely.
 
+## `[keys]` — the bindings, which belong to the user
+
+The defaults are the keymap in [keymap.md](keymap.md); a `[keys]` table in
+`config.toml` lays the user's own bindings over them:
+
+```toml
+[keys]
+# F9 makes a directory
+"f9" = "create_dir"
+# and F7 stops doing anything
+"f7" = ""
+"ctrl+e" = "exchange_panes"
+```
+
+- **An overlay, not a replacement.** A key nobody mentions keeps its default,
+  so a binding added in a later version reaches people who already have a
+  settings file. A full replacement would make every new key invisible to
+  anyone who ever wrote this table.
+- **An empty action unbinds the key**, which is not the same as leaving the
+  line out — that keeps the default.
+- **Names may be written in any case, and modifiers in any order.** GDK's own
+  keysym names follow no rule a person could guess (`space` is lower, `Insert`
+  is capitalised, `F8` is upper, `KP_Add` is all three at once), so the
+  spellings it uses are tried in turn. A single letter is folded to lower case:
+  upper-case letters are *different* keysyms that only arrive with Shift held,
+  and `shift+` is how Shift is asked for.
+- **A binding nobody can read is named on stderr and skipped.** A misspelling
+  in one line must not cost the other nineteen.
+- Action names are the `ACTION_NAMES` table in `crates/tc-app/src/keymap.rs`.
+  A test walks every default binding against it, so an action that reaches a
+  key but has no name — one the user could see working and could not rebind —
+  fails the tests rather than shipping.
+
+**`tc-core` carries this table and never interprets it.** A key name is a GTK
+keysym and an action is a command of the shell, neither of which the engine
+knows anything about ([crates/CLAUDE.md](../crates/CLAUDE.md)); the strings
+cross the file and the shell makes sense of them.
+
+## The file is edited, never regenerated
+
+`save` parses the existing `config.toml` as a document, updates the tables the
+app owns, and writes it back. Comments, blank lines, the order things were put
+in and the whole `[keys]` table come through exactly as they were typed.
+
+This is what makes a hand-edited file safe now that saving happens on every
+change: serializing the settings struct reproduces the *data* and nothing else,
+so a user's comments would be gone about half a second after they opened the
+app. The end-to-end test writes a commented `[keys]` table, lets the app save,
+kills it, and checks the comments are still there — and a probe that swaps the
+document edit back for a struct serialization fails it.
+
+The app **never writes `[keys]` itself**, even though `Settings` carries it.
+Writing it back would reformat and reorder lines nobody asked it to touch.
+
+A file that is not TOML at all is started over rather than repaired: there is
+nothing in it worth preserving that could be found reliably, and refusing to
+save would mean one bad character costs every setting from then on.
+
 ## Writing it is atomic
 
 The new settings go to `config.toml.new` beside the real file and are then
@@ -76,7 +134,7 @@ mutation probe demonstrated before this test existed.
   or to quit, because a settings file could not be written is a worse bargain
   than starting up in the wrong directory next time.
 
-## Why serde and toml
+## Why serde, toml and toml_edit
 
 The first dependency in this project that is not tiny, and the reliability
 requirement is what settles it: the program rewrites this file whenever
@@ -85,6 +143,12 @@ that path
 ([reliability.md](reliability.md)). The speed requirement is not in tension —
 the file is read once at startup, and compile time is a developer cost
 ([performance.md](performance.md)).
+
+**Two TOML crates, and each earns its place.** `toml` reads the file into
+`Settings` and serializes what the app owns; `toml_edit` applies that to the
+document without destroying the rest. One crate could not do both: a
+serializer that reproduced the user's comments would have to model them, and
+that is what a document editor *is*.
 
 **Sort keys are written by name through an explicit table**, not by deriving
 serde on the enum. Renaming a variant would otherwise silently change the file

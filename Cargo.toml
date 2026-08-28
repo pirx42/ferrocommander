@@ -24,11 +24,17 @@ tempfile = "3"
 # anything.
 async-channel = "2"
 # The settings file. A hand-rolled parser would save a dependency and cost
-# reliability, which is the wrong way round for a file the program rewrites on
-# every exit (docs/reliability.md). It is read once at startup, so the speed
-# requirement is not in tension.
+# reliability, which is the wrong way round for a file the program rewrites
+# whenever something in it changes (docs/reliability.md). It is read once at
+# startup, so the speed requirement is not in tension.
 serde = { version = "1", features = ["derive"] }
 toml = "0.9"
+# Writing that same file back without destroying it. `toml` serializes a
+# struct and reproduces the data and nothing else; the user hand-writes a
+# [keys] table with comments into this file, and a save half a second later
+# would take them out. `toml_edit` edits the document in place, so everything
+# the app does not own survives untouched (docs/config.md).
+toml_edit = "0.23"
 # Freedesktop / Recycle Bin deletion. Default features are off because they
 # pull chrono in for listing and restoring trash contents, which this project
 # never does; the Windows COM apartment feature is kept, because dropping it

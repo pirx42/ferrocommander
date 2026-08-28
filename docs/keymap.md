@@ -177,10 +177,16 @@ wherever the widget last was rather than from the cursor.
 
 ## One table, no key names in the widgets
 
-All bindings live in a single `BINDINGS` table in `keymap.rs`, and the GTK
-controller knows no key names at all: it looks up an `Action` and dispatches
-it. That is what makes the bindings testable without a display, and it gives
-phase 3's configurable keymap exactly one place to replace.
+All default bindings live in a single `BINDINGS` table in `keymap.rs`, and the
+GTK controller knows no key names at all: it looks up an `Action` and
+dispatches it. That is what makes the bindings testable without a display, and
+it is what lets the user's own bindings be laid over the defaults in one place.
+
+**Every binding above can be changed** — see the `[keys]` table in
+[config.md](config.md). The overlay is built once at startup into a hash map,
+so a lookup stays a hash of one key rather than a walk down a table a
+configurable keymap would otherwise make arbitrarily long
+([performance.md](performance.md)).
 
 **Unlisted modifiers are masked out before the lookup.** GTK reports Caps
 Lock, Num Lock and held mouse buttons alongside the real modifiers; without

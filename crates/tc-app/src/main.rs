@@ -32,7 +32,7 @@ use constants::{
     SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
     TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_UNMARK_PATTERN,
 };
-use keymap::Action;
+use keymap::{Action, Keymap};
 use pane::PaneView;
 
 /// The two panes, which of them keystrokes go to, and the jobs they started.
@@ -50,6 +50,9 @@ struct Shell {
     /// What was last written. Compared against the current state so that
     /// moving the cursor around does not rewrite an identical file.
     saved: config::Settings,
+    /// The default bindings with the user's own laid over them. Read on every
+    /// keystroke and never changed again, so it is built once at startup.
+    keymap: Keymap,
     /// Whether a write is already scheduled. One pending write picks up
     /// whatever the settings are when it runs, so a burst of changes costs
     /// one file write rather than one each.
@@ -62,6 +65,7 @@ impl Shell {
         window: &gtk::ApplicationWindow,
         config_root: Option<VfsPath>,
         saved: config::Settings,
+        keymap: Keymap,
     ) -> Self {
         let mut shell = Shell {
             panes,
@@ -70,6 +74,7 @@ impl Shell {
             window: window.downgrade(),
             config_root,
             saved,
+            keymap,
             save_queued: false,
         };
         shell.update_active();
@@ -509,6 +514,14 @@ fn build_window(app: &gtk::Application) {
         eprintln!("{SETTINGS_UNREADABLE}: {reason}");
     }
 
+    // A binding nobody can make sense of is named and skipped, never fatal: a
+    // misspelling in one line must not cost the other nineteen, and nothing
+    // about the settings may stop the program starting.
+    let (keymap, complaints) = Keymap::with_overrides(&settings.keys);
+    for complaint in complaints {
+        eprintln!("{complaint}");
+    }
+
     // Panes open where they were, or at the home directory on a first run.
     let start = LocalFs::home_dir().unwrap_or_else(VfsPath::root);
 
@@ -555,6 +568,7 @@ fn build_window(app: &gtk::Application) {
         &window,
         config_root,
         settings.clone(),
+        keymap,
     )));
     shell.borrow_mut().active = settings.active_pane.min(PANE_COUNT - 1);
     shell.borrow_mut().update_active();
@@ -712,7 +726,7 @@ fn key_controller(
         if typing(controller) {
             return glib::Propagation::Proceed;
         }
-        let Some(action) = keymap::action_for(key, modifiers) else {
+        let Some(action) = shell.borrow().keymap.action_for(key, modifiers) else {
             return glib::Propagation::Proceed;
         };
         if action == Action::Quit {

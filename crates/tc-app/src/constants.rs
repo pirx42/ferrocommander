@@ -31,6 +31,30 @@ pub const PAGE_ROWS_FALLBACK: usize = 20;
 /// Both panes start equally wide — neither side is the "main" one.
 pub const PANE_SPLIT_RATIO: f32 = 0.5;
 
+/// What separates the parts of a key name in the settings file:
+/// `ctrl+shift+kp_add`.
+pub const KEY_SPEC_SEPARATOR: char = '+';
+
+/// What separates the words inside one key name: `page_down`, `kp_add`.
+pub const KEY_NAME_SEPARATOR: char = '_';
+
+/// The keypad keys are the one family GDK shouts the prefix of.
+pub const KEYPAD_PREFIX: &str = "KP_";
+pub const KEYPAD_PREFIX_TITLED: &str = "Kp_";
+
+/// The modifier names a settings file may use, and the only place that
+/// mapping lives. Matched case-insensitively.
+pub const MODIFIER_NAMES: [(&str, gtk::gdk::ModifierType); 3] = [
+    ("ctrl", gtk::gdk::ModifierType::CONTROL_MASK),
+    ("shift", gtk::gdk::ModifierType::SHIFT_MASK),
+    ("alt", gtk::gdk::ModifierType::ALT_MASK),
+];
+
+/// What a settings file with a binding nobody can make sense of is told,
+/// once, on stderr. The rest of the table still applies.
+pub const UNKNOWN_KEY: &str = "no such key";
+pub const UNKNOWN_ACTION: &str = "no such action";
+
 /// The two panes by position, for the commands that name a side rather than
 /// "the active one": Ctrl+← / Ctrl+→ and the pane exchange.
 pub const LEFT_PANE: usize = 0;

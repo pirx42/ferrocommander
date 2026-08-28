@@ -1,12 +1,24 @@
 //! What each key does.
 //!
-//! Every binding lives in one table. The GTK controller does not know any key
-//! names — it looks up an [`Action`] and dispatches it — which is what makes
-//! the bindings testable without a display and gives phase 3's configurable
-//! keymap one place to replace.
+//! Every default binding lives in one table, and the GTK controller knows no
+//! key names at all — it looks up an [`Action`] and dispatches it. That is
+//! what makes the bindings testable without a display, and it is what lets the
+//! user's own bindings be laid over the defaults in one place.
+//!
+//! **The overlay is the shell's job, not `tc-core`'s.** The settings file
+//! carries the `[keys]` table as plain strings because a key name is a GTK
+//! keysym and an action is a command of this shell, neither of which the
+//! engine knows anything about ([`docs/config.md`]).
+
+use std::collections::HashMap;
 
 use gtk::gdk::{Key, ModifierType};
 use tc_core::listing::SortKey;
+
+use crate::constants::{
+    KEYPAD_PREFIX, KEYPAD_PREFIX_TITLED, KEY_NAME_SEPARATOR, KEY_SPEC_SEPARATOR, MODIFIER_NAMES,
+    UNKNOWN_ACTION, UNKNOWN_KEY,
+};
 
 /// Something the user asked the shell to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -355,13 +367,204 @@ const KEYPAD_TWINS: [(Key, Key); 4] = [
     (Key::slash, Key::KP_Divide),
 ];
 
-/// The action a keystroke triggers, or `None` when nothing is bound.
-pub fn action_for(key: Key, modifiers: ModifierType) -> Option<Action> {
-    let (key, modifiers) = normalize(key, modifiers & RELEVANT_MODIFIERS);
-    BINDINGS
+/// The names actions are written under in the settings file, and the only
+/// place that mapping lives.
+///
+/// Spelled out rather than derived from the enum, for the reason the sort-key
+/// table in `tc-core` is: renaming a variant would otherwise silently change
+/// the file format under everybody's existing bindings. A test walks this
+/// table against every default binding, so an action nobody named here is
+/// caught rather than being quietly unbindable.
+const ACTION_NAMES: &[(&str, Action)] = &[
+    ("switch_pane", Action::SwitchPane),
+    ("cursor_up", Action::CursorUp),
+    ("cursor_down", Action::CursorDown),
+    ("cursor_first", Action::CursorFirst),
+    ("cursor_last", Action::CursorLast),
+    ("activate", Action::Activate),
+    ("go_parent", Action::GoParent),
+    ("copy", Action::Copy),
+    ("move", Action::Move),
+    ("create_dir", Action::CreateDir),
+    ("delete", Action::Delete),
+    ("delete_permanently", Action::DeletePermanently),
+    ("toggle_mark", Action::ToggleMark),
+    ("toggle_mark_and_advance", Action::ToggleMarkAndAdvance),
+    ("toggle_mark_and_retreat", Action::ToggleMarkAndRetreat),
+    ("extend_mark_to_first", Action::ExtendMarkToFirst),
+    ("extend_mark_to_last", Action::ExtendMarkToLast),
+    ("extend_mark_page_up", Action::ExtendMarkPageUp),
+    ("extend_mark_page_down", Action::ExtendMarkPageDown),
+    ("mark_by_pattern", Action::MarkByPattern),
+    ("unmark_by_pattern", Action::UnmarkByPattern),
+    ("invert_marks", Action::InvertMarks),
+    (
+        "invert_marks_including_folders",
+        Action::InvertMarksIncludingFolders,
+    ),
+    ("mark_same_extension", Action::MarkSameExtension),
+    ("unmark_same_extension", Action::UnmarkSameExtension),
+    ("restore_marks", Action::RestoreMarks),
+    ("mark_all", Action::MarkAll),
+    ("unmark_all", Action::UnmarkAll),
+    ("quick_filter", Action::QuickFilter),
+    ("clear_filter", Action::ClearFilter),
+    ("sort_by_name", Action::SortBy(SortKey::Name)),
+    ("sort_by_ext", Action::SortBy(SortKey::Ext)),
+    ("sort_by_size", Action::SortBy(SortKey::Size)),
+    ("sort_by_date", Action::SortBy(SortKey::Modified)),
+    ("clone_to_right", Action::CloneToRight),
+    ("clone_to_left", Action::CloneToLeft),
+    ("exchange_panes", Action::ExchangePanes),
+    ("toggle_hidden", Action::ToggleHidden),
+    ("quit", Action::Quit),
+];
+
+/// The defaults, with the user's own bindings laid over them.
+///
+/// An overlay rather than a replacement: a key nobody mentions keeps what it
+/// always did, so a binding added in a later version reaches people who
+/// already have a settings file. An entry with an empty action unbinds its
+/// key.
+///
+/// Built once at startup and then only read, so a lookup stays a hash of one
+/// key rather than a walk down a table that a configurable keymap would
+/// otherwise make arbitrarily long (`docs/performance.md`).
+#[derive(Clone)]
+pub struct Keymap {
+    bindings: HashMap<(Key, ModifierType), Action>,
+}
+
+impl Default for Keymap {
+    fn default() -> Self {
+        Keymap {
+            bindings: BINDINGS
+                .iter()
+                .map(|binding| ((binding.key, binding.modifiers), binding.action))
+                .collect(),
+        }
+    }
+}
+
+impl Keymap {
+    /// Lays the user's bindings over the defaults, reporting the entries it
+    /// could not make sense of.
+    ///
+    /// A bad entry is skipped and named, never fatal: nothing about the
+    /// settings may stop the program starting ([`docs/config.md`]), and a
+    /// misspelling in one line must not cost the other nineteen.
+    pub fn with_overrides<'a>(
+        overrides: impl IntoIterator<Item = (&'a String, &'a String)>,
+    ) -> (Keymap, Vec<String>) {
+        let mut keymap = Keymap::default();
+        let mut complaints = Vec::new();
+        for (spec, action) in overrides {
+            let Some(stroke) = parse_key(spec) else {
+                complaints.push(format!("{UNKNOWN_KEY}: {spec}"));
+                continue;
+            };
+            // An empty action is how a key is taken away, which is not the
+            // same as leaving it out — leaving it out keeps the default.
+            if action.is_empty() {
+                keymap.bindings.remove(&stroke);
+                continue;
+            }
+            match action_named(action) {
+                Some(action) => {
+                    keymap.bindings.insert(stroke, action);
+                }
+                None => complaints.push(format!("{UNKNOWN_ACTION}: {action}")),
+            }
+        }
+        (keymap, complaints)
+    }
+
+    /// The action a keystroke triggers, or `None` when nothing is bound.
+    pub fn action_for(&self, key: Key, modifiers: ModifierType) -> Option<Action> {
+        let stroke = normalize(key, modifiers & RELEVANT_MODIFIERS);
+        self.bindings.get(&stroke).copied()
+    }
+}
+
+/// The action written under `name`.
+fn action_named(name: &str) -> Option<Action> {
+    ACTION_NAMES
         .iter()
-        .find(|binding| binding.key == key && binding.modifiers == modifiers)
-        .map(|binding| binding.action)
+        .find(|(candidate, _)| *candidate == name)
+        .map(|(_, action)| *action)
+}
+
+/// Reads `"ctrl+shift+kp_add"` into the keystroke it names.
+///
+/// Case-insensitive and order-insensitive, because a person writing a settings
+/// file by hand should not have to guess either. The key itself is whatever
+/// GDK knows by that name, so every keysym is reachable without this file
+/// carrying a list of them ([`docs/config.md`]).
+fn parse_key(spec: &str) -> Option<(Key, ModifierType)> {
+    let mut modifiers = ModifierType::empty();
+    let mut key = None;
+    for part in spec.split(KEY_SPEC_SEPARATOR) {
+        let part = part.trim();
+        match MODIFIER_NAMES
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(part))
+        {
+            Some((_, modifier)) => modifiers |= *modifier,
+            // Not a modifier, so it must be the key — and there is only one.
+            None if key.is_none() => key = Some(key_named(part)?),
+            None => return None,
+        }
+    }
+    Some(normalize(key?, modifiers))
+}
+
+/// The key GDK knows by `name`, without insisting on GDK's own capitalisation.
+///
+/// GDK's keysym names are case-sensitive and follow no rule a person could
+/// guess — `space` is lower, `Insert` is capitalised, `F8` is upper and
+/// `KP_Add` is all three at once. Making somebody get that right in a
+/// hand-written settings file, with a silently dead binding as the penalty, is
+/// not a trade worth making, so the spellings GDK uses are tried in turn.
+///
+/// A single letter is folded to lower case, because upper-case letters are
+/// *different* keysyms that only arrive with Shift held: someone writing
+/// `ctrl+U` means Ctrl+U, and `shift+` is how Shift is asked for here.
+fn key_named(name: &str) -> Option<Key> {
+    if name.len() == 1
+        && name
+            .chars()
+            .all(|character| character.is_ascii_alphabetic())
+    {
+        return Key::from_name(name.to_ascii_lowercase());
+    }
+    let titled = title_case(name);
+    [
+        name.to_string(),
+        titled.clone(),
+        name.to_ascii_uppercase(),
+        name.to_ascii_lowercase(),
+        // `KP_Add` and its neighbours, the one family with a shouted prefix.
+        titled.replacen(KEYPAD_PREFIX_TITLED, KEYPAD_PREFIX, 1),
+    ]
+    .iter()
+    .find_map(Key::from_name)
+}
+
+/// `page_down` and `PAGE_DOWN` alike → `Page_Down`: GDK's usual shape for a
+/// multi-word key, reached from however the user shouted it.
+fn title_case(name: &str) -> String {
+    name.split(KEY_NAME_SEPARATOR)
+        .map(|word| {
+            let mut characters = word.chars();
+            match characters.next() {
+                Some(first) => {
+                    first.to_ascii_uppercase().to_string() + &characters.as_str().to_lowercase()
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(&KEY_NAME_SEPARATOR.to_string())
 }
 
 /// Resolves a keypad twin, and drops the Shift that produced it.
@@ -387,6 +590,17 @@ fn normalize(key: Key, modifiers: ModifierType) -> (Key, ModifierType) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What a keystroke does with nobody's settings laid over the defaults.
+    fn bound(key: Key, modifiers: ModifierType) -> Option<Action> {
+        Keymap::default().action_for(key, modifiers)
+    }
+
+    /// A keymap with one line of settings file laid over it.
+    fn overridden(spec: &str, action: &str) -> (Keymap, Vec<String>) {
+        let (spec, action) = (spec.to_string(), action.to_string());
+        Keymap::with_overrides(std::iter::once((&spec, &action)))
+    }
 
     #[test]
     fn every_documented_binding_resolves() {
@@ -493,8 +707,162 @@ mod tests {
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
         ];
         for (key, modifiers, action) in expected {
-            assert_eq!(action_for(key, modifiers), Some(action), "{key:?}");
+            assert_eq!(bound(key, modifiers), Some(action), "{key:?}");
         }
+    }
+
+    #[test]
+    fn every_default_binding_has_a_name_to_write_it_under() {
+        // Walking the bindings rather than listing the actions is what makes
+        // this exhaustive: an action that reaches a key but has no name is
+        // one the user can see working and cannot rebind, which is worse than
+        // one that does not exist.
+        for binding in BINDINGS {
+            assert!(
+                ACTION_NAMES
+                    .iter()
+                    .any(|(_, action)| *action == binding.action),
+                "{:?} has no name in ACTION_NAMES",
+                binding.action
+            );
+        }
+    }
+
+    #[test]
+    fn every_name_reaches_the_action_it_spells() {
+        // The other direction: a name that resolves to the wrong action, or
+        // two names for one action, would both pass the walk above.
+        for (name, action) in ACTION_NAMES {
+            assert_eq!(action_named(name), Some(*action), "{name}");
+        }
+        let mut names: Vec<&str> = ACTION_NAMES.iter().map(|(name, _)| *name).collect();
+        names.sort_unstable();
+        let count = names.len();
+        names.dedup();
+        assert_eq!(names.len(), count, "two actions share a name");
+    }
+
+    #[test]
+    fn a_users_binding_wins_over_the_default() {
+        let (keymap, complaints) = overridden("ctrl+e", "exchange_panes");
+
+        assert!(complaints.is_empty(), "{complaints:?}");
+        assert_eq!(
+            keymap.action_for(Key::e, ModifierType::CONTROL_MASK),
+            Some(Action::ExchangePanes)
+        );
+        // And Ctrl+U still means it too: an override adds a way in, it does
+        // not take the old one away.
+        assert_eq!(
+            keymap.action_for(Key::u, ModifierType::CONTROL_MASK),
+            Some(Action::ExchangePanes)
+        );
+    }
+
+    #[test]
+    fn a_key_nobody_mentions_keeps_its_default() {
+        // The whole point of an overlay: a binding added in a later version
+        // reaches people who already have a settings file.
+        let (keymap, _) = overridden("ctrl+e", "exchange_panes");
+
+        assert_eq!(keymap.action_for(Key::F5, PLAIN), Some(Action::Copy));
+        assert_eq!(keymap.action_for(Key::Tab, PLAIN), Some(Action::SwitchPane));
+    }
+
+    #[test]
+    fn an_empty_action_takes_a_key_away() {
+        // Not the same as leaving the line out, which keeps the default.
+        let (keymap, complaints) = overridden("f8", "");
+
+        assert!(complaints.is_empty(), "{complaints:?}");
+        assert_eq!(keymap.action_for(Key::F8, PLAIN), None);
+        // Delete is a separate binding for the same action and is untouched.
+        assert_eq!(keymap.action_for(Key::Delete, PLAIN), Some(Action::Delete));
+    }
+
+    #[test]
+    fn a_key_name_reads_the_same_in_any_case_or_order() {
+        let (canonical, _) = overridden("ctrl+shift+f5", "quit");
+        for spelling in ["CTRL+SHIFT+F5", "shift+ctrl+F5", "Ctrl + Shift + F5"] {
+            let (keymap, complaints) = overridden(spelling, "quit");
+            assert!(complaints.is_empty(), "{spelling}: {complaints:?}");
+            assert_eq!(
+                keymap.action_for(
+                    Key::F5,
+                    ModifierType::CONTROL_MASK | ModifierType::SHIFT_MASK
+                ),
+                canonical.action_for(
+                    Key::F5,
+                    ModifierType::CONTROL_MASK | ModifierType::SHIFT_MASK
+                ),
+                "{spelling}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_key_name_does_not_have_to_match_gdks_capitalisation() {
+        // GDK's names follow no rule a person could guess: `space` is lower,
+        // `Insert` is capitalised, `F8` is upper and `KP_Add` is all three at
+        // once. A settings file that silently dropped a binding over that
+        // would be a trap.
+        for (written, key) in [
+            ("f8", Key::F8),
+            ("F8", Key::F8),
+            ("insert", Key::Insert),
+            ("page_down", Key::Page_Down),
+            ("PAGE_DOWN", Key::Page_Down),
+            ("kp_add", Key::KP_Add),
+            ("KP_Add", Key::KP_Add),
+            ("SPACE", Key::space),
+            ("space", Key::space),
+        ] {
+            assert_eq!(key_named(written), Some(key), "{written}");
+        }
+    }
+
+    #[test]
+    fn a_letter_key_is_written_lower_case_and_shift_is_asked_for_by_name() {
+        // Upper-case letters are *different* keysyms that only arrive with
+        // Shift held, so `ctrl+U` taken literally would bind a stroke that
+        // never comes. Someone writing it means Ctrl+U.
+        let (keymap, complaints) = overridden("ctrl+U", "quit");
+
+        assert!(complaints.is_empty(), "{complaints:?}");
+        assert_eq!(
+            keymap.action_for(Key::u, ModifierType::CONTROL_MASK),
+            Some(Action::Quit)
+        );
+    }
+
+    #[test]
+    fn a_binding_nobody_can_make_sense_of_is_named_and_skipped() {
+        // Nothing about the settings may stop the program starting, and a
+        // misspelling in one line must not cost the other nineteen.
+        for (spec, action) in [("no_such_key", "quit"), ("ctrl+e", "no_such_action")] {
+            let (keymap, complaints) = overridden(spec, action);
+            assert_eq!(complaints.len(), 1, "{spec} = {action}");
+            assert_eq!(
+                keymap.action_for(Key::F5, PLAIN),
+                Some(Action::Copy),
+                "the rest of the keymap went with it"
+            );
+        }
+    }
+
+    #[test]
+    fn a_user_can_bind_an_ordinary_key_to_a_keypad_command() {
+        // Key specs go through the same twin resolution a real keystroke
+        // does, so a settings file may say `*` and mean Num *. Without that,
+        // a binding written the obvious way would be unreachable on every
+        // layout where `*` needs Shift.
+        let (keymap, complaints) = overridden("asterisk", "quit");
+
+        assert!(complaints.is_empty(), "{complaints:?}");
+        assert_eq!(
+            keymap.action_for(Key::KP_Multiply, PLAIN),
+            Some(Action::Quit)
+        );
     }
 
     #[test]
@@ -504,7 +872,7 @@ mod tests {
         // the witnesses are. Plain `a` and `s` are still unbound — only their
         // Ctrl forms mean anything.
         for key in [Key::a, Key::s, Key::F9, Key::F12] {
-            assert_eq!(action_for(key, PLAIN), None, "{key:?}");
+            assert_eq!(bound(key, PLAIN), None, "{key:?}");
         }
     }
 
@@ -512,14 +880,14 @@ mod tests {
     fn ctrl_turns_an_operation_key_into_a_sort_key() {
         // F5 copies and Ctrl+F5 sorts by date. A binding that ignored its
         // modifiers would make one of those impossible.
-        assert_eq!(action_for(Key::F5, PLAIN), Some(Action::Copy));
+        assert_eq!(bound(Key::F5, PLAIN), Some(Action::Copy));
         assert_eq!(
-            action_for(Key::F5, ModifierType::CONTROL_MASK),
+            bound(Key::F5, ModifierType::CONTROL_MASK),
             Some(Action::SortBy(SortKey::Modified))
         );
-        assert_eq!(action_for(Key::F6, PLAIN), Some(Action::Move));
+        assert_eq!(bound(Key::F6, PLAIN), Some(Action::Move));
         assert_eq!(
-            action_for(Key::F6, ModifierType::CONTROL_MASK),
+            bound(Key::F6, ModifierType::CONTROL_MASK),
             Some(Action::SortBy(SortKey::Size))
         );
     }
@@ -529,9 +897,9 @@ mod tests {
         // The one place in the keymap where a modifier changes what survives,
         // so it gets its own test rather than riding on the table above.
         for key in [Key::F8, Key::Delete] {
-            assert_eq!(action_for(key, PLAIN), Some(Action::Delete), "{key:?}");
+            assert_eq!(bound(key, PLAIN), Some(Action::Delete), "{key:?}");
             assert_eq!(
-                action_for(key, ModifierType::SHIFT_MASK),
+                bound(key, ModifierType::SHIFT_MASK),
                 Some(Action::DeletePermanently),
                 "{key:?}"
             );
@@ -545,10 +913,10 @@ mod tests {
         // keyboard, not something the user meant — and the phase-3 `+` binding
         // was dead on arrival for exactly this reason.
         for (twin, keypad) in KEYPAD_TWINS {
-            let expected = action_for(keypad, PLAIN);
+            let expected = bound(keypad, PLAIN);
             assert!(expected.is_some(), "{keypad:?} is not bound at all");
             for modifiers in [PLAIN, ModifierType::SHIFT_MASK] {
-                assert_eq!(action_for(twin, modifiers), expected, "{twin:?}");
+                assert_eq!(bound(twin, modifiers), expected, "{twin:?}");
             }
         }
     }
@@ -559,11 +927,11 @@ mod tests {
         // the keypad meanings, which is what makes a keyboard without a
         // numeric block able to run every marking command.
         assert_eq!(
-            action_for(Key::plus, ModifierType::CONTROL_MASK),
+            bound(Key::plus, ModifierType::CONTROL_MASK),
             Some(Action::MarkAll)
         );
         assert_eq!(
-            action_for(Key::minus, ModifierType::ALT_MASK),
+            bound(Key::minus, ModifierType::ALT_MASK),
             Some(Action::UnmarkSameExtension)
         );
     }
@@ -586,13 +954,9 @@ mod tests {
                 Action::UnmarkAll,
             ),
         ] {
+            assert_eq!(bound(Key::KP_Add, modifiers), Some(add), "{modifiers:?}");
             assert_eq!(
-                action_for(Key::KP_Add, modifiers),
-                Some(add),
-                "{modifiers:?}"
-            );
-            assert_eq!(
-                action_for(Key::KP_Subtract, modifiers),
+                bound(Key::KP_Subtract, modifiers),
                 Some(subtract),
                 "{modifiers:?}"
             );
@@ -604,12 +968,9 @@ mod tests {
         // Files only, or directories too — Total Commander's split, and the
         // one place in the marking keys where Shift changes what is touched
         // rather than only where the cursor ends up.
+        assert_eq!(bound(Key::KP_Multiply, PLAIN), Some(Action::InvertMarks));
         assert_eq!(
-            action_for(Key::KP_Multiply, PLAIN),
-            Some(Action::InvertMarks)
-        );
-        assert_eq!(
-            action_for(Key::KP_Multiply, ModifierType::SHIFT_MASK),
+            bound(Key::KP_Multiply, ModifierType::SHIFT_MASK),
             Some(Action::InvertMarksIncludingFolders)
         );
     }
@@ -624,9 +985,9 @@ mod tests {
             (Key::Home, Action::CursorFirst, Action::ExtendMarkToFirst),
             (Key::End, Action::CursorLast, Action::ExtendMarkToLast),
         ] {
-            assert_eq!(action_for(key, PLAIN), Some(plain), "{key:?}");
+            assert_eq!(bound(key, PLAIN), Some(plain), "{key:?}");
             assert_eq!(
-                action_for(key, ModifierType::SHIFT_MASK),
+                bound(key, ModifierType::SHIFT_MASK),
                 Some(shifted),
                 "{key:?}"
             );
@@ -638,20 +999,17 @@ mod tests {
         // The asymmetry is deliberate: plain paging belongs to the widget,
         // which is the only thing that knows how tall the viewport is.
         for key in [Key::Page_Up, Key::Page_Down] {
-            assert_eq!(action_for(key, PLAIN), None, "{key:?}");
-            assert!(
-                action_for(key, ModifierType::SHIFT_MASK).is_some(),
-                "{key:?}"
-            );
+            assert_eq!(bound(key, PLAIN), None, "{key:?}");
+            assert!(bound(key, ModifierType::SHIFT_MASK).is_some(), "{key:?}");
         }
     }
 
     #[test]
     fn a_bound_key_with_the_wrong_modifier_triggers_nothing() {
         // Ctrl+Down must not fall through to the unmodified CursorDown.
-        assert_eq!(action_for(Key::Down, ModifierType::CONTROL_MASK), None);
-        assert_eq!(action_for(Key::Tab, ModifierType::ALT_MASK), None);
-        assert_eq!(action_for(Key::q, PLAIN), None);
+        assert_eq!(bound(Key::Down, ModifierType::CONTROL_MASK), None);
+        assert_eq!(bound(Key::Tab, ModifierType::ALT_MASK), None);
+        assert_eq!(bound(Key::q, PLAIN), None);
     }
 
     #[test]
@@ -659,9 +1017,9 @@ mod tests {
         // Caps Lock and Num Lock are reported by GTK but must not disable
         // navigation.
         for noise in [ModifierType::LOCK_MASK, ModifierType::BUTTON1_MASK] {
-            assert_eq!(action_for(Key::Down, noise), Some(Action::CursorDown));
+            assert_eq!(bound(Key::Down, noise), Some(Action::CursorDown));
             assert_eq!(
-                action_for(Key::q, ModifierType::CONTROL_MASK | noise),
+                bound(Key::q, ModifierType::CONTROL_MASK | noise),
                 Some(Action::Quit)
             );
         }

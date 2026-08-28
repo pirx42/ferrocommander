@@ -999,6 +999,96 @@ fn a_resized_window_is_remembered_without_being_closed() {
     app.kill();
 }
 
+/// A settings file with the user's own bindings and their own comments.
+const HAND_WRITTEN_KEYS: &str = "\
+# my bindings
+[keys]
+# F9 makes a directory; F7 is somebody else's idea
+\"f9\" = \"create_dir\"
+\"f7\" = \"\"
+\"ctrl+e\" = \"exchange_panes\"
+\"nonsense\" = \"quit\"
+";
+
+/// Writes `HAND_WRITTEN_KEYS` into a home directory before the app opens.
+fn with_hand_written_keys(home: &Path) {
+    arrange(home);
+    let settings = home.join(SETTINGS_FILE);
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(settings, HAND_WRITTEN_KEYS).unwrap();
+}
+
+#[test]
+fn a_key_the_settings_file_rebinds_does_what_it_says() {
+    let app = in_src_and_dst(with_hand_written_keys);
+
+    app.key("F9");
+
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("rebound");
+    app.key("Return");
+    app.await_exists("src/rebound");
+}
+
+#[test]
+fn a_key_the_settings_file_unbinds_stops_doing_anything() {
+    // An empty action takes a key away, which is not the same as leaving the
+    // line out — that would keep the default.
+    let app = in_src_and_dst(with_hand_written_keys);
+
+    app.key("F7");
+
+    app.settle();
+    assert!(
+        !app.has_dialog(DIALOG_NEW_DIR),
+        "F7 still opened the dialog it was unbound from"
+    );
+}
+
+#[test]
+fn one_binding_nobody_can_read_does_not_cost_the_others() {
+    // The file above also contains a key name that means nothing. Nothing
+    // about the settings may stop the program starting, and a misspelling in
+    // one line must not cost the other three.
+    let app = in_src_and_dst(with_hand_written_keys);
+
+    app.key("ctrl+e");
+
+    // The panes swapped: the left one is in dst now, so F7 there lands in dst.
+    app.key("F9");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("swapped");
+    app.key("Return");
+    app.await_exists("dst/swapped");
+}
+
+#[test]
+fn the_app_saving_does_not_touch_the_bindings_the_user_wrote() {
+    // The consequence of saving on every change: the file the user hand-edits
+    // is rewritten about half a second after the app opens. Serializing the
+    // settings struct would reproduce the data and drop everything else.
+    let first = in_src_and_dst(with_hand_written_keys);
+    // Wait for a save to have happened at all, or this proves nothing.
+    first.await_mentions(SETTINGS_FILE, "src");
+    let home = first.kill();
+
+    let written = std::fs::read_to_string(home.path().join(SETTINGS_FILE)).unwrap();
+    for kept in [
+        "# my bindings",
+        "# F9 makes a directory; F7 is somebody else's idea",
+        "\"ctrl+e\" = \"exchange_panes\"",
+        "\"f7\" = \"\"",
+    ] {
+        assert!(written.contains(kept), "{kept:?} was lost:\n{written}");
+    }
+
+    // And the bindings still work in the next run, which is the point of
+    // keeping them.
+    let app = App::relaunch(home);
+    app.key("F9");
+    app.focus_dialog(DIALOG_NEW_DIR);
+}
+
 #[test]
 fn a_settings_file_that_is_nonsense_does_not_stop_the_program() {
     // A file manager that refuses to start over its own settings is worse

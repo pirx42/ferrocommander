@@ -9,6 +9,8 @@
 //! file manager that refuses to start over its own settings is worse than one
 //! that forgets where you were.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::listing::{Sort, SortKey, SortOrder};
@@ -19,6 +21,10 @@ pub const CONFIG_DIR: &str = "ferrocommander";
 
 /// Name of the settings file.
 pub const CONFIG_FILE: &str = "config.toml";
+
+/// The table of key bindings, which belongs to the user alone: read on
+/// startup, and never written back.
+pub const KEYS_TABLE: &str = "keys";
 
 /// Written first, then renamed over the real file.
 ///
@@ -37,6 +43,16 @@ pub struct Settings {
     pub panes: Vec<PaneSettings>,
     /// Which pane had the keyboard.
     pub active_pane: usize,
+    /// Key bindings the user has overridden, keyed by key name.
+    ///
+    /// Strings on both sides, and never interpreted here: a key name is a GTK
+    /// keysym and an action is a command of the shell, neither of which
+    /// `tc-core` knows anything about. Its job is to carry the table across
+    /// the file, and the shell's is to make sense of it.
+    ///
+    /// **Read but never written.** These are the user's own lines, and
+    /// [`save`] leaves them exactly as they were typed.
+    pub keys: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -194,6 +210,13 @@ pub fn load(fs: &dyn VirtualFs, config_root: &VfsPath) -> (Settings, Option<Stri
 
 /// Writes the settings, replacing the previous file only once the new one is
 /// complete.
+///
+/// **The file is edited, not regenerated.** Anything the app does not own —
+/// comments, blank lines, the order the user put things in, the whole `[keys]`
+/// table — comes back exactly as it was. Serializing the struct instead would
+/// reproduce the data and nothing else, and since this runs whenever a setting
+/// changes, a hand-written `[keys]` table would lose its comments about half a
+/// second after the app opened.
 pub fn save(
     fs: &dyn VirtualFs,
     config_root: &VfsPath,
@@ -203,7 +226,7 @@ pub fn save(
     ensure_directory(fs, config_root);
     ensure_directory(fs, &directory);
 
-    let text = toml::to_string_pretty(settings).map_err(|error| VfsError::Io(error.to_string()))?;
+    let text = render(&read_text(fs, &config_path(config_root)), settings)?;
 
     // Into a temporary name beside the real one, then renamed over it: a
     // rename within one directory is the only write a filesystem promises to
@@ -216,6 +239,46 @@ pub fn save(
             .map_err(|error| VfsError::Io(error.to_string()))?;
     }
     fs.rename(&temporary, &config_path(config_root))
+}
+
+/// Updates the tables the app owns inside `existing`, leaving the rest alone.
+///
+/// A file that cannot be parsed as TOML is started over rather than repaired:
+/// there is nothing in it worth preserving that could be found reliably, and
+/// refusing to save at all would mean one bad character costs every setting
+/// from then on.
+fn render(existing: &str, settings: &Settings) -> Result<String, VfsError> {
+    let mut document = existing
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap_or_default();
+
+    // Through a serialized copy rather than by hand: the field list lives in
+    // `Settings` and nowhere else, so a setting added there is written without
+    // anybody remembering to come back here.
+    let owned: toml_edit::DocumentMut = toml::to_string(settings)
+        .map_err(|error| VfsError::Io(error.to_string()))?
+        .parse()
+        .map_err(|error: toml_edit::TomlError| VfsError::Io(error.to_string()))?;
+
+    for (key, value) in owned.as_table() {
+        if key == KEYS_TABLE {
+            continue;
+        }
+        document.insert(key, value.clone());
+    }
+    Ok(document.to_string())
+}
+
+/// Reads a file into a string, treating anything that goes wrong as empty.
+///
+/// Only ever used to find out what to preserve, so "could not read it" and
+/// "there was nothing there" lead to the same place.
+fn read_text(fs: &dyn VirtualFs, path: &VfsPath) -> String {
+    let mut text = String::new();
+    if let Ok(mut reader) = fs.open_read(path) {
+        let _ = std::io::Read::read_to_string(&mut reader, &mut text);
+    }
+    text
 }
 
 /// Creates a directory, treating "it is already there" as success.
@@ -280,5 +343,104 @@ mod tests {
     #[test]
     fn an_empty_directory_means_wherever_the_app_starts() {
         assert_eq!(PaneSettings::default().directory(), None);
+    }
+
+    /// A file as a person would write it: their own bindings, their own
+    /// comments, and the app's own state mixed in.
+    const HAND_WRITTEN: &str = "\
+# my bindings
+[keys]
+# swap the panes with something my thumb can reach
+\"ctrl+e\" = \"exchange_panes\"
+\"f9\" = \"\"
+
+[window]
+width = 800
+height = 600
+";
+
+    #[test]
+    fn saving_leaves_the_users_own_lines_exactly_as_they_wrote_them() {
+        // The reason this file is edited rather than regenerated. Serializing
+        // the struct reproduces the data and nothing else, and the save runs
+        // whenever a setting changes — so a hand-written [keys] table would
+        // lose its comments about half a second after the app opened.
+        let settings = Settings {
+            window: WindowSettings {
+                width: 1234,
+                height: 567,
+            },
+            ..Settings::default()
+        };
+
+        let written = render(HAND_WRITTEN, &settings).unwrap();
+
+        for kept in [
+            "# my bindings",
+            "# swap the panes with something my thumb can reach",
+            "\"ctrl+e\" = \"exchange_panes\"",
+            "\"f9\" = \"\"",
+        ] {
+            assert!(written.contains(kept), "{kept:?} was lost:\n{written}");
+        }
+    }
+
+    #[test]
+    fn saving_still_records_what_the_app_owns() {
+        let settings = Settings {
+            window: WindowSettings {
+                width: 1234,
+                height: 567,
+            },
+            ..Settings::default()
+        };
+
+        let written = render(HAND_WRITTEN, &settings).unwrap();
+        let (read_back, complaint) = (
+            toml::from_str::<Settings>(&written).unwrap(),
+            None::<String>,
+        );
+
+        assert_eq!(complaint, None);
+        assert_eq!(read_back.window, settings.window, "the new size");
+        // And the user's table came back through the round trip as well, which
+        // is what makes the preservation useful rather than decorative.
+        assert_eq!(
+            read_back.keys.get("ctrl+e").map(String::as_str),
+            Some("exchange_panes")
+        );
+    }
+
+    #[test]
+    fn a_file_that_is_not_toml_at_all_is_started_over_rather_than_refused() {
+        // There is nothing in it worth preserving that could be found
+        // reliably, and refusing to save would mean one bad character costs
+        // every setting from then on.
+        let settings = Settings::default();
+
+        let written = render("{{{ not toml", &settings).unwrap();
+
+        assert_eq!(
+            toml::from_str::<Settings>(&written).unwrap().window,
+            settings.window
+        );
+    }
+
+    #[test]
+    fn the_app_never_writes_the_keys_table_itself() {
+        // Bindings are the user's lines alone. Loading them and writing them
+        // back would reformat and reorder a file nobody asked it to touch —
+        // and would make an unbinding indistinguishable from a default.
+        let settings = Settings {
+            keys: BTreeMap::from([("ctrl+e".to_string(), "exchange_panes".to_string())]),
+            ..Settings::default()
+        };
+
+        let written = render("", &settings).unwrap();
+
+        assert!(
+            !written.contains(KEYS_TABLE),
+            "the app wrote a keys table of its own:\n{written}"
+        );
     }
 }
