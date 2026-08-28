@@ -1,15 +1,20 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: In Progress — all sub-phases done
+Status: Implemented — substance extracted to [ops.md](../../ops.md),
+[vfs.md](../../vfs.md), [keymap.md](../../keymap.md),
+[ui-shell.md](../../ui-shell.md), [listing.md](../../listing.md); open points
+to [future-improvements.md](../../future-improvements.md).
+Commits 2ac3018 (0) / cf93979 (A) / a271527 (B) / 70bdc9d (C) / 967d2f5 (D) /
+5148fb9 (E) / 6d37cd2 (F).
 
 *2026-08-28 — implements phase 2 of
-[2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
+[2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md).*
 
-> Process: [good-development-practices.md](../good-development-practices.md),
+> Process: [good-development-practices.md](../../good-development-practices.md),
 > skill triggers in the root [CLAUDE.md](../../CLAUDE.md). Every sub-phase
 > below is one commit series, green before it lands
-> (skills [11](../skills/11-multi-phase-commits.md),
-> [25](../skills/25-green-suite-before-commit.md)).
+> (skills [11](../../skills/11-multi-phase-commits.md),
+> [25](../../skills/25-green-suite-before-commit.md)).
 
 ## 1. Scope
 
@@ -61,7 +66,7 @@ as good intentions: every destructive path is exercised against a tempdir and
 never against a real home directory, and delete goes to the freedesktop trash
 unless the user explicitly asked for a permanent one.
 
-## 2. Coverage pre-check (skill [43](../skills/43-coverage-before-implementation.md))
+## 2. Coverage pre-check (skill [43](../../skills/43-coverage-before-implementation.md))
 
 Phase 2 is almost entirely additive — new modules, new trait methods — so the
 pre-check is short. What matters is the handful of *existing* contracts the
@@ -74,9 +79,9 @@ phase relies on or changes.
 | `Listing::reload` | two tests: cursor keeps its entry when the entry survives, clamps when it is gone | covered — this is the path every finished job calls |
 | `Listing::load` on an unreadable directory | `PaneView::new` handles the error, no test | **reachable gap** — phase 2 makes it common (a pane standing in a directory a job just deleted) |
 | `keymap::action_for` | 4 tests, one of which asserts that `F5` and `Delete` are unbound | covered, and **must change** in sub-phase D — see below |
-| `PaneView::refresh` / `navigate_to` | no automated coverage (known gap, [future-improvements.md](../future-improvements.md)) | unchanged by this plan; the new dialog wiring inherits the same gap |
+| `PaneView::refresh` / `navigate_to` | no automated coverage (known gap, [future-improvements.md](../../future-improvements.md)) | unchanged by this plan; the new dialog wiring inherits the same gap |
 
-**Announced test change (skill [24](../skills/24-no-silent-test-changes.md)).**
+**Announced test change (skill [24](../../skills/24-no-silent-test-changes.md)).**
 `an_unbound_key_triggers_nothing` currently pins `Key::F5` and `Key::Delete`
 as unbound. Sub-phase D binds both, so that test has to lose those two keys.
 This is recorded here rather than being quietly edited during the
@@ -115,7 +120,7 @@ API forced in phase 1).
 
 The three facts that *were* verifiable here, and that the plan below depends
 on, were checked rather than assumed
-(skill [65](../skills/65-verify-or-ask-never-assume.md)):
+(skill [65](../../skills/65-verify-or-ask-never-assume.md)):
 
 - `io::ErrorKind::CrossesDevices`, `AlreadyExists`, `DirectoryNotEmpty` and
   `IsADirectory` all compile on stable — sub-phase A's error mapping needs
@@ -130,7 +135,7 @@ Each sub-phase is independently green (`cargo fmt --all -- --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`, `cargo build --release`, plus the Windows
 cross-target check on `tc-core`) and ends in a conventional commit
-(skill [31](../skills/31-conventional-commit.md)).
+(skill [31](../../skills/31-conventional-commit.md)).
 
 ### 0 — Coverage pre-check: a pane whose directory vanishes
 
@@ -189,7 +194,7 @@ pub trait VirtualFs: Send + Sync {
   progress, log a per-file error and keep going, and honour a cancel between
   two entries. A backend-side recursive delete would be a second, silent
   implementation of the same walk with none of that
-  (skill [44](../skills/44-no-redundancy.md)).
+  (skill [44](../../skills/44-no-redundancy.md)).
 - **`rename` is same-backend only** and surfaces `CrossDevice` rather than
   papering over it. The copy+delete degradation is a decision with a progress
   bar and a rollback attached, which makes it engine policy.
@@ -199,7 +204,7 @@ pub trait VirtualFs: Send + Sync {
   thread.
 - **`Send + Sync` on the trait** is what lets a job hold its backend across
   threads. Phase 6's `ArchiveFs` will need interior mutability to satisfy
-  `Sync`; noted in [vfs.md](../vfs.md) so it is a known constraint rather than
+  `Sync`; noted in [vfs.md](../../vfs.md) so it is a known constraint rather than
   a surprise.
 
   *Deviation, implemented deliberately:* the sketch also swapped `PaneView`'s
@@ -223,7 +228,7 @@ pub trait VirtualFs: Send + Sync {
   variant list. Since that wrapping is target-dependent (Windows reports Win32
   codes and the variant does not even exist there), the mapping lives in
   `platform.rs` as a sixth platform function, which keeps `local.rs` free of
-  `cfg` branches as [vfs.md](../vfs.md) promises. The crate's
+  `cfg` branches as [vfs.md](../../vfs.md) promises. The crate's
   `Error::source()` is no way around the split: for the filesystem variant it
   returns the io error's own source, which is `None`.
 
@@ -244,7 +249,7 @@ pub trait VirtualFs: Send + Sync {
   asserts the entry left the source directory *and* arrived under the
   redirected trash dir. If the crate turns out not to honour
   `XDG_DATA_HOME`, the test degrades to the source side only and the missing
-  half goes to [future-improvements.md](../future-improvements.md) rather
+  half goes to [future-improvements.md](../../future-improvements.md) rather
   than being faked. *Verified: the crate honours it, so the test asserts both
   halves.* The trash **error mapping** needs no redirection — it fails while
   resolving the path — so it is tested alongside the other write calls
@@ -255,7 +260,7 @@ carries no permission bits (`Entry` has no mode, so `+x` is lost), and
 `set_modified` cannot stamp a directory (no platform hands out a writable
 handle to one). Files keep their date, which is what the date column shows.
 
-*Docs:* [vfs.md](../vfs.md) — the full trait, the new error variants, why
+*Docs:* [vfs.md](../../vfs.md) — the full trait, the new error variants, why
 `remove_dir` is non-recursive, why `rename` reports `CrossDevice`, the
 `Send + Sync` constraint on future backends, and trash as a backend
 capability.
@@ -311,7 +316,7 @@ its behavior is pinned before concurrency can obscure it.
   for `Resolution::Rename` defaults.
 
 *Tests* — conservation invariants first
-(skill [52](../skills/52-test-conservation-invariants.md)), across a fixture
+(skill [52](../../skills/52-test-conservation-invariants.md)), across a fixture
 tree of nested directories, mixed sizes, an empty file, an empty directory
 and a unicode name:
 - **Copy conserves everything:** recursive file count and byte sum at the
@@ -348,7 +353,7 @@ and a unicode name:
   the selected tree), while copy follows a link to a file and refuses a link
   to a directory (following loops forever on a cycle, and `VirtualFs` has no
   `symlink` call to recreate one).
-- **Mutation probes** (skill [59](../skills/59-mutation-probe-over-coverage-percent.md)),
+- **Mutation probes** (skill [59](../../skills/59-mutation-probe-over-coverage-percent.md)),
   run and recorded: rollback removed, rename fast path removed, skip tracking
   removed, mtime stamping removed — each must turn its own test red.
 
@@ -370,7 +375,7 @@ before, which is what the test asserts.
 and the `CrossDevice` fallback both address one backend, which holds while the
 UI has one; phase 6 is where a cross-store move has to be told apart.
 
-*Docs:* new [ops.md](../ops.md) — the job model, the scan/execute split, the
+*Docs:* new [ops.md](../../ops.md) — the job model, the scan/execute split, the
 event vocabulary, the conflict protocol, and what cancel does and does not
 undo.
 
@@ -406,7 +411,7 @@ undo.
 - Two queued jobs run in submission order and neither observes the other's
   events.
 
-*Docs:* [ops.md](../ops.md) — the threading model, the channel shapes, and
+*Docs:* [ops.md](../../ops.md) — the threading model, the channel shapes, and
 the dropped-reply rule.
 
 ### D — `tc-app`: keys, dialogs, and refresh
@@ -425,7 +430,7 @@ the dropped-reply rule.
 
 - Dialogs, all modal, all built from the same small helper so three dialogs
   do not become three layouts
-  (skill [44](../skills/44-no-redundancy.md)):
+  (skill [44](../../skills/44-no-redundancy.md)):
   - **Target dialog** (F5/F6) — an entry prefilled with the *other* pane's
     directory. F6 with the path edited down to a bare name is a rename; the
     engine needs no separate rename job, because a move whose target is the
@@ -458,13 +463,13 @@ cursor keys and Enter in passing, F5, F7 and F8 with their dialogs directly.
 It earned its keep on the first run by finding a defect no test could see: the
 conflict dialog opened with no focused button and could only be answered with
 the mouse. What it still does not reach is listed in
-[future-improvements.md](../future-improvements.md).
+[future-improvements.md](../../future-improvements.md).
 
 *Deviations, implemented deliberately:*
 - **The conflict dialog moved from sub-phase E into D.** Without it, every
   colliding copy in D would have been answered by the engine's
   dropped-question rule — a silent abort. A sub-phase has to be usable on its
-  own (skill [11](../skills/11-multi-phase-commits.md)), and that one would
+  own (skill [11](../../skills/11-multi-phase-commits.md)), and that one would
   not have been. E keeps the progress window and the failure summary.
 - **`Job::Rename` was removed and `Destination` introduced.** Building the
   dialog showed the UI needs "copy to an exact name" (duplicating a file) just
@@ -479,9 +484,9 @@ the mouse. What it still does not reach is listed in
   true and the phase-0 tests still hold; the third of them turned into the
   specification the new function is tested against.
 
-*Docs:* [keymap.md](../keymap.md) — the new bindings and why a rename is a
-move · [ui-shell.md](../ui-shell.md) — the dialogs and the refresh rule ·
-[listing.md](../listing.md) — `load_nearest`.
+*Docs:* [keymap.md](../../keymap.md) — the new bindings and why a rename is a
+move · [ui-shell.md](../../ui-shell.md) — the dialogs and the refresh rule ·
+[listing.md](../../listing.md) — `load_nearest`.
 
 ### E — `tc-app`: progress window and conflict dialog
 
@@ -518,10 +523,10 @@ tests go red.
 of empty space to report a single failure. It now grows with its content and
 stops at a screenful.
 
-*Docs:* [ui-shell.md](../ui-shell.md) — the progress window, the conflict
+*Docs:* [ui-shell.md](../../ui-shell.md) — the progress window, the conflict
 dialog, and where the event loop is attached.
 
-### F — Refactoring audit + correction (skill [49](../skills/49-final-phase-refactoring-audit.md))
+### F — Refactoring audit + correction (skill [49](../../skills/49-final-phase-refactoring-audit.md))
 
 *Commit:* `refactor(core,app): audit corrections for the core operations phase`
 
@@ -577,7 +582,7 @@ changed; only the `tc-core` half of the problem was worth solving.
 
 ## 5. Effort
 
-Calibrated per skill [45](../skills/45-calibrate-effort-estimates.md)
+Calibrated per skill [45](../../skills/45-calibrate-effort-estimates.md)
 (feature plan, factor ×0.25):
 
 | Sub-phase | Calibrated |
@@ -606,7 +611,7 @@ measured ~5.5 h for roughly half this surface.
 - **Cross-device move is untestable on one device.** The fallback is exercised
   directly, so the *behavior* is covered while the *trigger* is not. The
   `CrossDevice` mapping itself is covered by the error-kind table. Anything
-  left over goes to [future-improvements.md](../future-improvements.md).
+  left over goes to [future-improvements.md](../../future-improvements.md).
 - **The trash test depends on `XDG_DATA_HOME` being honoured** by the crate
   (sub-phase A). If it is not, half the assertion is lost; the plan says what
   happens then rather than discovering it mid-implementation.
@@ -617,7 +622,7 @@ measured ~5.5 h for roughly half this surface.
   more composition, in a phase where a bug can delete something. The manual
   pass is not optional here, and its checklist grows with sub-phases D and E.
 - **The function-key bar is out of scope, and this is the phase that makes it
-  worth having** (skill [73](../skills/73-proactively-suggest-better-approaches.md)).
+  worth having** (skill [73](../../skills/73-proactively-suggest-better-approaches.md)).
   Eight labelled buttons across the bottom is perhaps an hour, it is the
   affordance that makes F5–F8 discoverable at all, and it is currently
   unassigned to any phase. Left out to keep the phase's shape, but it would
@@ -636,10 +641,10 @@ measured ~5.5 h for roughly half this surface.
   `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo test --workspace`, `cargo build --release` and the Windows
   cross-target clippy check are all green.
-- [ops.md](../ops.md) exists and is linked from [docs/CLAUDE.md](../CLAUDE.md);
-  [vfs.md](../vfs.md), [keymap.md](../keymap.md), [ui-shell.md](../ui-shell.md)
-  and [listing.md](../listing.md) reflect the new behavior.
+- [ops.md](../../ops.md) exists and is linked from [docs/CLAUDE.md](../../CLAUDE.md);
+  [vfs.md](../../vfs.md), [keymap.md](../../keymap.md), [ui-shell.md](../../ui-shell.md)
+  and [listing.md](../../listing.md) reflect the new behavior.
 - The manual keyboard-and-dialog pass has been run by the owner and its result
   recorded, as phase 1's was.
 - Sub-phase F is done, and this document's Status becomes `Implemented` with
-  the commit hashes, per skill [10](../skills/10-plan-lifecycle.md).
+  the commit hashes, per skill [10](../../skills/10-plan-lifecycle.md).
