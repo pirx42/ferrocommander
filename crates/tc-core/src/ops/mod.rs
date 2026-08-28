@@ -12,6 +12,7 @@ pub mod conflict;
 pub mod constants;
 pub mod plan;
 pub mod progress;
+pub mod queue;
 
 use std::io::{Read, Write};
 
@@ -21,6 +22,7 @@ pub use cancel::CancelToken;
 pub use conflict::{Answer, ApplyToAll, Conflict, ConflictResolver, Resolution};
 pub use plan::{Item, Plan, Task};
 pub use progress::{Outcome, Progress, ProgressSink, Report, Silent};
+pub use queue::{ConflictRequest, JobHandle, JobQueue};
 
 use conflict::{conflict_at, free_name_beside};
 use constants::COPY_BUFFER_BYTES;

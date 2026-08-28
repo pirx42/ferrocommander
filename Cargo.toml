@@ -16,6 +16,13 @@ repository = "https://github.com/pirx/ferrocommander"
 [workspace.dependencies]
 tc-core = { path = "crates/tc-core" }
 tempfile = "3"
+# Channels between a job's worker thread and whoever is watching. In tc-core
+# rather than tc-app because a channel is not a UI dependency, and because it
+# is what lets the shell await the event stream on the GLib main loop without
+# tc-core knowing GLib exists. Its blocking and async halves cover both
+# directions: the worker waits for a conflict answer, the UI does not wait for
+# anything.
+async-channel = "2"
 # Freedesktop / Recycle Bin deletion. Default features are off because they
 # pull chrono in for listing and restoring trash contents, which this project
 # never does; the Windows COM apartment feature is kept, because dropping it

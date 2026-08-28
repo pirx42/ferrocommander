@@ -8,7 +8,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+async-channel.workspace = true
 trash.workspace = true
 
 [dev-dependencies]
+async-channel.workspace = true
 tempfile.workspace = true

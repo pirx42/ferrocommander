@@ -122,6 +122,42 @@ Deleting and copying treat them differently, and both are deliberate:
   call to recreate it with. The refusal is reported as a per-path failure, so
   it is visible rather than silent.
 
+## The queue
+
+`ops::queue` runs jobs off the caller's thread: one worker thread takes them
+in submission order, and everything needed while a job runs hangs off the
+`JobHandle` that `submit` returns — a progress receiver, a conflict receiver,
+the cancel token, and a report channel that yields exactly one `Report`.
+
+```
+submit(job, source_fs, target_fs) ──► worker thread
+        │                                  │
+        │  progress  ◄─────────────────────┤  unbounded
+        │  conflicts ◄─────────────────────┤  question + its own reply channel
+        │  report    ◄─────────────────────┘  exactly one, at the end
+        └─ cancel ─────────────────────────►  shared flag
+```
+
+`async-channel` lives in `tc-core` rather than in the shell, because a channel
+is not a UI dependency and because its two halves cover both directions: the
+worker *waits* for a conflict answer with the blocking half, while the shell
+awaits events on the GLib main loop with the async half — without `tc-core`
+knowing GLib exists.
+
+**Progress is unbounded.** A bounded channel would let a stalled UI throttle
+the disk; unbounded means a busy caller slows down the display instead of the
+copy.
+
+**A conflict question carries its own reply channel**, and answering consumes
+the question, so it cannot be answered twice.
+
+**No answer means abort.** If the caller is gone, or a dialog is dismissed
+without deciding, the worker must not sit on a channel forever holding a
+half-copied tree. Abort rather than skip: silence is not consent to overwrite
+anything, and aborting is the outcome a user can always recover from by
+starting again. That also makes dropping the queue safe — a job parked on a
+question wakes the moment its handles go.
+
 ## Testing
 
 Assertions are conservation statements — file counts, byte sums,
@@ -129,6 +165,12 @@ per-relative-path contents, what the source still holds — rather than checks
 on the one path a call names. An engine that writes the right file and quietly
 loses a sibling passes the narrow kind of test and fails these
 (skill [52](skills/52-test-conservation-invariants.md)).
+
+The queue's own tests drive it entirely from a test thread, and the two that
+would otherwise be timing-dependent are made deterministic by construction:
+the cancel test parks the worker on a conflict question first, and job
+ordering is checked by effect — the second job creates a directory inside the
+first job's, so it can only succeed if the first already ran.
 
 Three seams make the awkward cases reachable without a second device or a real
 trash: a decorator that counts reads (so "a same-device move reads no bytes"
@@ -145,6 +187,7 @@ confirm the test goes red:
 | rename fast path removed | `a_move_within_one_filesystem_reads_no_bytes` |
 | skip tracking removed | `a_move_that_skipped_a_file_does_not_delete_it` |
 | modification time not stamped | `a_copied_file_keeps_the_original_date` |
+| no answer means skip, not abort | `a_conflict_question_dropped_unanswered_aborts_instead_of_hanging` |
 
 The first probe found a real hole rather than confirming one: the cancel test
 originally stopped on a file that had already been read completely, so nothing

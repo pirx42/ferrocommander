@@ -1,6 +1,6 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: In Progress — sub-phases 0, A, B done
+Status: In Progress — sub-phases 0, A, B, C done
 
 *2026-08-28 — implements phase 2 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
