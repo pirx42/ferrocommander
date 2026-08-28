@@ -261,10 +261,100 @@ impl Listing {
         self.set_visible(|_| false);
     }
 
-    /// Flips every visible row.
+    /// Flips every visible row, directories included.
+    ///
+    /// What Total Commander binds to `Shift+Num *`; its plain `Num *` is
+    /// [`invert_selection_files`](Self::invert_selection_files).
     pub fn invert_selection(&mut self) {
-        for &position in &self.view {
+        self.invert(|_| true);
+    }
+
+    /// Flips every visible **file**, leaving directories as they are.
+    ///
+    /// The split is Total Commander's, and it is the useful default: a person
+    /// inverting a selection is nearly always thinking about files, and having
+    /// every directory in the pane join in is a surprise that costs a second
+    /// `Num *` to undo.
+    pub fn invert_selection_files(&mut self) {
+        self.invert(|entry| !entry.is_dir());
+    }
+
+    fn invert(&mut self, include: impl Fn(&Entry) -> bool) {
+        let flipping: Vec<usize> = self
+            .view
+            .iter()
+            .copied()
+            .filter(|&position| include(&self.entries[position]))
+            .collect();
+        for position in flipping {
             self.selected[position] = !self.selected[position];
+        }
+    }
+
+    /// Marks or unmarks every visible file sharing the cursor row's extension.
+    ///
+    /// Files only, like the inversion above and like Total Commander: a
+    /// directory that happens to be called `photos.backup` is not one of "the
+    /// `.backup` files". A cursor row with no extension picks out the other
+    /// extension-less files, which is the same rule applied honestly rather
+    /// than a special case.
+    ///
+    /// Does nothing on `..`, which has no extension to go by.
+    pub fn select_same_extension(&mut self, selected: bool) {
+        let Some(entry) = self.current() else {
+            return;
+        };
+        if entry.is_dir() {
+            return;
+        }
+        let wanted = split_name(&entry.name).1.to_string();
+        let matching: Vec<usize> = self
+            .view
+            .iter()
+            .copied()
+            .filter(|&position| {
+                let entry = &self.entries[position];
+                !entry.is_dir() && split_name(&entry.name).1 == wanted
+            })
+            .collect();
+        for position in matching {
+            self.selected[position] = selected;
+        }
+    }
+
+    /// The names of the marked rows, in the order they are shown.
+    ///
+    /// Names rather than indices, because that is the only form of a selection
+    /// that survives anything: every finished job builds a fresh listing and
+    /// every sort reorders the one that is there, so an index restored later
+    /// points at a different file than the one it was taken from.
+    pub fn selected_names(&self) -> Vec<String> {
+        self.view
+            .iter()
+            .filter(|&&position| self.selected[position])
+            .map(|&position| self.entries[position].name.clone())
+            .collect()
+    }
+
+    /// Marks exactly the named rows, unmarking everything else visible.
+    ///
+    /// A name that is no longer here — the file it referred to was moved or
+    /// deleted by the very operation this restores the selection from — is
+    /// silently not marked. There is nothing else it could mean.
+    pub fn set_selected_names(&mut self, names: &[String]) {
+        let wanted: Vec<usize> = self
+            .view
+            .iter()
+            .copied()
+            .filter(|&position| {
+                names
+                    .iter()
+                    .any(|name| *name == self.entries[position].name)
+            })
+            .collect();
+        self.clear_selection();
+        for position in wanted {
+            self.selected[position] = true;
         }
     }
 

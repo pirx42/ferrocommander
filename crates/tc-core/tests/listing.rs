@@ -534,6 +534,15 @@ mod selection {
         )
     }
 
+    /// The marked names as a *set*, for the tests where the view order is
+    /// not the thing under test — `selected_names` reports in display order,
+    /// so a sort legitimately reorders it.
+    fn marked_set(listing: &Listing) -> Vec<String> {
+        let mut names = listing.selected_names();
+        names.sort();
+        names
+    }
+
     /// Every visible row, marked or not.
     fn marks(listing: &Listing) -> Vec<bool> {
         (0..listing.len()).map(|i| listing.is_selected(i)).collect()
@@ -585,6 +594,182 @@ mod selection {
 
         listing.select_matching("*", true);
         assert!(!listing.is_selected(0), "select_matching");
+    }
+
+    #[test]
+    fn inverting_files_leaves_the_directories_alone() {
+        // Total Commander's `Num *`. A person inverting a selection is
+        // thinking about files; dragging every directory in with them is the
+        // surprise the split exists to avoid.
+        let mut listing = listing();
+        listing.focus_entry("projects");
+        listing.toggle_selected(listing.cursor());
+        let directories = listing.selection_summary().count;
+
+        listing.invert_selection_files();
+
+        assert!(
+            listing.selected_names().contains(&"projects".to_string()),
+            "the marked directory lost its mark"
+        );
+        // Three visible files, none of which were marked, all of them now.
+        assert_eq!(listing.selection_summary().count, directories + 3);
+    }
+
+    #[test]
+    fn inverting_everything_does_include_the_directories() {
+        // `Shift+Num *`, the other half of the split. Same fixture, same
+        // starting marks, and the directory must come out the other way.
+        let mut listing = listing();
+        listing.focus_entry("projects");
+        listing.toggle_selected(listing.cursor());
+
+        listing.invert_selection();
+
+        assert!(
+            !listing.selected_names().contains(&"projects".to_string()),
+            "the directory was left out of an inversion that includes them"
+        );
+    }
+
+    #[test]
+    fn inverting_files_twice_is_the_identity() {
+        let mut listing = listing();
+        listing.focus_entry("b.txt");
+        listing.toggle_selected(listing.cursor());
+        let before = marks(&listing);
+
+        listing.invert_selection_files();
+        listing.invert_selection_files();
+
+        assert_eq!(marks(&listing), before);
+    }
+
+    #[test]
+    fn the_extension_keys_pick_out_that_extension_and_nothing_else() {
+        let mut listing = listing();
+        listing.focus_entry("a.txt");
+
+        listing.select_same_extension(true);
+
+        assert_eq!(
+            listing.selected_names(),
+            vec!["a.txt".to_string(), "b.txt".to_string()],
+            "the .txt files, and only those"
+        );
+
+        // And back off again, which is the whole of `Alt+Num −`.
+        listing.select_same_extension(false);
+        assert!(listing.selected_names().is_empty());
+    }
+
+    #[test]
+    fn a_directory_is_not_one_of_the_files_with_its_extension() {
+        // `photos.backup` is a directory, not one of "the .backup files".
+        let mut listing = Listing::new(
+            VfsPath::new("/home/pirx"),
+            vec![
+                dir_entry("photos.backup", 10),
+                file_entry("notes.backup", 100, 20),
+                file_entry("data.backup", 200, 30),
+            ],
+        );
+        listing.focus_entry("notes.backup");
+
+        listing.select_same_extension(true);
+
+        assert_eq!(
+            listing.selected_names(),
+            vec!["data.backup".to_string(), "notes.backup".to_string()],
+            "the directory joined the files sharing its extension"
+        );
+    }
+
+    #[test]
+    fn an_extension_less_file_picks_out_the_other_extension_less_ones() {
+        // The same rule applied honestly rather than a special case.
+        let mut listing = Listing::new(
+            VfsPath::new("/home/pirx"),
+            vec![
+                file_entry("README", 100, 20),
+                file_entry("LICENSE", 200, 30),
+                file_entry("notes.md", 400, 40),
+            ],
+        );
+        listing.focus_entry("README");
+
+        listing.select_same_extension(true);
+
+        assert_eq!(
+            listing.selected_names(),
+            vec!["LICENSE".to_string(), "README".to_string()]
+        );
+    }
+
+    #[test]
+    fn the_extension_keys_do_nothing_on_a_directory_or_on_the_parent_row() {
+        let mut listing = listing();
+
+        // Row 0 is `..`, which has no extension to go by.
+        listing.set_cursor(0);
+        listing.select_same_extension(true);
+        assert!(listing.selected_names().is_empty(), "on `..`");
+
+        listing.focus_entry("projects");
+        listing.select_same_extension(true);
+        assert!(listing.selected_names().is_empty(), "on a directory");
+    }
+
+    #[test]
+    fn a_selection_survives_being_taken_by_name_and_put_back() {
+        // What `Num /` needs: every finished job builds a fresh listing and
+        // every sort reorders the one that is there, so a selection that is
+        // restorable at all is one recorded by name.
+        let mut listing = listing();
+        listing.focus_entry("a.txt");
+        listing.toggle_selected(listing.cursor());
+        listing.focus_entry("notes.md");
+        listing.toggle_selected(listing.cursor());
+        let taken = marked_set(&listing);
+
+        listing.clear_selection();
+        listing.set_sort(Sort::new(SortKey::Size, SortOrder::Descending));
+        listing.set_selected_names(&taken);
+
+        // The *set* survives; the order does not, because `selected_names`
+        // reports in display order and the sort is what just changed it.
+        assert_eq!(marked_set(&listing), taken, "across a sort");
+
+        listing.set_sort(Sort::new(SortKey::Name, SortOrder::Ascending));
+        assert_eq!(marked_set(&listing), taken, "and back again");
+    }
+
+    #[test]
+    fn restoring_a_selection_replaces_whatever_is_marked_now() {
+        // Not a merge: `Num /` puts back the selection from before the
+        // operation, and anything marked since is not part of it.
+        let mut listing = listing();
+        listing.focus_entry("a.txt");
+        listing.toggle_selected(listing.cursor());
+        let taken = marked_set(&listing);
+
+        listing.select_all();
+        listing.set_selected_names(&taken);
+
+        assert_eq!(marked_set(&listing), taken);
+    }
+
+    #[test]
+    fn a_restored_name_that_is_gone_is_simply_not_marked() {
+        // The usual case: the selection being restored is the one the last
+        // operation consumed, so some of those files have just been moved or
+        // deleted. There is nothing else "mark it" could mean.
+        let mut listing = listing();
+        let taken = vec!["a.txt".to_string(), "vanished.txt".to_string()];
+
+        listing.set_selected_names(&taken);
+
+        assert_eq!(listing.selected_names(), vec!["a.txt".to_string()]);
     }
 
     #[test]

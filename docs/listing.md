@@ -119,6 +119,30 @@ Pattern selection uses `tc-core::glob` — `*` and `?`, case-insensitive, which
 is what Total Commander accepts and what a person types. It lives outside
 `listing` because phase 5's search needs the same matcher.
 
+### Files-only is the default, directories the opt-in
+
+`invert_selection_files` flips the visible **files**; `invert_selection` flips
+the directories too. Total Commander's split, and the useful default: a person
+inverting a selection is nearly always thinking about files, and having every
+directory in the pane join in is a surprise that costs a second keystroke to
+undo. `select_same_extension` follows the same rule — a directory called
+`photos.backup` is not one of "the `.backup` files" — and a cursor row with no
+extension picks out the other extension-less files, which is that rule applied
+honestly rather than a special case.
+
+### A selection is restorable only by name
+
+`selected_names` / `set_selected_names` are how a selection is put away and
+brought back, because names are the only form of it that survives anything:
+every finished job builds a fresh listing and every sort reorders the one that
+is there, so an index restored later points at a different file than the one it
+was taken from. Restoring **replaces** what is marked rather than merging into
+it, and a name that is no longer here is simply not marked — the usual case,
+since the selection being restored is the one the last operation consumed.
+
+`selected_names` reports in **display order**, so a sort legitimately reorders
+it; what survives a round trip is the set, not the sequence.
+
 ## The quick filter
 
 `set_filter` narrows the visible rows to names containing a string, ignoring
