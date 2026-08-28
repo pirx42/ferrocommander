@@ -39,7 +39,9 @@ same session also found a bug no unit test could see — stepping up left the
 cursor on `..` instead of the directory just left — while 74 tests passed.
 Each unit was correct; the composition was not. That is the argument for this
 gap mattering, and for the manual pass being repeated whenever the shell
-grows. So the wiring is known good today; what is missing is a regression
+grows. A second one followed: Page Up/Down moved the widget's selection while
+the model's cursor stayed behind, so the next keystroke acted on a stale row.
+Both bugs lived in the composition, which is exactly the layer with no test. So the wiring is known good today; what is missing is a regression
 net, and a future refactor could break it silently.
 *Home:* would need a way to synthesize keystrokes in the session, or
 `gtk::test` smoke tests as the design doc's testing section anticipates.

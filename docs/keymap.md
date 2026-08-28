@@ -13,8 +13,22 @@
 | `Backspace` | Leave the current directory |
 | `Ctrl+Q` | Quit |
 
-Everything else is unbound. Activating a *file* does nothing in phase 1 —
-F3/F4 arrive in phase 4.
+Activating a *file* does nothing in phase 1 — F3/F4 arrive in phase 4.
+
+## Page Up / Page Down are the widget's job
+
+They are deliberately **not** in the table. Paging depends on how many rows
+fit on screen, and the model has no idea how tall the viewport is — the
+`ColumnView` does. So the page keys fall through to the widget, which moves
+its own selection and scrolls.
+
+That leaves the widget's selection ahead of the model's cursor, so the pane
+**adopts the selection before acting on any bound key**. Without that step the
+two drift apart and the next Enter opens whatever row the cursor was on
+before the page, not the row the user is looking at.
+
+The same mechanism covers anything else the widget handles on its own, and is
+what mouse selection will ride on in a later phase.
 
 ## One table, no key names in the widgets
 

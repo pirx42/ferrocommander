@@ -13,7 +13,7 @@ use crate::constants::{
     COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
     COLUMN_WIDTH_SIZE, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, XALIGN_LEFT, XALIGN_RIGHT,
 };
-use crate::navigation::{activation_target, focus_after_move, parent_target};
+use crate::navigation::{activation_target, adopted_cursor, focus_after_move, parent_target};
 use crate::row::Row;
 
 /// The columns a pane shows.
@@ -196,6 +196,10 @@ impl PaneView {
             None => path.to_string(),
         });
 
+        // Emptying and refilling the store makes the widget move its own
+        // selection, which `adopt_selection` would then read back as the
+        // user's intent. The model's cursor is restored afterwards.
+        let cursor = self.listing.cursor();
         self.store.remove_all();
         for index in 0..self.listing.len() {
             let entry = self
@@ -206,6 +210,7 @@ impl PaneView {
             self.store.append(&PaneEntry::new(row));
         }
 
+        self.listing.set_cursor(cursor);
         self.sync_cursor();
     }
 
@@ -215,6 +220,22 @@ impl PaneView {
             return;
         }
         self.selection.set_selected(self.listing.cursor() as u32);
+    }
+
+    /// Takes over a selection the widget moved on its own.
+    ///
+    /// Keys this shell does not bind — Page Up/Down above all — fall through
+    /// to the `ColumnView`, which moves its selection without telling the
+    /// model. Adopting that selection before acting keeps the two from
+    /// drifting apart, so the next Enter opens the row the user is actually
+    /// looking at.
+    ///
+    /// Paging is deliberately left to the widget: it knows the height of the
+    /// viewport, and the model has no idea how many rows are on screen.
+    pub fn adopt_selection(&mut self) {
+        if let Some(cursor) = adopted_cursor(self.selection.selected()) {
+            self.listing.set_cursor(cursor);
+        }
     }
 
     /// Moves the cursor by `delta` rows.

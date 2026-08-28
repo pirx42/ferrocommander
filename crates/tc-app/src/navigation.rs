@@ -23,6 +23,14 @@ pub fn parent_target(listing: &Listing) -> Option<VfsPath> {
     listing.dir().parent()
 }
 
+/// The model cursor implied by the widget's selection index.
+///
+/// `None` when the widget reports no selection at all, which it does while a
+/// pane is being repopulated.
+pub fn adopted_cursor(selected: u32) -> Option<usize> {
+    (selected != gtk::INVALID_LIST_POSITION).then_some(selected as usize)
+}
+
 /// Which entry the cursor should land on after moving from `from` to `to`.
 ///
 /// Stepping **up** lands on the directory just left: someone who pressed
@@ -91,6 +99,17 @@ mod tests {
     fn activating_an_empty_listing_leads_nowhere() {
         let listing = Listing::new(VfsPath::root(), Vec::new());
         assert_eq!(activation_target(&listing), None);
+    }
+
+    #[test]
+    fn a_widget_selection_becomes_the_model_cursor() {
+        assert_eq!(adopted_cursor(0), Some(0));
+        assert_eq!(adopted_cursor(7), Some(7));
+    }
+
+    #[test]
+    fn no_widget_selection_means_no_cursor_to_adopt() {
+        assert_eq!(adopted_cursor(gtk::INVALID_LIST_POSITION), None);
     }
 
     #[test]

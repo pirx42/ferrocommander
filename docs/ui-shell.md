@@ -50,6 +50,22 @@ variant, not four scattered edits (skill
 into leftover width; the rest stay fixed so the two panes line up with each
 other.
 
+## Cursor and selection
+
+The `Listing` cursor is authoritative and the widget's selection mirrors it —
+but only in one direction, and only while the widget cooperates. Keys the
+shell does not bind reach the `ColumnView`, which moves its selection without
+asking. So the traffic runs both ways:
+
+- **Model → widget** after anything that changes the listing (`refresh`,
+  cursor moves, navigation).
+- **Widget → model** at the start of every dispatched action, via
+  `adopt_selection`.
+
+`refresh` saves and restores the cursor around the store rebuild, because
+emptying and refilling the store makes the widget move its selection on its
+own — which the next adoption would otherwise read back as the user's intent.
+
 ## Active pane
 
 Exactly one pane is active. It is marked by a style class on its **path bar**,

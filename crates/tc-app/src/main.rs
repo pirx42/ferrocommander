@@ -45,6 +45,11 @@ impl Shell {
     /// Carries out an action. [`Action::Quit`] is not handled here — closing
     /// the window is the caller's business, since the shell has no window.
     fn dispatch(&mut self, action: Action) {
+        // The widget may have moved its own selection since the last action —
+        // Page Up/Down are not bound here and go straight to the ColumnView.
+        // Catch the model up before acting on a stale cursor.
+        self.active_pane().adopt_selection();
+
         match action {
             Action::SwitchPane => {
                 self.active = (self.active + 1) % PANE_COUNT;
