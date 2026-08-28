@@ -291,6 +291,9 @@ pub const CONFLICT_PROMPT: &str = "{name} already exists in the target.";
 pub const TITLE_PROGRESS: &str = "Working";
 pub const TITLE_FAILURES: &str = "Some items were not processed";
 
+/// Title of the command history Ctrl+Down opens.
+pub const TITLE_HISTORY: &str = "Command history";
+
 /// Title of the window a command's output lands in.
 pub const TITLE_OUTPUT: &str = "Command output";
 

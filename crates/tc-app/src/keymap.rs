@@ -82,6 +82,8 @@ pub enum Action {
     /// Ctrl+F3…Ctrl+F6 — sort by a column, or flip it if it is already the
     /// one in force.
     SortBy(SortKey),
+    /// Ctrl+↓ / Alt+F8 — the command lines that were run, to pick one from.
+    CommandHistory,
     /// Alt+F1 — offer the left pane a list of places to go.
     SelectDriveLeft,
     /// Alt+F2 — the same for the right pane.
@@ -328,6 +330,17 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::SortBy(SortKey::Size),
     },
+    // Total Commander's two ways to the same list, and both are muscle memory.
+    Binding {
+        key: Key::Down,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::CommandHistory,
+    },
+    Binding {
+        key: Key::F8,
+        modifiers: ModifierType::ALT_MASK,
+        action: Action::CommandHistory,
+    },
     // Absolute, as in Total Commander: the F-key number *is* the pane number,
     // so which pane has the keyboard makes no difference. Unlike Ctrl+arrow
     // below, there is nothing relative for these to be consistent with.
@@ -430,6 +443,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("sort_by_ext", Action::SortBy(SortKey::Ext)),
     ("sort_by_size", Action::SortBy(SortKey::Size)),
     ("sort_by_date", Action::SortBy(SortKey::Modified)),
+    ("command_history", Action::CommandHistory),
     ("select_drive_left", Action::SelectDriveLeft),
     ("select_drive_right", Action::SelectDriveRight),
     ("clone_to_right", Action::CloneToRight),
@@ -719,6 +733,12 @@ mod tests {
                 ModifierType::CONTROL_MASK,
                 Action::SortBy(SortKey::Size),
             ),
+            (
+                Key::Down,
+                ModifierType::CONTROL_MASK,
+                Action::CommandHistory,
+            ),
+            (Key::F8, ModifierType::ALT_MASK, Action::CommandHistory),
             (Key::F1, ModifierType::ALT_MASK, Action::SelectDriveLeft),
             (Key::F2, ModifierType::ALT_MASK, Action::SelectDriveRight),
             (Key::Right, ModifierType::CONTROL_MASK, Action::CloneToRight),
@@ -1027,10 +1047,25 @@ mod tests {
 
     #[test]
     fn a_bound_key_with_the_wrong_modifier_triggers_nothing() {
-        // Ctrl+Down must not fall through to the unmodified CursorDown.
-        assert_eq!(bound(Key::Down, ModifierType::CONTROL_MASK), None);
+        // Ctrl+End is the witness because Ctrl+Down stopped being one: it
+        // took on the command history in phase 3c. The contract is unchanged,
+        // only which key demonstrates it — End is bound plain and with Shift,
+        // and must still mean nothing with Ctrl.
+        assert_eq!(bound(Key::End, ModifierType::CONTROL_MASK), None);
         assert_eq!(bound(Key::Tab, ModifierType::ALT_MASK), None);
         assert_eq!(bound(Key::q, PLAIN), None);
+    }
+
+    #[test]
+    fn ctrl_does_not_fall_through_to_a_plain_cursor_key() {
+        // What Ctrl+Down used to witness, now that it means something: a
+        // lookup ignoring modifiers would move the cursor instead of opening
+        // the history, and the two are not close.
+        assert_eq!(bound(Key::Down, PLAIN), Some(Action::CursorDown));
+        assert_eq!(
+            bound(Key::Down, ModifierType::CONTROL_MASK),
+            Some(Action::CommandHistory)
+        );
     }
 
     #[test]

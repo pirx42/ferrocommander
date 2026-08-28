@@ -26,6 +26,13 @@ pub const CONFIG_FILE: &str = "config.toml";
 /// startup, and never written back.
 pub const KEYS_TABLE: &str = "keys";
 
+/// How many command lines are remembered.
+///
+/// A cap rather than everything: the settings file is rewritten whenever
+/// anything changes, and an unbounded list would make that write grow without
+/// limit for a list nobody scrolls to the end of.
+pub const COMMAND_HISTORY_LIMIT: usize = 100;
+
 /// Written first, then renamed over the real file.
 ///
 /// A settings file truncated by a crash mid-write is a program that starts up
@@ -43,6 +50,11 @@ pub struct Settings {
     pub panes: Vec<PaneSettings>,
     /// Which pane had the keyboard.
     pub active_pane: usize,
+    /// Command lines that were run, newest first.
+    ///
+    /// Kept so `Ctrl+↓` has something to offer on the next run: a history that
+    /// forgot everything when the app closed would be a history in name only.
+    pub command_history: Vec<String>,
     /// The directory each mount point was last showing, keyed by mount path.
     ///
     /// What makes switching to a drive land where you were on it rather than
@@ -175,6 +187,17 @@ impl Settings {
     /// other one is missing would be worse than defaulting it.
     pub fn pane(&self, index: usize) -> PaneSettings {
         self.panes.get(index).cloned().unwrap_or_default()
+    }
+
+    /// Puts `line` at the front of the history, and keeps it capped.
+    ///
+    /// Newest first, and a line run again moves up rather than appearing
+    /// twice: a history listing `make` eleven times is one you have to read
+    /// past to find anything else.
+    pub fn remember_command(&mut self, line: &str) {
+        self.command_history.retain(|previous| previous != line);
+        self.command_history.insert(0, line.to_string());
+        self.command_history.truncate(COMMAND_HISTORY_LIMIT);
     }
 
     /// Records the settings for pane `index`, growing the list as needed.
@@ -345,6 +368,35 @@ mod tests {
         assert_eq!(settings.pane(0), PaneSettings::default());
         assert_eq!(settings.pane(1).directory().unwrap().as_str(), "/home/pirx");
         assert_eq!(settings.pane(9), PaneSettings::default());
+    }
+
+    #[test]
+    fn a_command_run_again_moves_up_rather_than_appearing_twice() {
+        // A history listing `make` eleven times is one you read past to find
+        // anything else.
+        let mut settings = Settings::default();
+        settings.remember_command("make");
+        settings.remember_command("ls -la");
+        settings.remember_command("make");
+
+        assert_eq!(settings.command_history, ["make", "ls -la"]);
+    }
+
+    #[test]
+    fn the_history_stops_growing_at_the_cap() {
+        // The settings file is rewritten whenever anything changes, so an
+        // unbounded list would make that write grow without limit.
+        let mut settings = Settings::default();
+        for index in 0..COMMAND_HISTORY_LIMIT + 10 {
+            settings.remember_command(&format!("command {index}"));
+        }
+
+        assert_eq!(settings.command_history.len(), COMMAND_HISTORY_LIMIT);
+        // The newest survived the trimming, not the oldest.
+        assert_eq!(
+            settings.command_history[0],
+            format!("command {}", COMMAND_HISTORY_LIMIT + 9)
+        );
     }
 
     #[test]

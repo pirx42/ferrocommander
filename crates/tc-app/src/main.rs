@@ -31,8 +31,8 @@ use constants::{
     PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
     PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY,
     SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
-    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_DRIVES, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT,
-    TITLE_UNMARK_PATTERN,
+    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE,
+    TITLE_OUTPUT, TITLE_UNMARK_PATTERN,
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
@@ -111,6 +111,15 @@ impl Shell {
         self.follow_active();
     }
 
+    /// Adds a command line to the history, which is part of the settings.
+    ///
+    /// Written into `saved` rather than a field of its own, because `saved` is
+    /// what the next write compares against — a history kept beside it would
+    /// look like no change at all and never reach the disk.
+    fn remember_command(&mut self, line: &str) {
+        self.saved.remember_command(line);
+    }
+
     /// Points the command line's prompt at the active pane.
     ///
     /// Shown rather than left to be remembered: which directory a command
@@ -139,6 +148,7 @@ impl Shell {
             // has a [keys] table, and the first keystroke of every run would
             // write their file for no reason.
             keys: self.saved.keys.clone(),
+            command_history: self.saved.command_history.clone(),
             drives: self.drives.clone(),
             ..config::Settings::default()
         };
@@ -234,6 +244,7 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         }
         Action::ClearFilter => shell.borrow_mut().active_pane().reset_filter(),
         Action::SortBy(key) => shell.borrow_mut().active_pane().sort_by(key),
+        Action::CommandHistory => show_command_history(shell),
         Action::SelectDriveLeft => start_drive_selection(shell, LEFT_PANE),
         Action::SelectDriveRight => start_drive_selection(shell, RIGHT_PANE),
         Action::CloneToRight => clone_pane(shell, RIGHT_PANE),
@@ -257,6 +268,38 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     // there is no arm that could not have.
     shell.borrow().follow_active();
     remember(shell);
+}
+
+/// `Ctrl+↓` / `Alt+F8`: the command history, to pick a line from.
+///
+/// Picking puts the line in the entry rather than running it, so it can be
+/// edited first — which is most of why anybody opens a history at all, and
+/// what Total Commander does.
+fn show_command_history(shell: &Rc<RefCell<Shell>>) {
+    let (window, history) = {
+        let state = shell.borrow();
+        let Some(window) = state.window.upgrade() else {
+            return;
+        };
+        (window, state.saved.command_history.clone())
+    };
+    // Nothing run yet is not a window worth opening on an empty list.
+    if history.is_empty() {
+        return;
+    }
+    // Label and value are the same here: a command line is its own name.
+    let rows: Vec<(String, String)> = history
+        .into_iter()
+        .map(|line| (line, String::new()))
+        .map(|(line, _)| (line.clone(), line))
+        .collect();
+
+    let shell = shell.clone();
+    dialogs::choose_one(&window, TITLE_HISTORY, &rows, move |line| {
+        let state = shell.borrow();
+        state.command_line.set_text(&line);
+        state.command_line.grab_focus();
+    });
 }
 
 /// Runs whatever is in the command line, in the active pane's directory.
@@ -288,6 +331,9 @@ fn run_command(shell: &Rc<RefCell<Shell>>) {
             remember(shell);
         }
         command_line::Typed::Shell(line) => {
+            // Remembered before it runs, and whatever it does: a command that
+            // failed is the one most worth getting back to and correcting.
+            shell.borrow_mut().remember_command(&line);
             finish_command(shell);
             // Before it finishes, not after: the keyboard belongs back in the
             // rows the moment the command is away, and a long one would
@@ -380,7 +426,7 @@ fn start_drive_selection(shell: &Rc<RefCell<Shell>>, target: usize) {
         .collect();
 
     let shell = shell.clone();
-    dialogs::choose_place(&window, TITLE_DRIVES, &places, move |path| {
+    dialogs::choose_one(&window, TITLE_DRIVES, &places, move |path| {
         // `go_to_drive` remembers for us — and it has to, because the
         // keystroke that opened this dialog returned long before the answer
         // arrived, so the one call at the end of `dispatch` has been and gone.

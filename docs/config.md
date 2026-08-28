@@ -59,6 +59,15 @@ mounts nest: a file under `/mnt/backup` belongs to the backup drive, not to
 so the rule is tested against a made-up machine rather than whatever the test
 host has mounted.
 
+## `command_history` — the lines that were run
+
+Newest first, without duplicates, capped at `COMMAND_HISTORY_LIMIT`. What
+`Ctrl+↓` offers on the next run ([command-line.md](command-line.md)); a history
+that forgot everything when the app closed would be one in name only. The cap
+exists because this file is rewritten whenever anything changes, and an
+unbounded list would make that write grow without limit for a list nobody
+scrolls to the end of.
+
 ## `[keys]` — the bindings, which belong to the user
 
 The defaults are the keymap in [keymap.md](keymap.md); a `[keys]` table in

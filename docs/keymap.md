@@ -29,6 +29,7 @@
 | `Num /` | The selection from before the last operation |
 | `Ctrl+A`, `Ctrl+Num +` | Mark everything visible |
 | `Ctrl+Num −` | Unmark everything visible |
+| `Ctrl+↓`, `Alt+F8` | The command history — see [command-line.md](command-line.md) |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
 | `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
 | `Ctrl+U` | Exchange the two panes |

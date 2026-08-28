@@ -32,6 +32,29 @@ hold the keyboard for as long as it runs. Leaving the focus in the entry meant
 the next `F7` was typed into it rather than opening a dialog, which reads as
 the program ignoring you — a test found that.
 
+## `Ctrl+↓` and `Alt+F8` open the history
+
+Total Commander's two ways to the same list, and both are muscle memory.
+Picking a line **puts it in the entry rather than running it**, with the cursor
+at the end — editing a previous command is most of why anybody opens a history
+at all.
+
+- **Newest first, no duplicates.** A line run again moves up rather than
+  appearing twice; a history listing `make` eleven times is one you read past
+  to find anything else.
+- **Remembered before it runs, whatever it does.** A command that failed is
+  the one most worth getting back to and correcting.
+- **It survives a restart**, in `command_history` in
+  [config.md](config.md) — a history that forgot everything when the app closed
+  would be one in name only. Capped at `COMMAND_HISTORY_LIMIT`, because the
+  settings file is rewritten whenever anything changes and an unbounded list
+  would make that write grow without limit.
+- **An empty history opens nothing.** Nothing run yet is not worth a window
+  listing nothing.
+
+The list is the same chooser the drive selector uses (`dialogs::choose_one`),
+which is why it was renamed from `choose_place` — it was never about places.
+
 ## The prompt says which directory
 
 The line follows the active pane, so which directory it means changes under

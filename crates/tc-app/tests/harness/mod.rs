@@ -263,7 +263,10 @@ impl App {
     }
 
     pub fn type_text(&self, text: &str) {
-        self.xdotool(&["type", "--clearmodifiers", text]);
+        // `--` before the text, or xdotool reads a leading dash as a flag of
+        // its own and refuses: typing `-again` onto the end of a command line
+        // failed with no hint that the text was the problem.
+        self.xdotool(&["type", "--clearmodifiers", "--", text]);
     }
 
     /// Puts the keyboard focus back on the panes, and waits until it is

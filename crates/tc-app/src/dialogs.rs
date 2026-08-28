@@ -135,29 +135,33 @@ pub fn ask_text(
     entry.select_region(0, -1);
 }
 
-/// Offers a list of places to go, and calls back with the one chosen.
+/// Offers a list of rows and calls back with the value of the one chosen.
 ///
-/// Total Commander's `Alt+F1`/`Alt+F2`. Its version is a dropdown under the
-/// drive button; this is a modal window like every other chooser here, for a
-/// reason worth writing down: a GTK popover is not a window the end-to-end
-/// suite can find or send keys to, and a drive selector that cannot be tested
-/// through a real key press is exactly the kind of thing that ships broken
-/// ([`docs/ui-shell.md`]).
+/// Each row is `(label, detail)`; the detail is shown dimmed beside the label
+/// and is also what comes back, because a label may repeat and the value is
+/// what actually identifies the choice.
+///
+/// Serves the drive selector (`Alt+F1`/`Alt+F2`) and the command history
+/// (`Ctrl+↓`). A modal window rather than the dropdown Total Commander uses,
+/// for a reason worth writing down: a GTK popover is not a window the
+/// end-to-end suite can find or send keys to, and a chooser that cannot be
+/// tested through a real key press is exactly the kind of thing that ships
+/// broken ([`docs/ui-shell.md`]).
 ///
 /// Keyboard-first, since that is the whole point of having the key at all:
 /// the list opens focused with the first row selected, the arrows walk it,
-/// Enter takes it and Escape leaves without going anywhere.
-pub fn choose_place(
+/// Enter takes it and Escape leaves without choosing.
+pub fn choose_one(
     parent: &impl IsA<gtk::Window>,
     title: &str,
-    places: &[(String, String)],
+    rows: &[(String, String)],
     accept: impl Fn(String) + 'static,
 ) {
     let (window, content) = shell(parent, title);
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
-    for (label, detail) in places {
+    for (label, detail) in rows {
         let row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(DIALOG_SPACING)
@@ -189,16 +193,16 @@ pub fn choose_place(
         .build();
     content.append(&scroller);
 
-    // By index rather than by widget: the row carries a label, and two mounts
-    // may share one. The index is what actually identifies the choice.
-    let chosen: Vec<String> = places.iter().map(|(_, path)| path.clone()).collect();
+    // By index rather than by widget: two rows may carry the same label, and
+    // the index is what actually identifies the choice.
+    let chosen: Vec<String> = rows.iter().map(|(_, value)| value.clone()).collect();
     let closing = window.clone();
     list.connect_row_activated(move |_, row| {
-        let Some(path) = chosen.get(row.index() as usize).cloned() else {
+        let Some(value) = chosen.get(row.index() as usize).cloned() else {
             return;
         };
         closing.close();
-        accept(path);
+        accept(value);
     });
 
     window.present();

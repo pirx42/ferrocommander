@@ -34,6 +34,7 @@ const DIALOG_FAILURES: &str = "Some items were not processed";
 const DIALOG_PATTERN: &str = "Select by pattern";
 const DIALOG_DRIVES: &str = "Drives";
 const DIALOG_OUTPUT: &str = "Command output";
+const DIALOG_HISTORY: &str = "Command history";
 
 /// Where the settings file lands inside a test's private home. Spelled out
 /// rather than read from `tc-core`, for the same reason the dialog titles
@@ -1488,6 +1489,77 @@ fn escape_empties_the_command_line_and_hands_back_the_keyboard() {
         !app.path("src/never-run").exists(),
         "Escape left the command behind to be run later"
     );
+}
+
+#[test]
+fn ctrl_down_offers_a_command_that_was_run_before() {
+    // Total Commander's Ctrl+Down. Picking puts the line in the entry rather
+    // than running it, so it can be edited first — which is most of why
+    // anybody opens a history — so this edits it before pressing Enter.
+    let app = in_src_and_dst(arrange);
+    app.type_text("touch first");
+    app.key("Return");
+    app.await_exists("src/first");
+
+    app.focus_main();
+    app.key("ctrl+Down");
+    app.focus_dialog(DIALOG_HISTORY);
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_HISTORY);
+
+    // The line came back and the cursor is at its end, so typing extends it.
+    app.type_text("-again");
+    app.key("Return");
+
+    app.await_exists("src/first-again");
+}
+
+#[test]
+fn alt_f8_opens_the_same_history() {
+    // TC's other way to the same list, and both are muscle memory.
+    let app = in_src_and_dst(arrange);
+    app.type_text("touch remembered");
+    app.key("Return");
+    app.await_exists("src/remembered");
+
+    app.focus_main();
+    app.key("alt+F8");
+    app.focus_dialog(DIALOG_HISTORY);
+}
+
+#[test]
+fn an_empty_history_opens_no_window() {
+    // Nothing run yet is not worth a window listing nothing.
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+Down");
+
+    app.settle();
+    assert!(
+        !app.has_dialog(DIALOG_HISTORY),
+        "an empty history still opened a window"
+    );
+}
+
+#[test]
+fn the_history_survives_a_restart() {
+    // A history that forgot everything when the app closed would be one in
+    // name only.
+    let first = in_src_and_dst(arrange);
+    first.type_text("touch before-restart");
+    first.key("Return");
+    first.await_exists("src/before-restart");
+    let home = first.close();
+
+    let app = App::relaunch(home);
+    app.key("ctrl+Down");
+    app.focus_dialog(DIALOG_HISTORY);
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_HISTORY);
+    app.type_text("-two");
+    app.key("Return");
+
+    app.await_exists("src/before-restart-two");
 }
 
 #[test]

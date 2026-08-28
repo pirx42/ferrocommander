@@ -121,6 +121,18 @@ impl CommandLine {
         self.entry.text().to_string()
     }
 
+    /// Puts a whole line in, with the cursor at its end — a history pick,
+    /// ready to be edited rather than already running.
+    pub fn set_text(&self, text: &str) {
+        self.entry.set_text(text);
+        self.entry.set_position(-1);
+    }
+
+    pub fn grab_focus(&self) {
+        self.entry.grab_focus();
+        self.entry.set_position(-1);
+    }
+
     pub fn clear(&self) {
         self.entry.set_text("");
     }
