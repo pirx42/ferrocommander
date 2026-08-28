@@ -12,8 +12,8 @@
 //! no feature flag to stay honest.
 
 // Each test binary compiles this module separately and uses a subset of it,
-// so unused helpers here are expected rather than dead.
-#![allow(dead_code)]
+// so unused helpers and an unused macro here are expected rather than dead.
+#![allow(dead_code, unused_imports, unused_macros)]
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -94,3 +94,92 @@ pub fn byte_sum(snapshot: &Snapshot) -> usize {
 pub fn exists(fs: &dyn VirtualFs, path: &VfsPath) -> bool {
     fs.stat(path).is_ok()
 }
+
+/// Implements [`VirtualFs`] for a decorator by forwarding every call to its
+/// `inner` field, except the four a test might want to watch: `read_dir`,
+/// `rename`, `open_read` and `trash`, which the type supplies as
+/// `*_impl` methods.
+///
+/// Here rather than in one test file because two of them now wrap a backend
+/// to watch it — the operation tests to count and to inject failures, the
+/// settings tests to see which file is opened for writing — and a second copy
+/// of thirty lines of forwarding is a second place to forget a method when
+/// the trait grows.
+///
+/// A blanket `impl<T: Decorate> VirtualFs for T` would be tidier and is not
+/// allowed: `VirtualFs` belongs to another crate, so the orphan rule refuses
+/// it for a generic type.
+macro_rules! delegate_vfs {
+    ($target:ty) => {
+        impl tc_core::vfs::VirtualFs for $target {
+            fn read_dir(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+            ) -> Result<Vec<tc_core::vfs::Entry>, tc_core::vfs::VfsError> {
+                self.read_dir_impl(path)
+            }
+            fn stat(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+            ) -> Result<tc_core::vfs::Entry, tc_core::vfs::VfsError> {
+                self.inner.stat(path)
+            }
+            fn create_dir(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+            ) -> Result<(), tc_core::vfs::VfsError> {
+                self.inner.create_dir(path)
+            }
+            fn remove_dir(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+            ) -> Result<(), tc_core::vfs::VfsError> {
+                self.inner.remove_dir(path)
+            }
+            fn remove_file(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+            ) -> Result<(), tc_core::vfs::VfsError> {
+                self.inner.remove_file(path)
+            }
+            fn rename(
+                &self,
+                from: &tc_core::vfs::VfsPath,
+                to: &tc_core::vfs::VfsPath,
+            ) -> Result<(), tc_core::vfs::VfsError> {
+                self.rename_impl(from, to)
+            }
+            fn open_read(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+            ) -> Result<Box<dyn std::io::Read + Send>, tc_core::vfs::VfsError> {
+                self.open_read_impl(path)
+            }
+            fn create_file(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+            ) -> Result<Box<dyn std::io::Write + Send>, tc_core::vfs::VfsError> {
+                self.create_file_impl(path)
+            }
+            fn set_modified(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+                time: std::time::SystemTime,
+            ) -> Result<(), tc_core::vfs::VfsError> {
+                self.inner.set_modified(path, time)
+            }
+            fn set_attributes(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+                attributes: tc_core::vfs::Attributes,
+            ) -> Result<(), tc_core::vfs::VfsError> {
+                self.inner.set_attributes(path, attributes)
+            }
+            fn trash(&self, path: &tc_core::vfs::VfsPath) -> Result<(), tc_core::vfs::VfsError> {
+                self.trash_impl(path)
+            }
+        }
+    };
+}
+
+pub(crate) use delegate_vfs;

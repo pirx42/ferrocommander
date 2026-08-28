@@ -1,6 +1,10 @@
 # Phase 3 Implementation Plan — Polish Browsing
 
-Status: In Progress — sub-phases 0, A, B, C, D, E, F, G done
+Status: Implemented — substance extracted to [listing.md](../../listing.md),
+[keymap.md](../../keymap.md), [ui-shell.md](../../ui-shell.md),
+[vfs.md](../../vfs.md), [config.md](../../config.md),
+[performance.md](../../performance.md); open points to
+[future-improvements.md](../../future-improvements.md).
 
 *2026-08-28 — implements phase 3 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -244,15 +248,52 @@ system, so the test does not depend on the box it runs on; the filter rules
 
 ### H — Refactoring audit + correction (skill [49](../skills/49-final-phase-refactoring-audit.md))
 
-*Commit:* `refactor(core,app): audit corrections for the browsing phase`
+*Commit:* `refactor(core): audit corrections for the browsing phase`
 
-Same axes as phase 2's, which found real things: redundancy across the
-sub-phases, `pub` items with no caller outside their own tests, magic values
-that drifted into widget code, and the architecture invariants (no GTK in
-`tc-core`, no `std::fs` in `tc-app`, no `cfg` outside `vfs/platform.rs`).
-Plus, new this phase: every optimisation claim in
-[performance.md](../performance.md) still measured, and every mutation probe
-listed in [reliability.md](../reliability.md) still red when reverted.
+**Done.** 270 tests green; behaviour unchanged, verified by re-running every
+mutation probe from phases 2 and 3 and re-measuring the performance claims.
+
+**Architecture: clean.** No `gtk`/`glib`/`gdk` anywhere in `tc-core`; no
+`std::fs` or `PathBuf` in `tc-app` production code (the one `std::fs` is
+inside a `#[cfg(test)]` module); no `cfg` branch in `tc-app`, and none in
+`tc-core` outside `vfs/platform.rs` — through a phase that added a
+platform-specific attribute model *and* a platform-specific mount table.
+
+**API ahead of its caller.** Two items were reachable from outside with
+nothing outside calling them, and both were narrowed: `config::SORT_KEY_NAMES`
+and `SortOrder::flipped`. The second is the same item phase 1's audit removed
+for having no caller at all — it has one now, and that caller is in its own
+file.
+
+**Redundancy.** Two test files were each carrying thirty lines of `VirtualFs`
+forwarding to wrap a backend and watch it — the operation tests to count calls
+and inject failures, the settings tests to see which file is opened for
+writing. That is a second place to forget a method when the trait grows, so
+the macro moved into `tests/common/`. A blanket
+`impl<T: Decorate> VirtualFs for T` would have been tidier and is not allowed:
+the trait belongs to another crate, so the orphan rule refuses it.
+
+**Probes re-run, all six still red when reverted:** rollback on cancel, skip
+tracking, the self-target refusal, the move fast path, marks surviving a
+reload, and the atomic settings write.
+
+*The probe run found a mistake in the probing itself.* Two saved copies were
+written to the same scratch path, so five of the six were "verified" against a
+crate that no longer compiled — a green-looking result that meant nothing.
+Reported as zero failing suites, which is exactly what a passing probe looks
+like if you only count. The rerun added a baseline check that the unmutated
+tree is green, and each probe now names the test it turned red.
+
+**Performance re-measured, not assumed.** Phase 3 added a selection array, a
+quick filter and an attributes read to the listing path: 50 000 entries now
+list in **79 ms** and 20 000 files still move within one filesystem in
+**6.5 µs**.
+
+**Accepted without change.** `PaneView` keeps its own `sort` and `show_hidden`
+beside the listing's. It looks like two sources of truth and is not: the pane's
+is the preference and the listing's is the state of the directory currently
+loaded, which is exactly why the pane has to re-apply it. `adopt` is the single
+place the two meet.
 
 ## 4. Effort
 

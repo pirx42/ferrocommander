@@ -21,7 +21,9 @@ pub enum SortOrder {
 }
 
 impl SortOrder {
-    pub fn flipped(self) -> Self {
+    /// Not public: `Sort::cycled` is the only thing that ever wants it, and
+    /// phase 1's audit already removed this once for having no caller at all.
+    fn flipped(self) -> Self {
         match self {
             SortOrder::Ascending => SortOrder::Descending,
             SortOrder::Descending => SortOrder::Ascending,

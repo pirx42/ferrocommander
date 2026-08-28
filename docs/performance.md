@@ -34,7 +34,7 @@ the ratios and what dominates — not the absolute numbers.
 
 | Operation | Before | Now |
 |---|---|---|
-| List a directory of 50 000 entries | 222 ms | **89 ms** |
+| List a directory of 50 000 entries | 222 ms | **79 ms** |
 | — of which reading the directory | 78 ms | 67 ms |
 | — of which sorting and building the view | 153 ms | **22 ms** |
 | Move 20 000 files within one filesystem | 57 ms | **6 µs** |
@@ -66,11 +66,20 @@ destination, or a `CrossDevice` error — is scanned and copied. Pinned by a
 test asserting that such a move performs no directory walk and reads no
 bytes.
 
+### Re-measured after phase 3
+
+Phase 3 added a selection array, a quick filter and an attributes read to the
+listing path, so the numbers were taken again rather than assumed: **79 ms**
+to list 50 000 entries and **6.5 µs** to move 20 000 files within one
+filesystem. Marks cost nothing to carry because they are a `Vec<bool>` beside
+the entries, and the filter is folded into the pass that was already
+happening.
+
 ## What is deliberately still slow
 
 **The listing loads whole directories.** No pagination, no incremental
 display: `read_dir` returns everything before the pane draws. At 50 000
-entries that is ~90 ms, which is acceptable; at a million it would not be.
+entries that is ~80 ms, which is acceptable; at a million it would not be.
 The fix is streaming the model into the view, which needs the pane to render
 rows it does not yet have.
 *From:* [listing.md](listing.md).

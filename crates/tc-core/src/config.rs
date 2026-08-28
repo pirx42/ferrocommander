@@ -66,7 +66,7 @@ pub struct PaneSettings {
 /// settings. The round-trip test iterates this table, so a new key that is
 /// not listed here fails the build's tests rather than being written as a
 /// default.
-pub const SORT_KEY_NAMES: [(SortKey, &str); 4] = [
+const SORT_KEY_NAMES: [(SortKey, &str); 4] = [
     (SortKey::Name, "name"),
     (SortKey::Ext, "ext"),
     (SortKey::Size, "size"),

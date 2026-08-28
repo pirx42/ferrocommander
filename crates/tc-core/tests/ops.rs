@@ -8,7 +8,6 @@
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-use std::time::SystemTime;
 
 use tc_core::ops::{
     self, Answer, ApplyToAll, CancelToken, Conflict, ConflictResolver, DeleteMode, Destination,
@@ -19,7 +18,7 @@ use tempfile::TempDir;
 
 mod common;
 
-use common::{byte_sum, exists, file_count, fixture, snapshot, Snapshot};
+use common::{byte_sum, delegate_vfs, exists, file_count, fixture, snapshot, Snapshot};
 
 // --------------------------------------------------------------- resolvers
 
@@ -150,51 +149,10 @@ struct RecordingTrash<'a> {
     trashed: Mutex<Vec<VfsPath>>,
 }
 
-macro_rules! delegate {
-    ($target:ty) => {
-        impl VirtualFs for $target {
-            fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
-                self.read_dir_impl(path)
-            }
-            fn stat(&self, path: &VfsPath) -> Result<Entry, VfsError> {
-                self.inner.stat(path)
-            }
-            fn create_dir(&self, path: &VfsPath) -> Result<(), VfsError> {
-                self.inner.create_dir(path)
-            }
-            fn remove_dir(&self, path: &VfsPath) -> Result<(), VfsError> {
-                self.inner.remove_dir(path)
-            }
-            fn remove_file(&self, path: &VfsPath) -> Result<(), VfsError> {
-                self.inner.remove_file(path)
-            }
-            fn rename(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
-                self.rename_impl(from, to)
-            }
-            fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
-                self.open_read_impl(path)
-            }
-            fn create_file(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
-                self.inner.create_file(path)
-            }
-            fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError> {
-                self.inner.set_modified(path, time)
-            }
-            fn set_attributes(
-                &self,
-                path: &VfsPath,
-                attributes: tc_core::vfs::Attributes,
-            ) -> Result<(), VfsError> {
-                self.inner.set_attributes(path, attributes)
-            }
-            fn trash(&self, path: &VfsPath) -> Result<(), VfsError> {
-                self.trash_impl(path)
-            }
-        }
-    };
-}
-
 impl Counting<'_> {
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
     fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         self.walks.fetch_add(1, Ordering::Relaxed);
         self.inner.read_dir(path)
@@ -212,6 +170,9 @@ impl Counting<'_> {
 }
 
 impl AlwaysCrossDevice<'_> {
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
     fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         self.inner.read_dir(path)
     }
@@ -227,6 +188,9 @@ impl AlwaysCrossDevice<'_> {
 }
 
 impl CancelsMidFile<'_> {
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
     fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         self.inner.read_dir(path)
     }
@@ -245,6 +209,9 @@ impl CancelsMidFile<'_> {
 }
 
 impl FailsMidRead<'_> {
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
     fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         self.inner.read_dir(path)
     }
@@ -263,6 +230,9 @@ impl FailsMidRead<'_> {
 }
 
 impl TrashRefuses<'_> {
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
     fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         self.inner.read_dir(path)
     }
@@ -278,6 +248,9 @@ impl TrashRefuses<'_> {
 }
 
 impl RecordingTrash<'_> {
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
     fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         self.inner.read_dir(path)
     }
@@ -293,12 +266,12 @@ impl RecordingTrash<'_> {
     }
 }
 
-delegate!(Counting<'_>);
-delegate!(AlwaysCrossDevice<'_>);
-delegate!(CancelsMidFile<'_>);
-delegate!(FailsMidRead<'_>);
-delegate!(TrashRefuses<'_>);
-delegate!(RecordingTrash<'_>);
+delegate_vfs!(Counting<'_>);
+delegate_vfs!(AlwaysCrossDevice<'_>);
+delegate_vfs!(CancelsMidFile<'_>);
+delegate_vfs!(FailsMidRead<'_>);
+delegate_vfs!(TrashRefuses<'_>);
+delegate_vfs!(RecordingTrash<'_>);
 
 // ------------------------------------------------------------------ driver
 

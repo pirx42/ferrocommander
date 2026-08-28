@@ -6,11 +6,14 @@
 
 use std::io::{Read, Write};
 use std::sync::Mutex;
-use std::time::SystemTime;
 
 use tc_core::config::{self, PaneSettings, Settings};
 use tc_core::listing::{Sort, SortKey, SortOrder};
-use tc_core::vfs::{Attributes, Entry, LocalFs, VfsError, VfsPath, VirtualFs};
+use tc_core::vfs::{Entry, LocalFs, VfsError, VfsPath, VirtualFs};
+
+mod common;
+
+use common::delegate_vfs;
 use tempfile::TempDir;
 
 fn root() -> (TempDir, VfsPath) {
@@ -168,6 +171,7 @@ fn the_written_file_is_readable_by_a_person() {
 
 /// Records which paths were opened for writing and what was renamed.
 struct Recording {
+    inner: LocalFs,
     created: Mutex<Vec<VfsPath>>,
     renamed: Mutex<Vec<(VfsPath, VfsPath)>>,
 }
@@ -175,52 +179,35 @@ struct Recording {
 impl Recording {
     fn new() -> Self {
         Recording {
+            inner: LocalFs,
             created: Mutex::new(Vec::new()),
             renamed: Mutex::new(Vec::new()),
         }
     }
-}
 
-impl VirtualFs for Recording {
-    fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
-        LocalFs.read_dir(path)
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.created.lock().unwrap().push(path.clone());
+        self.inner.create_file(path)
     }
-    fn stat(&self, path: &VfsPath) -> Result<Entry, VfsError> {
-        LocalFs.stat(path)
-    }
-    fn create_dir(&self, path: &VfsPath) -> Result<(), VfsError> {
-        LocalFs.create_dir(path)
-    }
-    fn remove_dir(&self, path: &VfsPath) -> Result<(), VfsError> {
-        LocalFs.remove_dir(path)
-    }
-    fn remove_file(&self, path: &VfsPath) -> Result<(), VfsError> {
-        LocalFs.remove_file(path)
-    }
-    fn rename(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
+    fn rename_impl(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
         self.renamed
             .lock()
             .unwrap()
             .push((from.clone(), to.clone()));
-        LocalFs.rename(from, to)
+        self.inner.rename(from, to)
     }
-    fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
-        LocalFs.open_read(path)
+    fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
+        self.inner.read_dir(path)
     }
-    fn create_file(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
-        self.created.lock().unwrap().push(path.clone());
-        LocalFs.create_file(path)
+    fn open_read_impl(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
+        self.inner.open_read(path)
     }
-    fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError> {
-        LocalFs.set_modified(path, time)
-    }
-    fn set_attributes(&self, path: &VfsPath, attributes: Attributes) -> Result<(), VfsError> {
-        LocalFs.set_attributes(path, attributes)
-    }
-    fn trash(&self, path: &VfsPath) -> Result<(), VfsError> {
-        LocalFs.trash(path)
+    fn trash_impl(&self, path: &VfsPath) -> Result<(), VfsError> {
+        self.inner.trash(path)
     }
 }
+
+delegate_vfs!(Recording);
 
 #[test]
 fn the_settings_file_is_never_written_in_place() {
