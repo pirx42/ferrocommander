@@ -117,6 +117,8 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
             state.panes[state.active].begin_filter();
         }
         Action::ClearFilter => shell.borrow_mut().active_pane().reset_filter(),
+        Action::SortBy(key) => shell.borrow_mut().active_pane().sort_by(key),
+        Action::ToggleHidden => shell.borrow_mut().active_pane().toggle_hidden(),
         Action::Copy => start_transfer(shell, true),
         Action::Move => start_transfer(shell, false),
         Action::CreateDir => start_create_dir(shell),

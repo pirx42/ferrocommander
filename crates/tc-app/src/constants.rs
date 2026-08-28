@@ -17,6 +17,10 @@ pub const PANE_SPLIT_RATIO: f32 = 0.5;
 /// later would need no new switching logic.
 pub const PANE_COUNT: usize = 2;
 
+/// Appended to the header of the column the listing is ordered by.
+pub const SORT_MARKER_ASCENDING: &str = " \u{25b2}";
+pub const SORT_MARKER_DESCENDING: &str = " \u{25bc}";
+
 /// Column headers.
 pub const COLUMN_TITLE_NAME: &str = "Name";
 pub const COLUMN_TITLE_EXT: &str = "Ext";

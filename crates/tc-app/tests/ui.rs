@@ -118,7 +118,6 @@ fn f5_to_a_bare_name_duplicates_beside_the_source() {
 
     app.key("F5");
     app.focus_dialog(DIALOG_COPY);
-    app.key("ctrl+a");
     app.type_text("copy.txt");
     app.key("Return");
 
@@ -135,7 +134,6 @@ fn f6_renames_the_cursor_entry_in_place() {
 
     app.key("F6");
     app.focus_dialog(DIALOG_MOVE);
-    app.key("ctrl+a");
     app.type_text("renamed.txt");
     app.key("Return");
 
@@ -405,7 +403,6 @@ fn a_wildcard_marks_only_what_it_matches() {
 
     app.key("KP_Add");
     app.focus_dialog(DIALOG_PATTERN);
-    app.key("ctrl+a");
     app.type_text("*.txt");
     app.key("Return");
 
@@ -482,4 +479,102 @@ fn a_filter_that_matches_nothing_still_leaves_a_way_out() {
     app.key("Return");
 
     app.await_exists("escaped");
+}
+
+#[test]
+fn ctrl_f6_sorts_by_size_and_ctrl_f6_again_reverses_it() {
+    // Checked by which file the cursor lands on, because that is the only
+    // thing about the order the filesystem can be asked about afterwards.
+    // data.bin is 4 KiB and notes.txt is a line of text.
+    let app = App::launch(|home| {
+        std::fs::create_dir_all(home.join("src")).unwrap();
+        std::fs::create_dir(home.join("dst")).unwrap();
+        std::fs::write(home.join("src/notes.txt"), SOURCE_TEXT).unwrap();
+        std::fs::write(home.join("src/data.bin"), vec![9u8; 4096]).unwrap();
+    });
+    app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
+
+    // Ascending by size puts the small file first.
+    app.key("ctrl+F6");
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/notes.txt");
+
+    // The same key again reverses it, so the big one is first now.
+    app.focus_main();
+    app.key("ctrl+F6");
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/data.bin");
+}
+
+#[test]
+fn ctrl_h_shows_the_dot_files_and_hides_them_again() {
+    let app = App::launch(|home| {
+        std::fs::create_dir_all(home.join("src")).unwrap();
+        std::fs::create_dir(home.join("dst")).unwrap();
+        std::fs::write(home.join("src/.hidden"), SOURCE_TEXT).unwrap();
+    });
+    app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
+
+    // Hidden to begin with: nothing below `..` to copy, so F5 does nothing.
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.settle();
+    assert!(
+        !app.has_dialog(DIALOG_COPY),
+        "a hidden entry must not be reachable by the cursor"
+    );
+
+    app.key("ctrl+h");
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/.hidden", SOURCE_TEXT);
+}
+
+#[test]
+fn the_sort_order_survives_a_finished_job() {
+    // Every navigation and every finished job builds a fresh listing, so the
+    // pane has to carry its own ordering or sorting by size and then copying
+    // one file quietly puts the order back to name.
+    //
+    // The names are chosen so the two orders disagree: by name it is a.bin,
+    // b.txt, c.txt; by descending size it is b.txt, c.txt, a.bin. Copying the
+    // third row afterwards therefore says which order was in force.
+    let app = App::launch(|home| {
+        std::fs::create_dir_all(home.join("src")).unwrap();
+        std::fs::create_dir(home.join("dst")).unwrap();
+        std::fs::write(home.join("src/a.bin"), vec![1u8; 10]).unwrap();
+        std::fs::write(home.join("src/b.txt"), vec![2u8; 8192]).unwrap();
+        std::fs::write(home.join("src/c.txt"), vec![3u8; 4096]).unwrap();
+    });
+    app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
+
+    // Descending by size: b.txt, c.txt, a.bin.
+    app.keys(&["ctrl+F6", "ctrl+F6"]);
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/b.txt");
+
+    // Now the third row, with no re-sorting in between.
+    app.focus_main();
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/a.bin");
+    assert!(
+        !app.path("dst/c.txt").exists(),
+        "the pane fell back to sorting by name after the job"
+    );
 }

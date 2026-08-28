@@ -7,14 +7,15 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use tc_core::listing::Listing;
+use tc_core::listing::{Listing, Sort, SortKey, SortOrder};
 use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
     CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
     CLASS_STATUS_LINE, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE,
     COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER,
-    PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, XALIGN_LEFT, XALIGN_RIGHT,
+    PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING,
+    XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_target, adopted_cursor, focus_after_move, parent_target};
 use crate::row::Row;
@@ -34,6 +35,16 @@ pub enum Column {
 
 impl Column {
     pub const ALL: [Column; 4] = [Column::Name, Column::Ext, Column::Size, Column::Modified];
+
+    /// Which ordering this column stands for, if any.
+    pub fn sort_key(self) -> Option<SortKey> {
+        Some(match self {
+            Column::Name => SortKey::Name,
+            Column::Ext => SortKey::Ext,
+            Column::Size => SortKey::Size,
+            Column::Modified => SortKey::Modified,
+        })
+    }
 
     fn title(self) -> &'static str {
         match self {
@@ -136,6 +147,14 @@ pub struct PaneView {
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
     listing: Listing,
+    /// How this pane orders and filters, which belongs to the *pane* and not
+    /// to the directory it happens to be showing.
+    ///
+    /// Every navigation and every finished job builds a fresh `Listing`, so
+    /// without keeping these here they would reset to the defaults each time
+    /// — sorting by size and then copying a file put the order back to name.
+    sort: Sort,
+    show_hidden: bool,
     /// Shared rather than owned: a running job holds the same backend on its
     /// worker thread while the pane goes on using it.
     fs: Arc<dyn VirtualFs>,
@@ -197,6 +216,8 @@ impl PaneView {
         root.append(&status);
 
         let mut pane = PaneView {
+            sort: listing.sort(),
+            show_hidden: listing.show_hidden(),
             root,
             path_bar,
             filter_bar,
@@ -208,6 +229,7 @@ impl PaneView {
             fs,
             error,
         };
+        pane.update_headers();
         pane.refresh();
         pane
     }
@@ -238,6 +260,7 @@ impl PaneView {
     pub fn reload_after_job(&mut self) {
         let focused = self.listing.current().map(|entry| entry.name.clone());
         let mut listing = Listing::load_nearest(self.fs.as_ref(), self.listing.dir().clone());
+        self.adopt(&mut listing);
         if let Some(name) = focused {
             listing.focus_entry(&name);
         }
@@ -312,6 +335,58 @@ impl PaneView {
     /// rows, which is what Enter in the filter field means.
     pub fn leave_filter(&self) {
         self.grab_focus();
+    }
+
+    /// Sorts by `key`, flipping the direction when it is already the one in
+    /// force.
+    pub fn sort_by(&mut self, key: SortKey) {
+        self.sort = self.sort.cycled(key);
+        self.listing.set_sort(self.sort);
+        self.update_headers();
+        self.refresh();
+    }
+
+    /// Shows or hides the dot-files.
+    pub fn toggle_hidden(&mut self) {
+        self.show_hidden = !self.show_hidden;
+        self.listing.toggle_hidden();
+        self.refresh();
+    }
+
+    /// Puts this pane's ordering, hidden-file flag and filter onto a listing
+    /// that has just been read.
+    fn adopt(&self, listing: &mut Listing) {
+        listing.set_sort(self.sort);
+        if listing.show_hidden() != self.show_hidden {
+            listing.toggle_hidden();
+        }
+        listing.set_filter(&self.filter_bar.text());
+    }
+
+    /// Marks the column the listing is ordered by, and which way.
+    ///
+    /// The header text is the marker: this shell sorts in the model, so there
+    /// is no GTK sorter whose arrow GTK would draw for us.
+    fn update_headers(&self) {
+        let sort = self.listing.sort();
+        for (position, column) in Column::ALL.iter().enumerate() {
+            let Some(view_column) = self
+                .column_view
+                .columns()
+                .item(position as u32)
+                .and_downcast::<gtk::ColumnViewColumn>()
+            else {
+                continue;
+            };
+            let marker = match (column.sort_key(), sort.key, sort.order) {
+                (Some(key), active, SortOrder::Ascending) if key == active => SORT_MARKER_ASCENDING,
+                (Some(key), active, SortOrder::Descending) if key == active => {
+                    SORT_MARKER_DESCENDING
+                }
+                _ => "",
+            };
+            view_column.set_title(Some(&format!("{}{marker}", column.title())));
+        }
     }
 
     /// Flips the mark on the cursor row; `advance` steps down afterwards, so
@@ -423,6 +498,7 @@ impl PaneView {
         let focus = focus_after_move(self.listing.dir(), &dir);
         match Listing::load(self.fs.as_ref(), dir.clone()) {
             Ok(mut listing) => {
+                self.adopt(&mut listing);
                 if let Some(name) = focus {
                     listing.focus_entry(&name);
                 }

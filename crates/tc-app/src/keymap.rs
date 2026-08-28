@@ -6,6 +6,7 @@
 //! keymap one place to replace.
 
 use gtk::gdk::{Key, ModifierType};
+use tc_core::listing::SortKey;
 
 /// Something the user asked the shell to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +47,11 @@ pub enum Action {
     QuickFilter,
     /// Escape — stop narrowing.
     ClearFilter,
+    /// Ctrl+F3…Ctrl+F6 — sort by a column, or flip it if it is already the
+    /// one in force.
+    SortBy(SortKey),
+    /// Ctrl+H — show or hide the dot-files.
+    ToggleHidden,
     Quit,
 }
 
@@ -199,6 +205,32 @@ static BINDINGS: &[Binding] = &[
         modifiers: PLAIN,
         action: Action::ClearFilter,
     },
+    // Total Commander's sort keys, in its order: name, extension, date, size.
+    Binding {
+        key: Key::F3,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::SortBy(SortKey::Name),
+    },
+    Binding {
+        key: Key::F4,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::SortBy(SortKey::Ext),
+    },
+    Binding {
+        key: Key::F5,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::SortBy(SortKey::Modified),
+    },
+    Binding {
+        key: Key::F6,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::SortBy(SortKey::Size),
+    },
+    Binding {
+        key: Key::h,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::ToggleHidden,
+    },
     Binding {
         key: Key::q,
         modifiers: ModifierType::CONTROL_MASK,
@@ -251,6 +283,27 @@ mod tests {
             (Key::a, ModifierType::CONTROL_MASK, Action::MarkAll),
             (Key::s, ModifierType::CONTROL_MASK, Action::QuickFilter),
             (Key::Escape, PLAIN, Action::ClearFilter),
+            (
+                Key::F3,
+                ModifierType::CONTROL_MASK,
+                Action::SortBy(SortKey::Name),
+            ),
+            (
+                Key::F4,
+                ModifierType::CONTROL_MASK,
+                Action::SortBy(SortKey::Ext),
+            ),
+            (
+                Key::F5,
+                ModifierType::CONTROL_MASK,
+                Action::SortBy(SortKey::Modified),
+            ),
+            (
+                Key::F6,
+                ModifierType::CONTROL_MASK,
+                Action::SortBy(SortKey::Size),
+            ),
+            (Key::h, ModifierType::CONTROL_MASK, Action::ToggleHidden),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
         ];
         for (key, modifiers, action) in expected {
@@ -270,6 +323,22 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_turns_an_operation_key_into_a_sort_key() {
+        // F5 copies and Ctrl+F5 sorts by date. A binding that ignored its
+        // modifiers would make one of those impossible.
+        assert_eq!(action_for(Key::F5, PLAIN), Some(Action::Copy));
+        assert_eq!(
+            action_for(Key::F5, ModifierType::CONTROL_MASK),
+            Some(Action::SortBy(SortKey::Modified))
+        );
+        assert_eq!(action_for(Key::F6, PLAIN), Some(Action::Move));
+        assert_eq!(
+            action_for(Key::F6, ModifierType::CONTROL_MASK),
+            Some(Action::SortBy(SortKey::Size))
+        );
+    }
+
+    #[test]
     fn shift_tells_a_recoverable_delete_from_a_final_one() {
         // The one place in the keymap where a modifier changes what survives,
         // so it gets its own test rather than riding on the table above.
@@ -285,8 +354,7 @@ mod tests {
 
     #[test]
     fn a_bound_key_with_the_wrong_modifier_triggers_nothing() {
-        // Ctrl+Down must not fall through to the unmodified CursorDown — in
-        // phase 3 it will mean something else entirely.
+        // Ctrl+Down must not fall through to the unmodified CursorDown.
         assert_eq!(action_for(Key::Down, ModifierType::CONTROL_MASK), None);
         assert_eq!(action_for(Key::Tab, ModifierType::ALT_MASK), None);
         assert_eq!(action_for(Key::q, PLAIN), None);

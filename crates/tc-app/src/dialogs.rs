@@ -129,6 +129,10 @@ pub fn ask_text(
 
     window.present();
     entry.grab_focus();
+    // The prefill arrives selected, so typing replaces it and there is no
+    // select-all to reach for first. Every one of these dialogs offers a
+    // starting point the user is as likely to overwrite as to accept.
+    entry.select_region(0, -1);
 }
 
 /// Asks a yes/no question.

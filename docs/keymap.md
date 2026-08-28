@@ -22,6 +22,8 @@
 | `Num −`, `−` | Unmark everything matching a wildcard |
 | `Num *` | Swap what is marked for what is not |
 | `Ctrl+A` | Mark everything visible |
+| `Ctrl+F3` … `Ctrl+F6` | Sort by name / ext / date / size |
+| `Ctrl+H` | Show or hide the dot-files |
 | `Ctrl+S` | Narrow the pane as you type |
 | `Esc` | Stop narrowing |
 | `Ctrl+Q` | Quit |
@@ -107,6 +109,27 @@ Shift and Alt take part in a binding.
 **A bound key with the wrong modifier does nothing.** `Ctrl+↓` does not fall
 through to plain `↓` — in phase 3 it will mean something else entirely, and a
 binding that silently ignores its modifiers would make that impossible.
+
+## Sorting
+
+`Ctrl+F3`…`Ctrl+F6` are Total Commander's sort keys, in its order: name,
+extension, date, size. **The same key again flips the direction**; a different
+one starts ascending. That rule is what makes one key mean both "sort by this"
+and "the other way round", and it is a pure function on `Sort` with its own
+test rather than something the widget layer decides.
+
+Note that `F5` copies and `Ctrl+F5` sorts by date. The keymap's rule that a
+bound key with the wrong modifier does nothing is what keeps both possible;
+there is a test for exactly that pair.
+
+The header of the active column carries ▲ or ▼. The marker is put into the
+header *text*, because this shell sorts in the model and there is no GTK
+sorter whose arrow GTK would draw for us.
+
+**The ordering belongs to the pane, not to the directory.** Every navigation
+and every finished job builds a fresh listing, so the pane re-applies its own
+sort, hidden-file flag and filter to whatever it just read. Without that,
+sorting by size and then copying one file quietly put the order back to name.
 
 ## The quick filter takes the keyboard back
 

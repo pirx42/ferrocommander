@@ -57,6 +57,17 @@ const EFFECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// keeps these tests both fast and reliable.
 const POLL: Duration = Duration::from_millis(50);
 
+/// How long a freshly focused dialog is given to move the focus onto its
+/// entry.
+///
+/// The one sleep in this harness, and it is here because there is genuinely
+/// nothing to poll: the X server reports the *window* that has the focus, and
+/// which widget inside it holds the focus is GTK's business alone. Typing
+/// into the gap loses the first characters, which turned `*.txt` into `.txt`
+/// and marked nothing — a failure that looked like a bug in the wildcard
+/// matcher.
+const FOCUS_SETTLE: Duration = Duration::from_millis(200);
+
 /// Title the main window carries, and the name dialogs are found by.
 const MAIN_WINDOW: &str = "Ferrocommander";
 
@@ -204,6 +215,7 @@ impl App {
         loop {
             if let Some(window) = self.find_window(title) {
                 if self.try_focus(&window, title) {
+                    std::thread::sleep(FOCUS_SETTLE);
                     return;
                 }
             }

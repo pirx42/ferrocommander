@@ -20,6 +20,15 @@ pub enum SortOrder {
     Descending,
 }
 
+impl SortOrder {
+    pub fn flipped(self) -> Self {
+        match self {
+            SortOrder::Ascending => SortOrder::Descending,
+            SortOrder::Descending => SortOrder::Ascending,
+        }
+    }
+}
+
 /// A column plus a direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sort {
@@ -30,6 +39,18 @@ pub struct Sort {
 impl Sort {
     pub fn new(key: SortKey, order: SortOrder) -> Self {
         Sort { key, order }
+    }
+
+    /// What pressing a sort key means, given what is already in force.
+    ///
+    /// The same column again flips the direction; a different one starts
+    /// ascending. That is the rule every file manager uses and the only one
+    /// that makes a single key both "sort by this" and "the other way round".
+    pub fn cycled(self, key: SortKey) -> Sort {
+        if self.key == key {
+            return Sort::new(key, self.order.flipped());
+        }
+        Sort::new(key, SortOrder::Ascending)
     }
 
     /// Orders two entries.
@@ -125,6 +146,8 @@ fn ascii_compare(a: &[u8], b: &[u8]) -> Option<Ordering> {
 mod tests {
     use super::*;
 
+    const ALL_ORDERS: [SortOrder; 2] = [SortOrder::Ascending, SortOrder::Descending];
+
     /// The ASCII shortcut must be invisible: same order, every pair.
     ///
     /// This is the test that makes the optimisation safe to keep. It compares
@@ -132,6 +155,31 @@ mod tests {
     /// every ordered pair of an awkward set — mixed case, prefixes, names
     /// that differ only past a non-ASCII byte, and the German sharp s, whose
     /// lowercase is two characters long.
+    #[test]
+    fn the_same_key_twice_flips_the_direction_and_a_new_one_starts_over() {
+        let by_name = Sort::new(SortKey::Name, SortOrder::Ascending);
+
+        let flipped = by_name.cycled(SortKey::Name);
+        assert_eq!(flipped, Sort::new(SortKey::Name, SortOrder::Descending));
+
+        // Back again on a third press.
+        assert_eq!(flipped.cycled(SortKey::Name), by_name);
+
+        // A different column always starts ascending, whatever was in force.
+        assert_eq!(
+            flipped.cycled(SortKey::Size),
+            Sort::new(SortKey::Size, SortOrder::Ascending)
+        );
+    }
+
+    #[test]
+    fn flipping_an_order_twice_returns_it() {
+        for order in ALL_ORDERS {
+            assert_eq!(order.flipped().flipped(), order);
+            assert_ne!(order.flipped(), order);
+        }
+    }
+
     #[test]
     fn the_ascii_shortcut_orders_exactly_as_comparing_characters_does() {
         fn by_characters(a: &str, b: &str) -> Ordering {
