@@ -15,6 +15,7 @@
 | `F6` | Move it, or rename it in place |
 | `Shift+F6` | Rename the row under the cursor, in the list itself |
 | `F7` | Create a directory |
+| `Shift+F4` | Create a file and open it in the editor |
 | `F8`, `Delete` | Delete to the trash |
 | `Shift+F8`, `Shift+Delete` | Delete permanently |
 | `Space` | Mark the row under the cursor |
@@ -169,6 +170,26 @@ the marks travel together; anything rebuilt field by field would quietly drop
 one of them, and the test for it marks a file on one side and spends it on the
 other. The keyboard stays in the same physical pane, now showing the other
 side.
+
+## Creating a file to edit
+
+`Shift+F4` asks for a name, creates an **empty** file and hands it to the
+editor — Total Commander's behaviour, including leaving the file empty: what an
+editor makes of a zero-byte file is the editor's business.
+
+Asked for rather than assumed, unlike TC's fixed `new.txt`: the name is the
+first thing anybody changes, and a dialog they can accept with Enter costs
+nothing. Which program opens it is the `editor` line in
+[config.md](config.md).
+
+**A name that is already taken is refused**, and that is the whole reason this
+is a job rather than a bare VFS call: `create_file` truncates, so `Shift+F4` on
+an existing name would empty the very file the user meant to open — and then
+hand it to an editor, which would save the emptiness back.
+
+**The editor starts only once the job reports success.** One opened on a file
+that was never created shows an empty buffer that silently recreates it on
+save, which is a worse answer than nothing.
 
 ## Renaming in the list
 

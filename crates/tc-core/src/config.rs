@@ -26,6 +26,13 @@ pub const CONFIG_FILE: &str = "config.toml";
 /// startup, and never written back.
 pub const KEYS_TABLE: &str = "keys";
 
+/// What opens a file when no editor is configured.
+///
+/// The desktop's own answer, which is the only one that can be right without
+/// being told: `$EDITOR` is nearly always a terminal editor, and launching one
+/// with no terminal fails in the common case rather than the rare one.
+pub const DEFAULT_EDITOR: &str = "xdg-open";
+
 /// How many command lines are remembered.
 ///
 /// A cap rather than everything: the settings file is rewritten whenever
@@ -50,6 +57,13 @@ pub struct Settings {
     pub panes: Vec<PaneSettings>,
     /// Which pane had the keyboard.
     pub active_pane: usize,
+    /// The program `Shift+F4` opens a new file in.
+    ///
+    /// Empty means [`DEFAULT_EDITOR`], which hands the file to whatever the
+    /// desktop has registered for it. A terminal editor still needs a terminal,
+    /// so somebody wanting `vim` writes `x-terminal-emulator -e vim` here — the
+    /// value is a command line, run the same way the command line's is.
+    pub editor: String,
     /// Command lines that were run, newest first.
     ///
     /// Kept so `Ctrl+↓` has something to offer on the next run: a history that
@@ -179,6 +193,14 @@ impl PaneSettings {
 }
 
 impl Settings {
+    /// The command that opens a file, configured or defaulted.
+    pub fn editor(&self) -> &str {
+        if self.editor.trim().is_empty() {
+            return DEFAULT_EDITOR;
+        }
+        self.editor.trim()
+    }
+
     /// The settings for pane `index`, defaulted when the file did not carry
     /// that many.
     ///
@@ -368,6 +390,27 @@ mod tests {
         assert_eq!(settings.pane(0), PaneSettings::default());
         assert_eq!(settings.pane(1).directory().unwrap().as_str(), "/home/pirx");
         assert_eq!(settings.pane(9), PaneSettings::default());
+    }
+
+    #[test]
+    fn an_unset_editor_falls_back_to_the_desktops_own() {
+        assert_eq!(Settings::default().editor(), DEFAULT_EDITOR);
+        // Whitespace is not a configuration, it is an empty line somebody
+        // left behind.
+        let blank = Settings {
+            editor: "   ".to_string(),
+            ..Settings::default()
+        };
+        assert_eq!(blank.editor(), DEFAULT_EDITOR);
+    }
+
+    #[test]
+    fn a_configured_editor_is_used_as_written() {
+        let settings = Settings {
+            editor: " x-terminal-emulator -e vim ".to_string(),
+            ..Settings::default()
+        };
+        assert_eq!(settings.editor(), "x-terminal-emulator -e vim");
     }
 
     #[test]

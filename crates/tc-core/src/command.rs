@@ -93,6 +93,34 @@ pub fn run(directory: &VfsPath, line: &str) -> Outcome {
     }
 }
 
+/// Opens `path` with `editor`, and does not wait for it.
+///
+/// Through the shell, like a typed command: the editor is a command *line*,
+/// so `x-terminal-emulator -e vim` works and the quoting is the shell's to
+/// read. The path is appended quoted, because a filename with a space in it is
+/// ordinary and splitting it would open two files that do not exist.
+///
+/// Detached rather than awaited: an editor runs for as long as somebody is
+/// editing, and a file manager that waited would be frozen for all of it.
+/// Nothing comes back — an editor that fails to start is between the user and
+/// their desktop, and a window from us saying so would arrive long after they
+/// noticed.
+pub fn open_in_editor(editor: &str, path: &VfsPath) {
+    let line = format!("{editor} {}", shell_quoted(path.as_str()));
+    let directory = path.parent().unwrap_or_else(VfsPath::root);
+    std::thread::spawn(move || {
+        let _ = run(&directory, &line);
+    });
+}
+
+/// A string the shell will read back as exactly one word.
+///
+/// Single quotes take everything literally; the only thing that cannot appear
+/// inside them is a single quote, which is spliced in the usual way.
+fn shell_quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', r"'\''"))
+}
+
 /// Starts a command on a thread of its own and hands back where its answer
 /// will arrive.
 ///

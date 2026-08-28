@@ -59,6 +59,29 @@ mounts nest: a file under `/mnt/backup` belongs to the backup drive, not to
 so the rule is tested against a made-up machine rather than whatever the test
 host has mounted.
 
+## `editor` — what `Shift+F4` opens a new file in
+
+A command line, run the way a typed one is, with the path appended and quoted.
+Empty means `xdg-open`, which hands the file to whatever the desktop has
+registered for it — the only answer that can be right without being told, since
+`$EDITOR` is nearly always a terminal editor and launching one with no terminal
+fails in the common case rather than the rare one. Somebody wanting `vim`
+writes `x-terminal-emulator -e vim`.
+
+## What the app writes back, and what it must not
+
+The settings the app writes are built from **what it loaded**, then overwritten
+field by field with what it actually owns. That way round on purpose: a setting
+the shell knows nothing about is carried through untouched.
+
+Starting from the defaults instead has gone wrong **twice** — `[keys]` when it
+arrived, and `editor` a phase later. Both times a field nobody thought to copy
+was zeroed and the zero written back over the user's own line, half a second
+after the app opened, because saving happens on change. Building from the
+loaded settings makes the failure mode "a new setting is preserved" rather than
+"a new setting is destroyed", and there is now an end-to-end test that closes
+the app and checks the editor line is still in the file.
+
 ## `command_history` — the lines that were run
 
 Newest first, without duplicates, capped at `COMMAND_HISTORY_LIMIT`. What

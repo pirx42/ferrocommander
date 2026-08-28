@@ -80,6 +80,8 @@ pub enum Job {
     },
     /// F7.
     CreateDir { path: VfsPath },
+    /// Shift+F4. An empty file, for an editor to open.
+    CreateFile { path: VfsPath },
 }
 
 /// Runs a job to completion and reports what happened.
@@ -163,6 +165,7 @@ impl Run<'_> {
     fn job(&mut self, job: &Job) {
         match job {
             Job::CreateDir { path } => self.create_dir(path),
+            Job::CreateFile { path } => self.create_file(path),
             Job::Copy {
                 sources,
                 destination,
@@ -201,6 +204,27 @@ impl Run<'_> {
         self.progress.emit(Progress::Started { path: path.clone() });
         match self.target_fs.create_dir(path) {
             Ok(()) => self
+                .progress
+                .emit(Progress::Finished { path: path.clone() }),
+            Err(error) => self.fail(path, error),
+        }
+    }
+
+    /// Creates an empty file, and refuses to touch one that is already there.
+    ///
+    /// The refusal is the whole point: `create_file` on the VFS truncates,
+    /// and `Shift+F4` on a name that exists would then empty a file the user
+    /// meant to open. Reported as a failure rather than asked about, because
+    /// there is no version of this the user wants — the file they named is
+    /// already there and already has something in it.
+    fn create_file(&mut self, path: &VfsPath) {
+        self.progress.emit(Progress::Started { path: path.clone() });
+        if self.target_fs.stat(path).is_ok() {
+            self.fail(path, VfsError::AlreadyExists);
+            return;
+        }
+        match self.target_fs.create_file(path) {
+            Ok(_) => self
                 .progress
                 .emit(Progress::Finished { path: path.clone() }),
             Err(error) => self.fail(path, error),

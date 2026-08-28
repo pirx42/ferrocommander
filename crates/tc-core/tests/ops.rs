@@ -1428,3 +1428,64 @@ mod permissions {
         assert_eq!(copy.modified, original.modified);
     }
 }
+
+/// `Shift+F4`: an empty file for an editor to open.
+mod create_file {
+    use super::*;
+
+    #[test]
+    fn an_empty_file_appears_where_it_was_asked_for() {
+        let (dir, root) = fixture();
+        let path = root.child("into").child("notes.txt");
+
+        let report = run_clean(&Job::CreateFile { path: path.clone() }, &LocalFs);
+
+        assert!(report.failures.is_empty(), "{:?}", report.failures);
+        let written = dir.path().join("into/notes.txt");
+        assert!(written.exists(), "the file was not created");
+        assert_eq!(std::fs::read(&written).unwrap().len(), 0, "not empty");
+    }
+
+    #[test]
+    fn a_name_that_is_taken_is_refused_rather_than_emptied() {
+        // The whole reason this is not a bare `create_file` on the VFS: that
+        // call truncates, so Shift+F4 on an existing name would empty the very
+        // file the user meant to open — and then hand it to an editor, which
+        // would save the emptiness back.
+        let (dir, root) = fixture();
+        let existing = dir.path().join("into/keep.txt");
+        std::fs::write(&existing, "precious").unwrap();
+
+        let (report, _) = run_on(
+            &Job::CreateFile {
+                path: root.child("into").child("keep.txt"),
+            },
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1, "it was allowed through");
+        assert_eq!(
+            std::fs::read_to_string(&existing).unwrap(),
+            "precious",
+            "the file was emptied"
+        );
+    }
+
+    #[test]
+    fn a_directory_that_is_not_there_is_a_failure_not_a_panic() {
+        let (_dir, root) = fixture();
+
+        let (report, _) = run_on(
+            &Job::CreateFile {
+                path: root.child("nowhere").child("notes.txt"),
+            },
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+    }
+}

@@ -291,6 +291,11 @@ pub const CONFLICT_PROMPT: &str = "{name} already exists in the target.";
 pub const TITLE_PROGRESS: &str = "Working";
 pub const TITLE_FAILURES: &str = "Some items were not processed";
 
+/// The Shift+F4 dialog, and the name it offers to start from.
+pub const TITLE_CREATE_FILE: &str = "New file";
+pub const PROMPT_CREATE_FILE: &str = "Create and open:";
+pub const NEW_FILE_DEFAULT: &str = "new.txt";
+
 /// Title of the command history Ctrl+Down opens.
 pub const TITLE_HISTORY: &str = "Command history";
 

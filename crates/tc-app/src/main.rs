@@ -27,12 +27,12 @@ use tc_core::ops::{DeleteMode, Destination, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
-    APP_ID, APP_TITLE, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, LEFT_PANE, PANE_COUNT,
-    PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
-    PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY,
-    SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
-    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE,
-    TITLE_OUTPUT, TITLE_UNMARK_PATTERN,
+    APP_ID, APP_TITLE, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, LEFT_PANE,
+    NEW_FILE_DEFAULT, PANE_COUNT, PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY,
+    PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE,
+    SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT,
+    TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY,
+    TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_UNMARK_PATTERN,
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
@@ -131,6 +131,18 @@ impl Shell {
     }
 
     /// What the settings file would say if it were written right now.
+    ///
+    /// **Built from what was loaded, not from the defaults**, and then
+    /// overwritten field by field with what the shell actually owns. That way
+    /// round on purpose: a setting the shell does not know about — the
+    /// bindings, the editor, whatever is added next — is carried through
+    /// untouched, where starting from the defaults would zero it and then
+    /// write the zero back over the user's own line.
+    ///
+    /// This has now gone wrong twice. `[keys]` was defaulted away when it
+    /// arrived, and `editor` again a phase later; both were found by a test
+    /// rather than by reading. Starting from `saved` makes the failure mode
+    /// "a new setting is preserved" instead of "a new setting is destroyed".
     fn current_settings(&self) -> config::Settings {
         let mut settings = config::Settings {
             // A window that has already gone keeps the size last written,
@@ -142,15 +154,8 @@ impl Shell {
                 },
                 None => self.saved.window,
             },
-            // The bindings are the user's lines, not the app's state: they are
-            // echoed back exactly as they were loaded. Defaulting them here
-            // would make these settings differ from the file for anyone who
-            // has a [keys] table, and the first keystroke of every run would
-            // write their file for no reason.
-            keys: self.saved.keys.clone(),
-            command_history: self.saved.command_history.clone(),
             drives: self.drives.clone(),
-            ..config::Settings::default()
+            ..self.saved.clone()
         };
         settings.active_pane = self.active;
         for (index, pane) in self.panes.iter().enumerate() {
@@ -268,6 +273,7 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::Move => start_transfer(shell, false),
         Action::RenameInline => shell.borrow_mut().active_pane().begin_rename(),
         Action::CreateDir => start_create_dir(shell),
+        Action::CreateFile => start_create_file(shell),
         Action::Delete => start_delete(shell, DeleteMode::Trash),
         Action::DeletePermanently => start_delete(shell, DeleteMode::Permanent),
         Action::Quit => {}
@@ -613,6 +619,15 @@ fn start_delete(shell: &Rc<RefCell<Shell>>, mode: DeleteMode) {
 
 /// Hands a job to the queue and starts watching it.
 fn submit(shell: &Rc<RefCell<Shell>>, job: Job) {
+    submit_then(shell, job, || {});
+}
+
+/// Submits a job and runs `done` if it finished without a single failure.
+///
+/// What `Shift+F4` needs: an editor opened on a file that was never created
+/// shows an empty buffer that silently recreates it on save, which is a worse
+/// answer than nothing at all.
+fn submit_then(shell: &Rc<RefCell<Shell>>, job: Job, done: impl FnOnce() + 'static) {
     let handle = {
         let mut state = shell.borrow_mut();
         // Put the marks away before the job spends them: it ends with a fresh
@@ -622,7 +637,7 @@ fn submit(shell: &Rc<RefCell<Shell>>, job: Job) {
         let target_fs = state.panes[state.other()].fs();
         state.queue.submit(job, source_fs, target_fs)
     };
-    watch(shell, handle);
+    watch(shell, handle, done);
 }
 
 /// Follows a running job on the main loop.
@@ -630,7 +645,7 @@ fn submit(shell: &Rc<RefCell<Shell>>, job: Job) {
 /// Three futures rather than one, because progress, conflicts and the report
 /// arrive on separate channels and none should have to wait for another. Each
 /// ends on its own when the job does and its senders drop.
-fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle) {
+fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl FnOnce() + 'static) {
     let JobHandle {
         progress,
         conflicts,
@@ -700,7 +715,9 @@ fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle) {
             if let Some(window) = finishing.borrow().window.upgrade() {
                 dialogs::show_failures(&window, &report.failures);
             }
+            return;
         }
+        done();
     });
 }
 
@@ -911,6 +928,47 @@ fn typed_into_command_line(
     };
     shell.borrow().command_line.accept(character);
     glib::Propagation::Stop
+}
+
+/// Shift+F4: ask for a name, create an empty file, open it in the editor.
+///
+/// Asked for rather than assumed, unlike Total Commander's fixed `new.txt`:
+/// the name is the first thing anybody changes, and a dialog they can accept
+/// with Enter costs them nothing.
+///
+/// The editor is launched when the job reports success and not before — an
+/// editor opened on a file that was never created shows an empty buffer that
+/// silently recreates it on save, which is a worse answer than nothing.
+fn start_create_file(shell: &Rc<RefCell<Shell>>) {
+    let (window, directory) = {
+        let mut state = shell.borrow_mut();
+        let Some(window) = state.window.upgrade() else {
+            return;
+        };
+        let directory = state.active_pane().listing().dir().clone();
+        (window, directory)
+    };
+
+    let shell = shell.clone();
+    dialogs::ask_text(
+        &window,
+        TITLE_CREATE_FILE,
+        PROMPT_CREATE_FILE,
+        NEW_FILE_DEFAULT,
+        move |name| {
+            let name = name.trim();
+            if name.is_empty() {
+                return;
+            }
+            let path = directory.child(name);
+            let opening = shell.clone();
+            let target = path.clone();
+            submit_then(&shell, Job::CreateFile { path }, move || {
+                let editor = opening.borrow().saved.editor().to_string();
+                tc_core::command::open_in_editor(&editor, &target);
+            });
+        },
+    );
 }
 
 /// Connects one pane's inline rename to the job that carries it out.

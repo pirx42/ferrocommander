@@ -35,6 +35,7 @@ const DIALOG_PATTERN: &str = "Select by pattern";
 const DIALOG_DRIVES: &str = "Drives";
 const DIALOG_OUTPUT: &str = "Command output";
 const DIALOG_HISTORY: &str = "Command history";
+const DIALOG_NEW_FILE: &str = "New file";
 
 /// Where the settings file lands inside a test's private home. Spelled out
 /// rather than read from `tc-core`, for the same reason the dialog titles
@@ -357,6 +358,104 @@ fn f5_with_both_panes_in_one_directory_will_not_copy_a_file_onto_itself() {
     // The refusal has to reach the user, not just the log.
     app.focus_dialog(DIALOG_FAILURES);
     app.await_contents("precious.txt", SOURCE_TEXT);
+}
+
+/// A home whose settings name an "editor" that records what it was given.
+///
+/// A real editor would open a window this suite cannot drive; a script that
+/// writes down the path it was handed proves the same two things — that the
+/// editor ran, and that it ran on the right file. A script rather than an
+/// inline shell command because the settings file, the shell and this source
+/// would otherwise each want their own layer of quoting.
+fn with_recording_editor(home: &Path) {
+    arrange(home);
+
+    let script = home.join("record-editor.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nprintf '%s' \"$1\" > \"$(dirname \"$0\")/opened.log\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+
+    let settings = home.join(SETTINGS_FILE);
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(settings, format!("editor = \"{}\"\n", script.display())).unwrap();
+}
+
+#[test]
+fn shift_f4_creates_a_file_and_opens_it() {
+    let app = in_src_and_dst(with_recording_editor);
+
+    app.key("shift+F4");
+    app.focus_dialog(DIALOG_NEW_FILE);
+    app.type_text("notes-from-f4.md");
+    app.key("Return");
+
+    app.await_exists("src/notes-from-f4.md");
+    // Empty, as Total Commander leaves it: what an editor makes of a
+    // zero-byte file is the editor's business.
+    app.await_contents("src/notes-from-f4.md", "");
+    // And the editor was handed that exact path.
+    app.await_contents(
+        "opened.log",
+        &format!("{}/src/notes-from-f4.md", app.home().display()),
+    );
+}
+
+#[test]
+fn shift_f4_will_not_empty_a_file_that_is_already_there() {
+    // The dangerous case: `create_file` truncates, so without a check this
+    // would empty the very file the user meant to open — and then hand it to
+    // an editor, which would save the emptiness back.
+    let app = in_src_and_dst(with_recording_editor);
+
+    app.key("shift+F4");
+    app.focus_dialog(DIALOG_NEW_FILE);
+    app.key("ctrl+a");
+    app.type_text("notes.txt");
+    app.key("Return");
+
+    app.focus_dialog(DIALOG_FAILURES);
+    app.await_contents("src/notes.txt", SOURCE_TEXT);
+    assert!(
+        !app.path("opened.log").exists(),
+        "the editor was launched on a file the job refused to create"
+    );
+}
+
+#[test]
+fn a_setting_the_shell_does_not_own_survives_being_written_back() {
+    // This has gone wrong twice: `[keys]` when it arrived, and `editor` a
+    // phase later. Both times the settings the app writes were built from the
+    // *defaults*, so a field nobody thought to copy was zeroed and the zero
+    // written back over the user's own line — half a second after the app
+    // opened, because saving happens on change.
+    //
+    // The editor is the witness because losing it is silent: Shift+F4 would
+    // just stop opening anything.
+    let first = in_src_and_dst(with_recording_editor);
+    // Move around, which is a change worth saving and so triggers a write.
+    first.key("ctrl+h");
+    let home = first.close();
+
+    let written = std::fs::read_to_string(home.path().join(SETTINGS_FILE)).unwrap();
+    assert!(
+        written.contains("record-editor.sh"),
+        "the editor line was written away:\n{written}"
+    );
+
+    // And it still works on the next run, which is what the line is for.
+    let app = App::relaunch(home);
+    app.key("shift+F4");
+    app.focus_dialog(DIALOG_NEW_FILE);
+    app.type_text("second-run.md");
+    app.key("Return");
+    app.await_exists("src/second-run.md");
+    app.await_contents(
+        "opened.log",
+        &format!("{}/src/second-run.md", app.home().display()),
+    );
 }
 
 #[test]

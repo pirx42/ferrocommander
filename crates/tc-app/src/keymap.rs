@@ -37,6 +37,8 @@ pub enum Action {
     Copy,
     /// F6 — move it, or rename it in place.
     Move,
+    /// Shift+F4 — create an empty file and open it in the editor.
+    CreateFile,
     /// Shift+F6 — rename the row under the cursor, in the list itself.
     RenameInline,
     /// F7 — create a directory here.
@@ -173,6 +175,11 @@ static BINDINGS: &[Binding] = &[
         key: Key::F6,
         modifiers: PLAIN,
         action: Action::Move,
+    },
+    Binding {
+        key: Key::F4,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::CreateFile,
     },
     Binding {
         key: Key::F6,
@@ -436,6 +443,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("go_parent", Action::GoParent),
     ("copy", Action::Copy),
     ("move", Action::Move),
+    ("create_file", Action::CreateFile),
     ("rename_inline", Action::RenameInline),
     ("create_dir", Action::CreateDir),
     ("delete", Action::Delete),
@@ -671,6 +679,7 @@ mod tests {
             (Key::BackSpace, PLAIN, Action::GoParent),
             (Key::F5, PLAIN, Action::Copy),
             (Key::F6, PLAIN, Action::Move),
+            (Key::F4, ModifierType::SHIFT_MASK, Action::CreateFile),
             (Key::F6, ModifierType::SHIFT_MASK, Action::RenameInline),
             (Key::F7, PLAIN, Action::CreateDir),
             (Key::F8, PLAIN, Action::Delete),
