@@ -1,6 +1,6 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: In Progress — sub-phase 0 done
+Status: In Progress — sub-phases 0, A done
 
 *2026-08-28 — implements phase 2 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -198,12 +198,16 @@ pub trait VirtualFs: Send + Sync {
   without a second code path. `+ Send` because the loop runs on a worker
   thread.
 - **`Send + Sync` on the trait** is what lets a job hold its backend across
-  threads. Consequence, applied in the same commit
-  (skill [20](../skills/20-no-backward-compat-shims.md) — migrate, do not
-  shim): `PaneView` swaps its `Box<dyn VirtualFs>` for an `Arc<dyn VirtualFs>`,
-  so a pane and a job share one handle instead of two. Phase 6's `ArchiveFs`
-  will need interior mutability to satisfy `Sync`; noted in
-  [vfs.md](../vfs.md) so it is a known constraint rather than a surprise.
+  threads. Phase 6's `ArchiveFs` will need interior mutability to satisfy
+  `Sync`; noted in [vfs.md](../vfs.md) so it is a known constraint rather than
+  a surprise.
+
+  *Deviation, implemented deliberately:* the sketch also swapped `PaneView`'s
+  `Box<dyn VirtualFs>` for an `Arc` in this commit. Deferred to sub-phase D,
+  where a job first shares the handle. Until then an `Arc` has exactly one
+  owner — a refcount paid for nothing, and the "API ahead of its caller"
+  pattern that phase 1's audit had to correct four times. The bound itself is
+  not affected: it is a bound, not a method, so it adds no untested code.
 - `trash` lives on the trait, implemented by `LocalFs` via the `trash` crate
   as `trash = { version = "5", default-features = false, features = ["coinit_apartmentthreaded"] }`
   — default features are dropped because they pull `chrono` in for listing
@@ -211,6 +215,17 @@ pub trait VirtualFs: Send + Sync {
   COM apartment feature is kept because dropping it would silently change
   Windows behavior. No `Unsupported` variant yet: it belongs to phase 6,
   where an archive backend will be the first thing that returns it.
+
+  *Correction found while implementing:* the trash error mapping does **not**
+  belong in `local.rs`, and `CouldNotAccess` is not the variant a missing path
+  produces — the freedesktop backend reports its wrapped `io::Error` instead,
+  which was established by running the crate rather than by reading its
+  variant list. Since that wrapping is target-dependent (Windows reports Win32
+  codes and the variant does not even exist there), the mapping lives in
+  `platform.rs` as a sixth platform function, which keeps `local.rs` free of
+  `cfg` branches as [vfs.md](../vfs.md) promises. The crate's
+  `Error::source()` is no way around the split: for the filesystem variant it
+  returns the io error's own source, which is `None`.
 
 *Tests* (tempdir fixtures, headless):
 - Round trip per method: `create_dir` then `read_dir` shows it; `create_file`
@@ -230,7 +245,15 @@ pub trait VirtualFs: Send + Sync {
   redirected trash dir. If the crate turns out not to honour
   `XDG_DATA_HOME`, the test degrades to the source side only and the missing
   half goes to [future-improvements.md](../future-improvements.md) rather
-  than being faked.
+  than being faked. *Verified: the crate honours it, so the test asserts both
+  halves.* The trash **error mapping** needs no redirection — it fails while
+  resolving the path — so it is tested alongside the other write calls
+  instead of costing a second single-test binary.
+
+*Two gaps this sub-phase opens, both recorded rather than hidden:* a copy
+carries no permission bits (`Entry` has no mode, so `+x` is lost), and
+`set_modified` cannot stamp a directory (no platform hands out a writable
+handle to one). Files keep their date, which is what the date column shows.
 
 *Docs:* [vfs.md](../vfs.md) — the full trait, the new error variants, why
 `remove_dir` is non-recursive, why `rename` reports `CrossDevice`, the

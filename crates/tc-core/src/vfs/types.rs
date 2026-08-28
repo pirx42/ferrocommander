@@ -66,6 +66,17 @@ pub enum VfsError {
     NotFound,
     PermissionDenied,
     NotADirectory,
+    /// The target of a create already exists. The operation engine turns this
+    /// into a conflict prompt rather than an error.
+    AlreadyExists,
+    /// A directory that had to be empty was not. Recursion is the engine's
+    /// job, so the backend reports this instead of deleting the contents.
+    NotEmpty,
+    /// A file operation was aimed at a directory.
+    IsADirectory,
+    /// A rename would have crossed filesystems, which no filesystem can do
+    /// atomically. The engine answers with copy + delete.
+    CrossDevice,
     /// Anything the layer does not model explicitly, with the original message
     /// preserved for the job log.
     Io(String),
@@ -77,6 +88,10 @@ impl From<io::Error> for VfsError {
             io::ErrorKind::NotFound => VfsError::NotFound,
             io::ErrorKind::PermissionDenied => VfsError::PermissionDenied,
             io::ErrorKind::NotADirectory => VfsError::NotADirectory,
+            io::ErrorKind::AlreadyExists => VfsError::AlreadyExists,
+            io::ErrorKind::DirectoryNotEmpty => VfsError::NotEmpty,
+            io::ErrorKind::IsADirectory => VfsError::IsADirectory,
+            io::ErrorKind::CrossesDevices => VfsError::CrossDevice,
             _ => VfsError::Io(err.to_string()),
         }
     }
@@ -88,6 +103,10 @@ impl fmt::Display for VfsError {
             VfsError::NotFound => write!(f, "no such file or directory"),
             VfsError::PermissionDenied => write!(f, "permission denied"),
             VfsError::NotADirectory => write!(f, "not a directory"),
+            VfsError::AlreadyExists => write!(f, "already exists"),
+            VfsError::NotEmpty => write!(f, "directory is not empty"),
+            VfsError::IsADirectory => write!(f, "is a directory"),
+            VfsError::CrossDevice => write!(f, "on a different filesystem"),
             VfsError::Io(message) => write!(f, "{message}"),
         }
     }
@@ -128,6 +147,10 @@ mod tests {
             (io::ErrorKind::NotFound, VfsError::NotFound),
             (io::ErrorKind::PermissionDenied, VfsError::PermissionDenied),
             (io::ErrorKind::NotADirectory, VfsError::NotADirectory),
+            (io::ErrorKind::AlreadyExists, VfsError::AlreadyExists),
+            (io::ErrorKind::DirectoryNotEmpty, VfsError::NotEmpty),
+            (io::ErrorKind::IsADirectory, VfsError::IsADirectory),
+            (io::ErrorKind::CrossesDevices, VfsError::CrossDevice),
         ];
         for (kind, expected) in cases {
             assert_eq!(VfsError::from(io::Error::from(kind)), expected);

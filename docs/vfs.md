@@ -8,20 +8,55 @@ The UI never calls `std::fs`; it holds a `VirtualFs` and asks that.
 ## The interface
 
 ```rust
-pub trait VirtualFs {
+pub trait VirtualFs: Send + Sync {
+    // reading
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError>;
     fn stat(&self, path: &VfsPath) -> Result<Entry, VfsError>;
+    // writing
+    fn create_dir(&self, path: &VfsPath) -> Result<(), VfsError>;
+    fn remove_dir(&self, path: &VfsPath) -> Result<(), VfsError>;
+    fn remove_file(&self, path: &VfsPath) -> Result<(), VfsError>;
+    fn rename(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError>;
+    fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError>;
+    fn create_file(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError>;
+    fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError>;
+    fn trash(&self, path: &VfsPath) -> Result<(), VfsError>;
 }
 ```
 
-Object-safe on purpose: a pane holds a `Box<dyn VirtualFs>` and swaps it when
-the user steps into an archive, without knowing which backend answers.
+Object-safe on purpose: a pane holds a `dyn VirtualFs` and swaps it when the
+user steps into an archive, without knowing which backend answers.
 
-**Read-only in phase 1.** The design doc lists `open/read/write, rename,
-mkdir, remove` on this trait. They are absent until phase 2 brings the
-operation engine that implements *and tests* them — trait methods added ahead
-of a caller are dead code no test can pin down (skill
-[20](skills/20-no-backward-compat-shims.md)).
+## Why the write side looks like this
+
+**`Send + Sync` is a bound, not a feature.** A file operation runs on a worker
+thread and holds its source and target backends across it. Declaring it costs
+nothing today — `LocalFs` is a unit struct — and it tells phase 6's
+`ArchiveFs`, which owns an open archive handle, that it needs interior
+mutability *before* it is half written rather than after.
+
+**`remove_dir` refuses a non-empty directory.** Recursion is the operation
+engine's walk. Only the engine can report per-file progress, log a per-file
+error and carry on, and honour a cancel between two entries; a recursive
+backend delete would be a second, silent implementation of the same walk with
+none of that. `create_dir` is non-recursive for the same reason.
+
+**`rename` reports `CrossDevice` instead of falling back to a copy.** The
+copy+delete degradation is a decision with a progress bar and a rollback
+attached, which makes it engine policy, not backend behavior.
+
+**Streams, not a `copy_file` method.** One `Read`/`Write` pair means the copy
+loop exists once and works local→local today and local→archive in phase 6
+without a second code path.
+
+**`create_file` truncates an existing file.** Whether overwriting is allowed
+is decided before the call — the engine has to ask the user anyway, and a
+second existence check in the backend would be a second answer to the same
+question.
+
+**`trash` sits on the trait rather than in the engine**, because only a
+backend knows whether its storage has such a thing. Phase 6's archives will
+not.
 
 ## `VfsPath`
 
@@ -60,21 +95,44 @@ decision — and never filters. Hidden entries are listed and flagged.
 
 ## Errors
 
-`VfsError` is a closed set: `NotFound`, `PermissionDenied`, `NotADirectory`,
-`Io(String)`. It deliberately carries no `io::Error`, so the variants stay
-comparable for tests and the UI has a finite set of cases to render. The
-original message survives in `Io` for the job log.
+`VfsError` is a closed set. It deliberately carries no `io::Error`, so the
+variants stay comparable for tests and the UI has a finite set of cases to
+render. The original message survives in `Io` for the job log.
+
+| Variant | Raised by |
+|---|---|
+| `NotFound` | anything aimed at a path that is not there |
+| `PermissionDenied` | the filesystem refusing the caller |
+| `NotADirectory` | listing something that is not a directory |
+| `AlreadyExists` | `create_dir` onto an existing name — the engine turns this into a conflict prompt, not an error |
+| `NotEmpty` | `remove_dir` on a directory with contents |
+| `IsADirectory` | `remove_file` aimed at a directory |
+| `CrossDevice` | `rename` across filesystems; the engine answers with copy + delete |
+| `Io(String)` | anything unmodelled, description preserved |
 
 ## Platform differences
 
-All of them live in `vfs/platform.rs`, behind three functions — `to_std_path`,
-`is_hidden`, `root_entries`. Adding a platform touches exactly one file.
+All of them live in `vfs/platform.rs`. Adding a platform touches exactly one
+file.
 
 | | Linux | Windows |
 |---|---|---|
 | Native path | the VFS path itself | `/C:/Users/pirx` → `C:\Users\pirx` |
 | Hidden | leading dot in the name | `FILE_ATTRIBUTE_HIDDEN` |
 | VFS root `/` | the real root directory | synthetic: the list of drives |
+| Trash errors | the crate wraps the real `io::Error`, so `NotFound` survives | Win32 status codes, kept as `Io` |
+
+**Why trash errors are a platform function.** The `trash` crate's error
+*shape* differs by target: its freedesktop backend carries the underlying
+`io::Error`, its Windows backend reports Win32 codes. Unwrapping the former
+keeps a failed trash inside the same closed error set as every other call —
+trashing a path that is already gone reports `NotFound` rather than an opaque
+string. Hand-mapping Win32 codes would be a table of guesses, so Windows keeps
+the description in `Io`.
+
+The crate's `Error::source()` is not a way around the split: for its
+filesystem variant it returns the io error's *own* source, which is `None`,
+not the io error itself.
 
 **Why the Windows root is the drive list.** Windows has no single filesystem
 root, so `/` has to mean *something*. Making it the drive list keeps `VfsPath`
@@ -110,10 +168,22 @@ platform-divergent line lives in `tc-core`** — `tc-app` contains no `cfg`
 branches at all. Verifying the Windows GTK build needs a real Windows or
 mingw toolchain.
 
-## Known gap
+## Known gaps
 
-If an entry disappears between `read_dir` enumerating it and `stat` reading
-its metadata, the whole listing fails with `NotFound` instead of omitting the
-vanished entry. Every alternative was untestable without an injection seam, so
-the honest version shipped; the refresh logic in phase 3 is the right place to
-revisit it.
+**A vanished entry fails the whole listing.** If an entry disappears between
+`read_dir` enumerating it and `stat` reading its metadata, the listing fails
+with `NotFound` instead of omitting it. Every alternative was untestable
+without an injection seam, so the honest version shipped; the refresh logic in
+phase 3 is the right place to revisit it.
+
+**`set_modified` cannot stamp a directory.** Stamping needs a handle opened
+for writing, which no platform hands out for a directory, so a copied
+directory carries the time it was created rather than the original's. Files —
+which is what the size and date columns are about — keep their date.
+
+**Copies do not carry permission bits.** `Entry` has no mode, so an
+executable script copied through the engine arrives without its `+x`. A
+portable permission model belongs with phase 3's attributes column.
+
+Both live in [future-improvements.md](future-improvements.md) with their
+reasons.

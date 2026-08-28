@@ -1,6 +1,7 @@
 //! The local filesystem as a [`VirtualFs`].
 
 use std::fs;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -55,6 +56,46 @@ impl VirtualFs for LocalFs {
         }
         // Deliberately unsorted — ordering is the listing layer's decision.
         Ok(entries)
+    }
+
+    fn create_dir(&self, path: &VfsPath) -> Result<(), VfsError> {
+        Ok(fs::create_dir(platform::to_std_path(path))?)
+    }
+
+    fn remove_dir(&self, path: &VfsPath) -> Result<(), VfsError> {
+        Ok(fs::remove_dir(platform::to_std_path(path))?)
+    }
+
+    fn remove_file(&self, path: &VfsPath) -> Result<(), VfsError> {
+        Ok(fs::remove_file(platform::to_std_path(path))?)
+    }
+
+    fn rename(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
+        Ok(fs::rename(
+            platform::to_std_path(from),
+            platform::to_std_path(to),
+        )?)
+    }
+
+    fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
+        Ok(Box::new(fs::File::open(platform::to_std_path(path))?))
+    }
+
+    fn create_file(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        Ok(Box::new(fs::File::create(platform::to_std_path(path))?))
+    }
+
+    fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError> {
+        // Write access is what the platform demands to stamp a file, which is
+        // also why this cannot serve directories.
+        let file = fs::File::options()
+            .write(true)
+            .open(platform::to_std_path(path))?;
+        Ok(file.set_modified(time)?)
+    }
+
+    fn trash(&self, path: &VfsPath) -> Result<(), VfsError> {
+        trash::delete(platform::to_std_path(path)).map_err(platform::trash_error)
     }
 
     fn stat(&self, path: &VfsPath) -> Result<Entry, VfsError> {

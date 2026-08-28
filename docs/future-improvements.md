@@ -16,6 +16,24 @@ to be testable at all, so the version with no untested code shipped.
 *Home:* the refresh logic in design phase 3.
 *From:* [vfs.md](vfs.md), walking-skeleton sub-phase A.
 
+**A copy loses the original's permission bits.**
+`Entry` carries no mode, so an executable script copied through the operation
+engine arrives without its `+x`. Modelling permissions portably — Unix mode
+bits against Windows ACLs — is a design question of its own, and the size and
+date columns were the phase-2 promise, not the attributes column.
+*Home:* phase 3, which adds the attributes column and therefore has to answer
+the modelling question anyway.
+*From:* [vfs.md](vfs.md), phase 2 sub-phase A.
+
+**A copied directory does not keep its date.**
+`VirtualFs::set_modified` needs a handle opened for writing, which no platform
+hands out for a directory, so `LocalFs` supports files only. A copied
+directory carries the time the copy created it. Files keep their date, which
+is what the date column shows.
+*Home:* would need `utimensat`-level access (a `rustix`/`libc` dependency) or
+the Windows equivalent, weighed against how much a directory's mtime is worth.
+*From:* [vfs.md](vfs.md), phase 2 sub-phase A.
+
 ## Platform coverage
 
 **The Windows GTK build is unverified.**

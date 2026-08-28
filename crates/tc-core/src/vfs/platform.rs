@@ -15,11 +15,14 @@
 //!   has no single filesystem root.
 //! - [`from_std_path`] is the inverse of [`to_std_path`].
 //! - [`home_dir`] locates the user's home directory.
+//! - [`trash_error`] maps a `trash` failure onto [`VfsError`]. It lives here
+//!   because the crate's error *shape* differs by target: the freedesktop
+//!   backend wraps the underlying `io::Error`, the Windows one does not.
 
 use std::path::{Path, PathBuf};
 
 use super::path::VfsPath;
-use super::types::Entry;
+use super::types::{Entry, VfsError};
 
 #[cfg(unix)]
 mod imp {
@@ -47,6 +50,20 @@ mod imp {
 
     pub fn home_dir() -> Option<PathBuf> {
         std::env::var_os("HOME").map(PathBuf::from)
+    }
+
+    /// The freedesktop backend wraps the real `io::Error`, so unwrapping it
+    /// keeps a failed trash in the same closed error set as every other call —
+    /// a path that is already gone reports `NotFound`, not an opaque string.
+    ///
+    /// The arm carries the crate's own `cfg`: `Error::FileSystem` exists on
+    /// freedesktop targets only, and `unix` also covers macOS.
+    pub fn trash_error(err: trash::Error) -> VfsError {
+        match err {
+            #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+            trash::Error::FileSystem { source, .. } => VfsError::from(source),
+            other => VfsError::Io(other.to_string()),
+        }
     }
 }
 
@@ -118,9 +135,16 @@ mod imp {
     pub fn home_dir() -> Option<PathBuf> {
         std::env::var_os("USERPROFILE").map(PathBuf::from)
     }
+
+    /// The Windows backend reports Win32 status codes, which this layer does
+    /// not model. Hand-mapping them would be a table of guesses; the original
+    /// description survives in `Io`, which is what that variant is for.
+    pub fn trash_error(err: trash::Error) -> VfsError {
+        VfsError::Io(err.to_string())
+    }
 }
 
-pub use imp::{from_std_path, home_dir, is_hidden, root_entries, to_std_path};
+pub use imp::{from_std_path, home_dir, is_hidden, root_entries, to_std_path, trash_error};
 
 #[cfg(test)]
 mod tests {
