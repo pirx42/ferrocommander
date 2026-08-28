@@ -41,7 +41,9 @@ Each unit was correct; the composition was not. That is the argument for this
 gap mattering, and for the manual pass being repeated whenever the shell
 grows. A second one followed: Page Up/Down moved the widget's selection while
 the model's cursor stayed behind, so the next keystroke acted on a stale row.
-Both bugs lived in the composition, which is exactly the layer with no test. So the wiring is known good today; what is missing is a regression
+A third followed: the view never scrolled to the cursor, so it walked off
+screen. All three lived in the composition between GTK and the model, which
+is exactly the layer with no test. So the wiring is known good today; what is missing is a regression
 net, and a future refactor could break it silently.
 *Home:* would need a way to synthesize keystrokes in the session, or
 `gtk::test` smoke tests as the design doc's testing section anticipates.

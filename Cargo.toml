@@ -16,7 +16,11 @@ repository = "https://github.com/pirx/ferrocommander"
 [workspace.dependencies]
 tc-core = { path = "crates/tc-core" }
 tempfile = "3"
-# The GTK4 bindings. Deliberately built against the baseline GTK 4.0 API: the
-# shell needs nothing newer, and a higher floor would exclude distributions
-# and Windows builds that ship an older libgtk-4.
-gtk = { package = "gtk4", version = "0.11" }
+# The GTK4 bindings, pinned to the GTK 4.12 API.
+#
+# The floor was 4.0 on the assumption that the shell needed nothing newer.
+# That was wrong: scrolling the cursor row into view has no supported
+# baseline API — gtk_column_view_scroll_to arrived in 4.12, and the
+# list.scroll-to-item action lives on an internal widget, not on ColumnView.
+# 4.12 is from March 2024; the cost is Debian 12 (4.8) and Ubuntu 22.04 (4.6).
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }

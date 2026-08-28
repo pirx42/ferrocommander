@@ -30,6 +30,11 @@ before the page, not the row the user is looking at.
 The same mechanism covers anything else the widget handles on its own, and is
 what mouse selection will ride on in a later phase.
 
+The traffic runs the other way too: when the shell moves the cursor it also
+moves the widget's *focus*, because the widget pages from its own focus. If
+focus did not follow, a Page Down after some arrow keys would page from
+wherever the widget last was rather than from the cursor.
+
 ## One table, no key names in the widgets
 
 All bindings live in a single `BINDINGS` table in `keymap.rs`, and the GTK

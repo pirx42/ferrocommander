@@ -214,12 +214,27 @@ impl PaneView {
         self.sync_cursor();
     }
 
-    /// Moves the visible selection onto the listing's cursor.
+    /// Selects the listing's cursor row, focuses it, and scrolls it into
+    /// view — the three halves of "the cursor is here" as far as the widget
+    /// is concerned.
+    ///
+    /// Setting the selection alone moves nothing: only the widget's own key
+    /// handling scrolls, and this shell binds the cursor keys itself, so the
+    /// selection would silently walk off screen. `FOCUS` matters as much as
+    /// the scrolling — Page Up/Down are handled by the widget and page from
+    /// *its* focus, so the focus has to follow our cursor or paging resumes
+    /// from wherever it last was.
     fn sync_cursor(&self) {
         if self.listing.is_empty() {
             return;
         }
-        self.selection.set_selected(self.listing.cursor() as u32);
+        let row = self.listing.cursor() as u32;
+        self.column_view.scroll_to(
+            row,
+            None,
+            gtk::ListScrollFlags::FOCUS | gtk::ListScrollFlags::SELECT,
+            None,
+        );
     }
 
     /// Takes over a selection the widget moved on its own.
@@ -313,6 +328,7 @@ fn build_column(column: Column) -> gtk::ColumnViewColumn {
     let factory = gtk::SignalListItemFactory::new();
 
     factory.connect_setup(move |_, item| {
+        let item = list_item(item);
         let label = gtk::Label::builder()
             .xalign(column.xalign())
             .ellipsize(gtk::pango::EllipsizeMode::Middle)
@@ -321,6 +337,7 @@ fn build_column(column: Column) -> gtk::ColumnViewColumn {
     });
 
     factory.connect_bind(move |_, item| {
+        let item = list_item(item);
         let entry = item
             .item()
             .and_downcast::<PaneEntry>()
@@ -336,4 +353,12 @@ fn build_column(column: Column) -> gtk::ColumnViewColumn {
     view_column.set_fixed_width(column.width());
     view_column.set_expand(column.expands());
     view_column
+}
+
+/// From GTK 4.12 the factory hands over a plain `Object`, because a factory
+/// can also produce header and cell items. A column's factory only ever makes
+/// list items.
+fn list_item(item: &glib::Object) -> &gtk::ListItem {
+    item.downcast_ref::<gtk::ListItem>()
+        .expect("a column view factory always yields ListItems")
 }

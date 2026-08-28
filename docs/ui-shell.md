@@ -58,9 +58,17 @@ shell does not bind reach the `ColumnView`, which moves its selection without
 asking. So the traffic runs both ways:
 
 - **Model → widget** after anything that changes the listing (`refresh`,
-  cursor moves, navigation).
+  cursor moves, navigation), via `sync_cursor`.
 - **Widget → model** at the start of every dispatched action, via
   `adopt_selection`.
+
+`sync_cursor` does three things in one `ColumnView::scroll_to` call —
+**select**, **focus**, and **scroll into view**. All three are needed.
+Selecting alone moves nothing: only the widget's own key handling scrolls,
+and this shell binds the cursor keys itself, so the selection would silently
+walk off the bottom of the viewport. Focus matters just as much: Page Up/Down
+are handled by the widget and page from *its* focus, so unless focus follows
+our cursor, paging resumes from wherever the widget last was.
 
 `refresh` saves and restores the cursor around the store rebuild, because
 emptying and refilling the store makes the widget move its selection on its
@@ -84,14 +92,24 @@ in the path bar.
 
 ## GTK version floor
 
-The `gtk4` bindings are built against the **baseline GTK 4.0 API** — no
-`v4_x` feature is enabled. The shell needs nothing newer, and a higher floor
-would exclude distributions and Windows builds shipping an older libgtk-4.
+The `gtk4` bindings are pinned to the **GTK 4.12 API** (`features =
+["v4_12"]`), so the binary requires libgtk-4 ≥ 4.12. That excludes Debian 12
+(4.8) and Ubuntu 22.04 (4.6); 4.12 is from March 2024.
 
-This has teeth: `CssProvider::load_from_string` needs GTK 4.12 and is
-therefore unavailable; `load_from_data` is the baseline equivalent. When an
-API is missing at compile time, that is the floor doing its job — reach for
-the baseline call, do not raise the floor without deciding to.
+The floor started at the 4.0 baseline, on the assumption that the shell
+needed nothing newer. That assumption was wrong, and it is worth recording
+why rather than just the outcome: **scrolling the cursor row into view has no
+supported baseline API.** `gtk_column_view_scroll_to` arrived in 4.12, and
+the `list.scroll-to-item` action that predates it lives on `GtkListBase` —
+which `ColumnView` is not; it wraps an internal list view. Reaching that
+action means poking at GTK's private widget tree.
+
+The cost of raising the floor is a list of old distributions. The cost of not
+raising it was either a broken cursor or a hack on undocumented internals.
+
+Raising it is not free elsewhere: from 4.12 a `SignalListItemFactory` hands
+its callbacks a plain `Object` rather than a `ListItem`, because a factory
+can also produce header and cell items, so the column factory downcasts.
 
 ## Testing
 

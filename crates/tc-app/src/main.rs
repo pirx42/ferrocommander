@@ -82,9 +82,7 @@ fn main() -> glib::ExitCode {
 
 fn load_stylesheet() {
     let provider = gtk::CssProvider::new();
-    // `load_from_string` needs GTK 4.12; `load_from_data` is baseline API and
-    // keeps the 4.0 floor this crate builds against.
-    provider.load_from_data(STYLESHEET);
+    provider.load_from_string(STYLESHEET);
     if let Some(display) = gdk::Display::default() {
         gtk::style_context_add_provider_for_display(
             &display,
