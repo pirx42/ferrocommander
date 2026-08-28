@@ -1,6 +1,6 @@
 # Phase 3b — the rest of Total Commander's selection keys, pane commands, and a configurable keymap
 
-**Status:** In progress
+**Status:** Implemented
 **Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) — inserted
 between design phases 3 and 4, because it finishes phase 3's territory
 (selection commands and the keymap) rather than starting the viewer.
@@ -163,6 +163,28 @@ makes the marks and the cursor come along for free.
 - The format-preserving save from §4.
 
 ### E. Docs and refactoring audit
+
+**What the audit found**, and what came of it:
+
+- **`Settings` gained a field the shell defaulted away.** `current_settings`
+  built its value with `..Settings::default()`, which zeroed the new `keys`
+  map — so for anyone with a `[keys]` table it never equalled what was loaded,
+  and the first keystroke of every run wrote their file for no reason. The
+  bindings are echoed back as they were loaded now. It costs one redundant
+  write and nothing else observable (after that write the two agree again), so
+  it carries no test of its own: pinning it would take a contortion that tests
+  the contortion.
+- **The `Testing` section of [keymap.md](../keymap.md) had gone stale** —
+  it claimed every binding but two was pressed for real, which stopped being
+  true three sub-phases ago. It now names what is left out and why, and two
+  keys that had no reason to be missing (`Shift+PgUp`, `Alt+Num −`) were
+  covered rather than excused.
+- **The six "do something to the marks" methods on `PaneView` were left
+  alone.** They look like duplication and are not: each is a delegation to a
+  differently-named `Listing` call, and only the three that depend on the
+  cursor call `adopt_selection` first. A shared helper would either force that
+  call on all six or take a flag to say which, and both are worse than the
+  three lines they would save.
 
 [keymap.md](../keymap.md) gets the full table and the TC-faithfulness notes;
 [config.md](../config.md) gets `[keys]` and the format-preserving save;

@@ -47,9 +47,8 @@ cross-references instead of duplication.
   engine, the background queue, progress and conflict dialogs) and
   [archive/2026-08-28-phase3-polish-browsing.md](plans/archive/2026-08-28-phase3-polish-browsing.md)
   (design phase 3: selection, quick filter, sorting, attributes, config
-  persistence, drive bar).
-  Also active:
-  [2026-08-28-phase3b-keys-and-keymap.md](plans/2026-08-28-phase3b-keys-and-keymap.md)
+  persistence, drive bar) and
+  [archive/2026-08-28-phase3b-keys-and-keymap.md](plans/archive/2026-08-28-phase3b-keys-and-keymap.md)
   (inserted between design phases 3 and 4: the rest of Total Commander's
   selection keys, the pane commands, and a configurable keymap).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files

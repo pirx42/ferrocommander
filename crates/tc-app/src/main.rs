@@ -109,6 +109,12 @@ impl Shell {
                 },
                 None => self.saved.window,
             },
+            // The bindings are the user's lines, not the app's state: they are
+            // echoed back exactly as they were loaded. Defaulting them here
+            // would make these settings differ from the file for anyone who
+            // has a [keys] table, and the first keystroke of every run would
+            // write their file for no reason.
+            keys: self.saved.keys.clone(),
             ..config::Settings::default()
         };
         settings.active_pane = self.active;

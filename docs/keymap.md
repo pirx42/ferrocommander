@@ -298,9 +298,24 @@ including that the prefilled value round-trips back to "into that directory".
 The wiring *between* a physical keypress and those functions used to have no
 automated coverage at all. It is now covered by the end-to-end suite in
 `crates/tc-app/tests/ui.rs`, where a real X server delivers real key events to
-the real binary and the checks are on the filesystem afterwards. Every binding
-in the table above is exercised there except `Ctrl+Q` and `Backspace`, and the
-cursor keys and Tab are used by every test to get anywhere at all.
+the real binary and the checks are on the filesystem afterwards. The cursor
+keys and Tab are used by every test to get anywhere at all, and `Ctrl+Q` is
+how the harness closes the app.
+
+**What is deliberately not exercised end to end**, and why:
+
+- `Backspace`, and `Ctrl+F3`/`F4`/`F5` — covered headlessly, and reaching them
+  through a real window would say nothing the unit tests do not.
+- The **aliases**: `Ctrl+Num +` for `Ctrl+A`, keypad `Enter` for `Enter`,
+  `Delete` for `F8`. They resolve to the same action as a key that *is*
+  pressed for real, so the second press only tests the lookup, which the
+  keymap's own tests cover exhaustively.
+
+Everything a physical press could get wrong on its own — a binding that
+matches nothing, a modifier that arrives uninvited, a dialog with no focused
+button, an action reaching the wrong pane — is pressed for real. That is not
+theoretical: the `+` binding shipped in phase 3 was dead on arrival, and only
+a real key press found it.
 
 It is part of `cargo test --workspace`, so touching the controller, the keymap
 or a dialog cannot silently break them. How it works and what it needs

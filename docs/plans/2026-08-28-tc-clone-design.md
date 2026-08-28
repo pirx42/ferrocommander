@@ -141,6 +141,15 @@ every phase ships its tests alongside the code (skill
    [archive/2026-08-28-phase3-polish-browsing.md](archive/2026-08-28-phase3-polish-browsing.md).
    Subsystem docs: [config.md](../config.md), plus the selection and filter
    halves of [listing.md](../listing.md) and [keymap.md](../keymap.md).
+3b. **Keys and keymap** — the rest of Total Commander's selection keys
+   (`Shift`+cursor, `Ctrl+Num −`, `Alt+Num ±`, `Num /`, `Shift+Num *`), the
+   two-pane commands (`Ctrl+←/→`, `Ctrl+U`), and a configurable keymap laid
+   over the defaults. Inserted here rather than deferred, because it finishes
+   phase 3's territory. ✅ **Implemented**; plan archived at
+   [archive/2026-08-28-phase3b-keys-and-keymap.md](archive/2026-08-28-phase3b-keys-and-keymap.md).
+   Subsystem docs: the marking half of [keymap.md](../keymap.md), the
+   selection primitives in [listing.md](../listing.md), and the `[keys]` table
+   in [config.md](../config.md).
 4. **Viewer** — F3 text/hex viewer, F4 external editor hook. *(~1 day)*
 5. **Search & multi-rename** — Alt+F7 dialog + streaming results; Ctrl+M tool
    with table-driven rename-engine tests. *(~1–2 days)*

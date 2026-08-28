@@ -551,6 +551,49 @@ fn shift_page_down_marks_across_a_screenful() {
 }
 
 #[test]
+fn shift_page_up_marks_across_a_screenful_the_other_way() {
+    // The upward twin, and the one that has to clamp: a page above the second
+    // row runs off the top, where `..` sits and must not be picked up.
+    let app = in_src_and_dst(arrange);
+    app.key("End");
+    app.key("shift+Prior");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/nested");
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/src").exists() && !app.path("dst/dst").exists(),
+        "the page ran off the top and marked the parent row"
+    );
+}
+
+#[test]
+fn alt_numminus_takes_the_extension_marks_back() {
+    let app = in_src_and_dst(with_two_text_files);
+    app.key("ctrl+a");
+    // `..`, nested, data.bin, notes.txt, other.txt — cursor on notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("alt+KP_Subtract");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    // The two .txt files lost their marks; the rest kept theirs.
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/nested");
+    app.settle();
+    for gone in ["dst/notes.txt", "dst/other.txt"] {
+        assert!(!app.path(gone).exists(), "{gone} kept its mark");
+    }
+}
+
+#[test]
 fn ctrl_numminus_takes_every_mark_back() {
     // The gap Ctrl+A left: before this there was no way to unmark everything.
     let app = in_src_and_dst(arrange);
