@@ -5,19 +5,21 @@ Status: Implemented — substance extracted to [listing.md](../../listing.md),
 [vfs.md](../../vfs.md), [config.md](../../config.md),
 [performance.md](../../performance.md); open points to
 [future-improvements.md](../../future-improvements.md).
+Commits e3c44b0 (0) / 3df2984 (A) / 16a38f7 (B) / e1986b9 (C) / 545d4ab (D) /
+2f18b51 (E) / dc7c5fe (F) / af55530 (G) / e8b735f (H).
 
 *2026-08-28 — implements phase 3 of
-[2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
+[2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md).*
 
-> Process: [good-development-practices.md](../good-development-practices.md),
+> Process: [good-development-practices.md](../../good-development-practices.md),
 > skill triggers in the root [CLAUDE.md](../../CLAUDE.md). Every sub-phase
 > below is one commit series, green before it lands
-> (skills [11](../skills/11-multi-phase-commits.md),
-> [25](../skills/25-green-suite-before-commit.md)).
+> (skills [11](../../skills/11-multi-phase-commits.md),
+> [25](../../skills/25-green-suite-before-commit.md)).
 >
 > Both standing requirements apply throughout and are called out where they
-> decide something: [performance.md](../performance.md) (speed wins) and
-> [reliability.md](../reliability.md) (rather more tests than too few).
+> decide something: [performance.md](../../performance.md) (speed wins) and
+> [reliability.md](../../reliability.md) (rather more tests than too few).
 
 ## 1. Scope
 
@@ -46,7 +48,7 @@ the program remembering all of it next time.
   pane.
 - Two gaps homed here by earlier phases: a vanished entry must no longer fail
   the whole listing, and permission bits must survive a copy
-  ([future-improvements.md](../future-improvements.md)).
+  ([future-improvements.md](../../future-improvements.md)).
 
 ### Explicitly out of scope
 
@@ -57,7 +59,7 @@ recursive scan per keystroke and belongs with the search walker in phase 5 ·
 a configurable keymap, which the one-table design already makes cheap but
 which nothing yet asks for.
 
-## 2. Coverage pre-check (skill [43](../skills/43-coverage-before-implementation.md))
+## 2. Coverage pre-check (skill [43](../../skills/43-coverage-before-implementation.md))
 
 | Existing item | Coverage today | Verdict |
 |---|---|---|
@@ -69,7 +71,7 @@ which nothing yet asks for.
 | `LocalFs::read_dir` | 15 tests | covered; the vanished-entry fix needs a seam it does not have — see sub-phase A |
 | `Entry` construction | built by hand in ~6 test modules | **every one breaks** when the attributes field lands (sub-phase E), mechanically |
 
-**Announced test changes (skill [24](../skills/24-no-silent-test-changes.md)).**
+**Announced test changes (skill [24](../../skills/24-no-silent-test-changes.md)).**
 Two, both scheduled rather than discovered:
 
 1. `an_unbound_key_triggers_nothing` currently witnesses with `Escape`, `a`,
@@ -110,7 +112,7 @@ remapping shares a code path with.
   a scan, and sorting or filtering costs nothing at all because neither
   touches `entries`. A `HashSet<String>` would allocate a string per selected
   file for a question asked on every keystroke
-  ([performance.md](../performance.md)).
+  ([performance.md](../../performance.md)).
 - API: `toggle(index)`, `set_selected(index, bool)`, `select_all`,
   `clear_selection`, `invert_selection`, `select_matching(pattern, bool)`,
   `selected_paths()`, `selection_summary()` (count and byte total for the
@@ -123,7 +125,7 @@ remapping shares a code path with.
   Vanished names fall out; new names arrive unselected.
 - New `tc-core::glob` — `*` and `?` only, table-tested. Phase 5's search needs
   the same matcher, so it is written where both can reach it rather than
-  twice ([44](../skills/44-no-redundancy.md)).
+  twice ([44](../../skills/44-no-redundancy.md)).
 - **The vanished-entry gap closes here.** `read_dir` currently fails the whole
   listing if an entry disappears between being enumerated and being stat'ed.
   The collect loop becomes a small function over `(name, Result<Metadata>)`
@@ -195,7 +197,7 @@ sorts by size and checks the top row changed.
 
 Reliability, not decoration: an executable that arrives without its `+x` is a
 broken copy, and today every copy does that
-([reliability.md](../reliability.md)).
+([reliability.md](../../reliability.md)).
 
 - `Entry` gains `attributes: Attributes` — a small, `Copy` value, not a
   string, so the column renders it and the copy engine restores it from the
@@ -220,7 +222,7 @@ broken copy, and today every copy does that
   applies to its own settings file.
 - `serde` + `toml`. A hand-rolled parser would save a dependency and cost
   reliability, which is the wrong way round for a file the program rewrites
-  on every exit ([reliability.md](../reliability.md)).
+  on every exit ([reliability.md](../../reliability.md)).
 - **Written atomically**: to a temporary name in the same directory, then
   renamed over the target. A config truncated by a crash mid-write is a
   program that starts up wrong, and `VirtualFs` already has both calls.
@@ -246,7 +248,7 @@ afterwards; an interrupted save leaves the previous config intact.
 system, so the test does not depend on the box it runs on; the filter rules
 (pseudo-filesystems excluded) are a table.
 
-### H — Refactoring audit + correction (skill [49](../skills/49-final-phase-refactoring-audit.md))
+### H — Refactoring audit + correction (skill [49](../../skills/49-final-phase-refactoring-audit.md))
 
 *Commit:* `refactor(core): audit corrections for the browsing phase`
 
@@ -297,7 +299,7 @@ place the two meet.
 
 ## 4. Effort
 
-Calibrated per skill [45](../skills/45-calibrate-effort-estimates.md) (feature
+Calibrated per skill [45](../../skills/45-calibrate-effort-estimates.md) (feature
 plan, factor ×0.25):
 
 | Sub-phase | Calibrated |
@@ -356,6 +358,6 @@ design doc's line was written before either had a home.
   the same sort order and window size.
 - The drive bar switches the active pane.
 - The full gate is green, the UI suite covers the new bindings, and every
-  claim added to [performance.md](../performance.md) carries a measurement.
+  claim added to [performance.md](../../performance.md) carries a measurement.
 - Sub-phase H is done, and this document's Status becomes `Implemented` with
-  the commit hashes, per skill [10](../skills/10-plan-lifecycle.md).
+  the commit hashes, per skill [10](../../skills/10-plan-lifecycle.md).

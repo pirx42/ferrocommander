@@ -1,6 +1,6 @@
 # Design: Total Commander Clone for Linux
 
-Status: In Progress — phases 1 and 2 implemented
+Status: In Progress — phases 1, 2 and 3 implemented
 
 *2026-08-28 — working name: "Ferrocommander" (pick whatever you like)*
 
@@ -137,10 +137,10 @@ every phase ships its tests alongside the code (skill
    and [ui-shell.md](../ui-shell.md).
 3. **Polish browsing** — sorting, selection commands, Ctrl+S filter, drive/mount
    bar, hidden files, config persistence. *(~1–2 days)*
-   📋 **Planned** —
-   [2026-08-28-phase3-polish-browsing.md](2026-08-28-phase3-polish-browsing.md).
-   The plan comes out larger than this line, and says why: permission-preserving
-   copies arrived there as a reliability gap, not as browsing polish.
+   ✅ **Implemented** (commits e3c44b0…e8b735f); plan archived at
+   [archive/2026-08-28-phase3-polish-browsing.md](archive/2026-08-28-phase3-polish-browsing.md).
+   Subsystem docs: [config.md](../config.md), plus the selection and filter
+   halves of [listing.md](../listing.md) and [keymap.md](../keymap.md).
 4. **Viewer** — F3 text/hex viewer, F4 external editor hook. *(~1 day)*
 5. **Search & multi-rename** — Alt+F7 dialog + streaming results; Ctrl+M tool
    with table-driven rename-engine tests. *(~1–2 days)*
