@@ -162,9 +162,13 @@ every phase ships its tests alongside the code (skill
    [archive/2026-08-28-phase4-viewer.md](archive/2026-08-28-phase4-viewer.md),
    subsystem doc [viewer.md](../viewer.md).
 5. **Search & multi-rename** — Alt+F7 dialog + streaming results; Ctrl+M tool
-   with table-driven rename-engine tests. *(~1–2 days)*
+   with table-driven rename-engine tests. ✅ **Implemented**; plan archived at
+   [archive/2026-08-28-phase5-search-and-rename.md](archive/2026-08-28-phase5-search-and-rename.md),
+   subsystem docs [search.md](../search.md) and
+   [multi-rename.md](../multi-rename.md).
 6. **Archives** — archive VFS read, then pack/unpack via the same copy pipeline;
-   pack→unpack roundtrip invariant tests. *(~2 days)*
+   pack→unpack roundtrip invariant tests. *(~2 days)* Plan:
+   [2026-08-28-phase6-archives.md](2026-08-28-phase6-archives.md).
 7. **Refactoring audit** — final phase per skill
    [49](../skills/49-final-phase-refactoring-audit.md): audit the whole
    implementation for architecture drift and redundancy

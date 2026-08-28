@@ -1,7 +1,7 @@
 # Phase 5 — search (Alt+F7) and the multi-rename tool (Ctrl+M)
 
-**Status:** In progress
-**Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) § 6, phase 5.
+**Status:** Implemented
+**Design:** [2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md) § 6, phase 5.
 
 ## 1. Why
 
@@ -19,12 +19,12 @@ design doc names for this phase:
 finds the first hit in milliseconds and the last one in minutes. Waiting for
 the whole walk before showing anything makes the fast case feel like the slow
 one, and a search that cannot be cancelled makes the slow one unbearable. Both
-are the speed requirement, not polish ([performance.md](performance.md)).
+are the speed requirement, not polish ([performance.md](../../performance.md)).
 
 **Multi-rename: it must be right, and it must be visible before it runs.**
 Renaming a hundred files by a rule nobody could check first is exactly the
 operation this project's reliability requirement exists for
-([reliability.md](reliability.md)). So the rule engine is **pure** — rules
+([reliability.md](../../reliability.md)). So the rule engine is **pure** — rules
 times names to a preview — table-tested, and the preview is the same function
 the rename uses. A preview that is computed differently from the thing it
 previews is worse than none.
@@ -123,3 +123,28 @@ Factor 0.25 per skill 45. The largest phase since 2.
 | D. The rename dialog | ~1.5 h |
 | E. Docs + audit | ~45 min |
 | **Total** | **~5.75 h** |
+
+## 7. Outcome
+
+Implemented across four commits (`6a11bd9`, `cd078c8`, and the multi-rename
+commit that closed it). What the plan did not foresee:
+
+- **`PATTERN_DEFAULT` was the wrong default to reuse.** The selection dialogs
+  prefill `*.`, which as a search pattern matches nothing; the search field
+  needed its own `*`. The first version of the feature found no files at all,
+  and the end-to-end test is what said so.
+- **The walk-order tests could not bite until the walk was forced.** The search
+  uses a stack rather than recursion, so "an unreadable directory does not stop
+  it" only means something if the unreadable directory is not the last one
+  visited. The fixtures name their directories so the order is known, and a
+  `CancelsMidDirectory` decorator cancels from inside `read_dir` rather than
+  hoping the timing lands.
+- **The batch-collision refusal needed a test that could see it.** Both the
+  preview and the job queue stop two files from landing on one name, so the
+  file survives either way; the assertion had to be that no conflict dialog
+  ever opened.
+
+Subsystem docs: [search.md](../../search.md),
+[multi-rename.md](../../multi-rename.md), plus the two new rows in
+[keymap.md](../../keymap.md) and the undo gap in
+[future-improvements.md](../../future-improvements.md).

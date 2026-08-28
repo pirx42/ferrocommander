@@ -85,7 +85,7 @@ The project is in its build-up phase; this table grows with the code.
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
 | Noticing external changes: the watcher, `Ctrl+R` | [docs/watching.md](docs/watching.md) |
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
-| What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 (phases 1–4 done, plus 3b and 3c; phase 5 next) |
+| What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 (phases 1–5 done, plus 3b and 3c; phase 6 next) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
 | How fast things are, and what is still slow | [docs/performance.md](docs/performance.md) |
 | What "reliable" means, and where the tests live | [docs/reliability.md](docs/reliability.md) |
