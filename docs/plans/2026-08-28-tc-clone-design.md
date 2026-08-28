@@ -137,6 +137,10 @@ every phase ships its tests alongside the code (skill
    and [ui-shell.md](../ui-shell.md).
 3. **Polish browsing** — sorting, selection commands, Ctrl+S filter, drive/mount
    bar, hidden files, config persistence. *(~1–2 days)*
+   📋 **Planned** —
+   [2026-08-28-phase3-polish-browsing.md](2026-08-28-phase3-polish-browsing.md).
+   The plan comes out larger than this line, and says why: permission-preserving
+   copies arrived there as a reliability gap, not as browsing polish.
 4. **Viewer** — F3 text/hex viewer, F4 external editor hook. *(~1 day)*
 5. **Search & multi-rename** — Alt+F7 dialog + streaming results; Ctrl+M tool
    with table-driven rename-engine tests. *(~1–2 days)*
