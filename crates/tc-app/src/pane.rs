@@ -366,6 +366,23 @@ impl PaneView {
         self.refresh();
     }
 
+    /// Opens the pane with a remembered ordering and hidden-file flag.
+    pub fn restore(&mut self, sort: Sort, show_hidden: bool) {
+        self.sort = sort;
+        self.show_hidden = show_hidden;
+        let mut listing =
+            std::mem::replace(&mut self.listing, Listing::new(VfsPath::root(), Vec::new()));
+        self.adopt(&mut listing);
+        self.listing = listing;
+        self.update_headers();
+        self.refresh();
+    }
+
+    /// What this pane would want back next time.
+    pub fn state(&self) -> (VfsPath, Sort, bool) {
+        (self.listing.dir().clone(), self.sort, self.show_hidden)
+    }
+
     /// Puts this pane's ordering, hidden-file flag and filter onto a listing
     /// that has just been read.
     fn adopt(&self, listing: &mut Listing) {

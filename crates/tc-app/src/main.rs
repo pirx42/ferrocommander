@@ -21,14 +21,15 @@ use gtk::gdk;
 use gtk::glib;
 use gtk::prelude::*;
 
+use tc_core::config;
 use tc_core::ops::{DeleteMode, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
     APP_ID, APP_NAME, CONFLICT_PROMPT, PANE_COUNT, PANE_SPLIT_RATIO, PATTERN_DEFAULT,
-    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, STYLESHEET,
-    TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN, TITLE_MOVE,
-    TITLE_UNMARK_PATTERN, WINDOW_HEIGHT, WINDOW_WIDTH,
+    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN,
+    SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
+    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_UNMARK_PATTERN,
 };
 use keymap::Action;
 use pane::PaneView;
@@ -375,19 +376,39 @@ fn load_stylesheet() {
 }
 
 fn build_window(app: &gtk::Application) {
-    // Both panes open at the user's home directory. Remembering the last
-    // directory is config persistence, which is phase 3.
+    let config_root = LocalFs::config_dir();
+    let (settings, complaint) = match &config_root {
+        Some(root) => config::load(&LocalFs, root),
+        // Nowhere to keep settings is a first run that never ends, not a
+        // reason to refuse to start.
+        None => (config::Settings::default(), None),
+    };
+    if let Some(reason) = complaint {
+        eprintln!("{SETTINGS_UNREADABLE}: {reason}");
+    }
+
+    // Panes open where they were, or at the home directory on a first run.
     let start = LocalFs::home_dir().unwrap_or_else(VfsPath::root);
 
     let backend: Arc<dyn tc_core::vfs::VirtualFs> = Arc::new(LocalFs);
-    let left = PaneView::new(Arc::clone(&backend), start.clone());
-    let right = PaneView::new(backend, start);
+    let mut left = PaneView::new(
+        Arc::clone(&backend),
+        settings
+            .pane(0)
+            .directory()
+            .unwrap_or_else(|| start.clone()),
+    );
+    let mut right = PaneView::new(backend, settings.pane(1).directory().unwrap_or(start));
+    for (index, pane) in [&mut left, &mut right].into_iter().enumerate() {
+        let remembered = settings.pane(index);
+        pane.restore(remembered.sort(), remembered.show_hidden);
+    }
 
     let panes = gtk::Paned::builder()
         .orientation(gtk::Orientation::Horizontal)
         .start_child(left.widget())
         .end_child(right.widget())
-        .position((WINDOW_WIDTH as f32 * PANE_SPLIT_RATIO) as i32)
+        .position((settings.window.width as f32 * PANE_SPLIT_RATIO) as i32)
         // Neither side may be squeezed to nothing by dragging the divider.
         .resize_start_child(true)
         .resize_end_child(true)
@@ -396,17 +417,61 @@ fn build_window(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title(APP_NAME)
-        .default_width(WINDOW_WIDTH)
-        .default_height(WINDOW_HEIGHT)
+        .default_width(settings.window.width)
+        .default_height(settings.window.height)
         .child(&panes)
         .build();
 
     let shell = Rc::new(RefCell::new(Shell::new([left, right], &window)));
+    shell.borrow_mut().active = settings.active_pane.min(PANE_COUNT - 1);
+    shell.borrow_mut().update_active();
     for index in 0..PANE_COUNT {
         wire_filter_bar(&shell, index);
     }
+    remember_on_close(&window, &shell, config_root);
     window.add_controller(key_controller(&window, shell));
     window.present();
+}
+
+/// Writes the settings out when the window closes.
+///
+/// Failing to save is reported and does not stop the program from closing:
+/// refusing to quit because a settings file could not be written would be a
+/// worse bargain than starting up in the wrong directory next time.
+fn remember_on_close(
+    window: &gtk::ApplicationWindow,
+    shell: &Rc<RefCell<Shell>>,
+    config_root: Option<VfsPath>,
+) {
+    let shell = shell.clone();
+    window.connect_close_request(move |window| {
+        if let Some(root) = &config_root {
+            let mut settings = config::Settings {
+                window: config::WindowSettings {
+                    width: window.width(),
+                    height: window.height(),
+                },
+                ..config::Settings::default()
+            };
+            let state = shell.borrow();
+            settings.active_pane = state.active;
+            for (index, pane) in state.panes.iter().enumerate() {
+                let (directory, sort, show_hidden) = pane.state();
+                let mut pane_settings = config::PaneSettings {
+                    directory: directory.to_string(),
+                    show_hidden,
+                    ..config::PaneSettings::default()
+                };
+                pane_settings.set_sort(sort);
+                settings.set_pane(index, pane_settings);
+            }
+            drop(state);
+            if let Err(reason) = config::save(&LocalFs, root, &settings) {
+                eprintln!("{SETTINGS_UNWRITABLE}: {reason}");
+            }
+        }
+        glib::Propagation::Proceed
+    });
 }
 
 /// Connects one pane's quick-filter field: typing narrows, Escape stops,

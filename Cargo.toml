@@ -23,6 +23,12 @@ tempfile = "3"
 # directions: the worker waits for a conflict answer, the UI does not wait for
 # anything.
 async-channel = "2"
+# The settings file. A hand-rolled parser would save a dependency and cost
+# reliability, which is the wrong way round for a file the program rewrites on
+# every exit (docs/reliability.md). It is read once at startup, so the speed
+# requirement is not in tension.
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
 # Freedesktop / Recycle Bin deletion. Default features are off because they
 # pull chrono in for listing and restoring trash contents, which this project
 # never does; the Windows COM apartment feature is kept, because dropping it

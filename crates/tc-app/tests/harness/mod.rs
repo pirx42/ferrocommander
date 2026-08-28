@@ -95,6 +95,9 @@ pub struct App {
     xvfb: Child,
     app: Child,
     window: String,
+    /// Set once the app has been shut down deliberately, so `Drop` does not
+    /// go looking for processes that are already reaped.
+    closed: bool,
     /// Held for the lifetime of the app, which is the test's lifetime.
     /// A poisoned lock is just a test that panicked earlier, which is no
     /// reason to fail every test after it.
@@ -107,14 +110,19 @@ impl App {
     /// `arrange` populates the home directory before the app is launched, so
     /// the panes show the fixture from their first frame.
     pub fn launch(arrange: impl FnOnce(&Path)) -> App {
+        let home = TempDir::new().expect("a temporary home");
+        arrange(home.path());
+        App::start(home)
+    }
+
+    /// Starts an app on a home directory that already exists, which is how a
+    /// test checks what the last run left behind.
+    fn start(home: TempDir) -> App {
         let turn = ONE_AT_A_TIME
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         require("Xvfb", "xvfb");
         require("xdotool", "xdotool");
-
-        let home = TempDir::new().expect("a temporary home");
-        arrange(home.path());
 
         let display = format!(":{}", NEXT_DISPLAY.fetch_add(1, Ordering::Relaxed));
         let xvfb_log = home.path().join("xvfb.log");
@@ -167,6 +175,7 @@ impl App {
             xvfb,
             app,
             window: String::new(),
+            closed: false,
             _turn: turn,
         };
         app.window = app.await_main_window().expect("the main window appears");
@@ -176,6 +185,36 @@ impl App {
 
     pub fn home(&self) -> &Path {
         self.home.path()
+    }
+
+    /// Closes the app and waits for it to go, so whatever it writes on the
+    /// way out has been written.
+    ///
+    /// Takes the app by value: there is nothing to drive afterwards, and the
+    /// point is to be able to start a second one on the same home directory.
+    pub fn close(mut self) -> TempDir {
+        // Ctrl+Q, not a kill: settings are written from GTK's close handler,
+        // and a killed process never runs one. Closing the way a person does
+        // is also the only way to test that the handler works at all.
+        self.key("ctrl+q");
+        let deadline = Instant::now() + EFFECT_TIMEOUT;
+        while self.app.try_wait().ok().flatten().is_none() {
+            if Instant::now() >= deadline {
+                let _ = self.app.kill();
+                break;
+            }
+            std::thread::sleep(POLL);
+        }
+        let _ = self.app.wait();
+        let _ = self.xvfb.kill();
+        let _ = self.xvfb.wait();
+        self.closed = true;
+        std::mem::replace(&mut self.home, TempDir::new().expect("a placeholder"))
+    }
+
+    /// Starts a second app on a home directory an earlier one left behind.
+    pub fn relaunch(home: TempDir) -> App {
+        App::start(home)
     }
 
     pub fn path(&self, relative: &str) -> PathBuf {
@@ -432,6 +471,9 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        if self.closed {
+            return;
+        }
         // Kill the app first: it is the one holding the display open.
         let _ = self.app.kill();
         let _ = self.app.wait();

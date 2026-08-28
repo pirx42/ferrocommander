@@ -35,6 +35,11 @@ impl LocalFs {
     pub fn home_dir() -> Option<VfsPath> {
         platform::home_dir().map(|native| Self::vfs_path(&native))
     }
+
+    /// Where per-user settings belong on this platform.
+    pub fn config_dir() -> Option<VfsPath> {
+        platform::config_dir().map(|native| Self::vfs_path(&native))
+    }
 }
 
 impl VirtualFs for LocalFs {

@@ -7,8 +7,10 @@ pub const APP_NAME: &str = "Ferrocommander";
 /// Reverse-DNS application id GTK identifies the process by.
 pub const APP_ID: &str = "st.rose.Ferrocommander";
 
-pub const WINDOW_WIDTH: i32 = 1200;
-pub const WINDOW_HEIGHT: i32 = 700;
+/// What a run with no readable settings reports, once, on stderr. The program
+/// starts either way.
+pub const SETTINGS_UNREADABLE: &str = "settings could not be read, using defaults";
+pub const SETTINGS_UNWRITABLE: &str = "settings could not be saved";
 
 /// Both panes start equally wide — neither side is the "main" one.
 pub const PANE_SPLIT_RATIO: f32 = 0.5;

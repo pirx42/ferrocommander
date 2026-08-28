@@ -78,6 +78,7 @@ The project is in its build-up phase; this table grows with the code.
 | Copy/move/delete/mkdir, progress, conflicts, cancel | [docs/ops.md](docs/ops.md) |
 | Widgets, row rendering, GTK version floor | [docs/ui-shell.md](docs/ui-shell.md) |
 | Key bindings, navigation actions | [docs/keymap.md](docs/keymap.md) |
+| Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
 | What is being built right now | [docs/plans/2026-08-28-phase3-polish-browsing.md](docs/plans/2026-08-28-phase3-polish-browsing.md) (phase 3; phases 1 and 2 done) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |

@@ -578,3 +578,44 @@ fn the_sort_order_survives_a_finished_job() {
         "the pane fell back to sorting by name after the job"
     );
 }
+
+#[test]
+fn the_panes_open_where_they_were_left() {
+    // Settings are only real if a second process finds them, so this closes
+    // the app and starts another one on the same home directory.
+    let first = in_src_and_dst(arrange);
+    first.key("ctrl+h");
+    let home = first.close();
+
+    let app = App::relaunch(home);
+
+    // The left pane is back in src, so the first row after `..` is a real
+    // entry there rather than one of the home directory's.
+    app.keys(&["Home", "Down"]);
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("proof");
+    app.key("Return");
+
+    app.await_exists("src/proof");
+}
+
+#[test]
+fn a_settings_file_that_is_nonsense_does_not_stop_the_program() {
+    // A file manager that refuses to start over its own settings is worse
+    // than one that forgets where you were.
+    let app = App::launch(|home| {
+        arrange(home);
+        let config = home.join(".config/ferrocommander");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(config.join("config.toml"), "{{{ not toml at all").unwrap();
+    });
+
+    // It came up at all, and still works.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("started-anyway");
+    app.key("Return");
+
+    app.await_exists("started-anyway");
+}

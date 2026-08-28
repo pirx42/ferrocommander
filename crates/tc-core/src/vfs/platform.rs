@@ -14,7 +14,8 @@
 //! - [`root_entries`] answers what the VFS root contains when the platform
 //!   has no single filesystem root.
 //! - [`from_std_path`] is the inverse of [`to_std_path`].
-//! - [`home_dir`] locates the user's home directory.
+//! - [`home_dir`] locates the user's home directory, [`config_dir`] the
+//!   place per-user settings belong.
 //! - [`attributes`] and [`render_attributes`] read and show the permission
 //!   or attribute bits, which are entirely different things on the two
 //!   platforms.
@@ -93,6 +94,18 @@ mod imp {
 
     pub fn home_dir() -> Option<PathBuf> {
         std::env::var_os("HOME").map(PathBuf::from)
+    }
+
+    /// `$XDG_CONFIG_HOME`, or `~/.config` when it is unset — the freedesktop
+    /// rule, and the one every other program on the machine follows.
+    pub fn config_dir() -> Option<PathBuf> {
+        if let Some(configured) = std::env::var_os("XDG_CONFIG_HOME") {
+            let path = PathBuf::from(configured);
+            if path.is_absolute() {
+                return Some(path);
+            }
+        }
+        home_dir().map(|home| home.join(".config"))
     }
 
     /// The freedesktop backend wraps the real `io::Error`, so unwrapping it
@@ -218,6 +231,13 @@ mod imp {
         std::env::var_os("USERPROFILE").map(PathBuf::from)
     }
 
+    /// `%APPDATA%`, where per-user settings belong on Windows.
+    pub fn config_dir() -> Option<PathBuf> {
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .or_else(|| home_dir().map(|home| home.join("AppData").join("Roaming")))
+    }
+
     /// The Windows backend reports Win32 status codes, which this layer does
     /// not model. Hand-mapping them would be a table of guesses; the original
     /// description survives in `Io`, which is what that variant is for.
@@ -227,7 +247,7 @@ mod imp {
 }
 
 pub use imp::{
-    attributes, from_std_path, home_dir, is_hidden, render_attributes, root_entries,
+    attributes, config_dir, from_std_path, home_dir, is_hidden, render_attributes, root_entries,
     set_attributes, to_std_path, trash_error,
 };
 
