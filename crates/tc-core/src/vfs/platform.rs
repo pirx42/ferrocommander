@@ -15,6 +15,10 @@
 //!   has no single filesystem root.
 //! - [`from_std_path`] is the inverse of [`to_std_path`].
 //! - [`home_dir`] locates the user's home directory.
+//! - [`attributes`] and [`render_attributes`] read and show the permission
+//!   or attribute bits, which are entirely different things on the two
+//!   platforms.
+//! - [`set_attributes`] puts them back onto a copy.
 //! - [`trash_error`] maps a `trash` failure onto [`VfsError`]. It lives here
 //!   because the crate's error *shape* differs by target: the freedesktop
 //!   backend wraps the underlying `io::Error`, the Windows one does not.
@@ -22,7 +26,7 @@
 use std::path::{Path, PathBuf};
 
 use super::path::VfsPath;
-use super::types::{Entry, VfsError};
+use super::types::{Attributes, Entry, VfsError};
 
 #[cfg(unix)]
 mod imp {
@@ -31,6 +35,45 @@ mod imp {
     /// On Unix the VFS path *is* the native path — both are `/`-rooted.
     pub fn to_std_path(path: &VfsPath) -> PathBuf {
         PathBuf::from(path.as_str())
+    }
+
+    /// Unix permissions, as `st_mode`.
+    pub fn attributes(metadata: &std::fs::Metadata) -> Attributes {
+        use std::os::unix::fs::PermissionsExt;
+        Attributes::from_raw(metadata.permissions().mode())
+    }
+
+    /// `rwxr-xr-x`, the form every Unix tool prints.
+    pub fn render_attributes(attributes: Attributes) -> String {
+        const FLAGS: [(u32, char); 9] = [
+            (0o400, 'r'),
+            (0o200, 'w'),
+            (0o100, 'x'),
+            (0o040, 'r'),
+            (0o020, 'w'),
+            (0o010, 'x'),
+            (0o004, 'r'),
+            (0o002, 'w'),
+            (0o001, 'x'),
+        ];
+        FLAGS
+            .iter()
+            .map(|&(bit, letter)| {
+                if attributes.raw() & bit != 0 {
+                    letter
+                } else {
+                    '-'
+                }
+            })
+            .collect()
+    }
+
+    pub fn set_attributes(path: &Path, attributes: Attributes) -> Result<(), VfsError> {
+        use std::os::unix::fs::PermissionsExt;
+        // Only the permission bits: the rest of st_mode says what kind of
+        // thing this is, which a copy has already decided.
+        let permissions = std::fs::Permissions::from_mode(attributes.raw() & 0o7777);
+        Ok(std::fs::set_permissions(path, permissions)?)
     }
 
     /// Unix convention: a leading dot hides the entry.
@@ -97,6 +140,44 @@ mod imp {
         PathBuf::from(native.trim_end_matches(std::path::MAIN_SEPARATOR))
     }
 
+    /// The Win32 file attributes.
+    pub fn attributes(metadata: &std::fs::Metadata) -> Attributes {
+        Attributes::from_raw(metadata.file_attributes())
+    }
+
+    /// `RHSA`, the letters Total Commander shows, with a dash where a flag is
+    /// absent.
+    pub fn render_attributes(attributes: Attributes) -> String {
+        const FLAGS: [(u32, char); 4] = [
+            (0x0000_0001, 'R'),
+            (FILE_ATTRIBUTE_HIDDEN, 'H'),
+            (0x0000_0004, 'S'),
+            (0x0000_0020, 'A'),
+        ];
+        FLAGS
+            .iter()
+            .map(|&(bit, letter)| {
+                if attributes.raw() & bit != 0 {
+                    letter
+                } else {
+                    '-'
+                }
+            })
+            .collect()
+    }
+
+    /// Only the read-only flag, which is all `std` can set here.
+    ///
+    /// Hidden, system and archive would need `SetFileAttributesW`, and this
+    /// project has no Win32 binding. Recorded rather than silently dropped:
+    /// see `docs/future-improvements.md`.
+    pub fn set_attributes(path: &Path, attributes: Attributes) -> Result<(), VfsError> {
+        const FILE_ATTRIBUTE_READONLY: u32 = 0x0000_0001;
+        let mut permissions = std::fs::metadata(path)?.permissions();
+        permissions.set_readonly(attributes.raw() & FILE_ATTRIBUTE_READONLY != 0);
+        Ok(std::fs::set_permissions(path, permissions)?)
+    }
+
     /// Windows convention: hidden is an attribute, not a naming rule. A
     /// dot-prefixed name such as `.gitignore` is a normal visible file here.
     pub fn is_hidden(_name: &str, metadata: &std::fs::Metadata) -> bool {
@@ -116,6 +197,7 @@ mod imp {
                         kind: EntryKind::Dir,
                         size: 0,
                         modified: SystemTime::UNIX_EPOCH,
+                        attributes: Attributes::default(),
                         hidden: false,
                     })
             })
@@ -144,7 +226,10 @@ mod imp {
     }
 }
 
-pub use imp::{from_std_path, home_dir, is_hidden, root_entries, to_std_path, trash_error};
+pub use imp::{
+    attributes, from_std_path, home_dir, is_hidden, render_attributes, root_entries,
+    set_attributes, to_std_path, trash_error,
+};
 
 #[cfg(test)]
 mod tests {

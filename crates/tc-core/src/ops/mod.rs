@@ -16,7 +16,7 @@ pub mod queue;
 
 use std::io::{Read, Write};
 
-use crate::vfs::{VfsError, VfsPath, VirtualFs};
+use crate::vfs::{Attributes, VfsError, VfsPath, VirtualFs};
 
 pub use cancel::CancelToken;
 pub use conflict::{Answer, ApplyToAll, Conflict, ConflictResolver, Resolution};
@@ -361,7 +361,8 @@ impl Run<'_> {
                 target,
                 size,
                 modified,
-            } => self.copy_file(source, target, *size, *modified),
+                attributes,
+            } => self.copy_file(source, target, *size, *modified, *attributes),
             Task::RemoveFile { path } => self.simple(path, |fs, p| fs.remove_file(p)),
             Task::RemoveDir { path } => self.simple(path, |fs, p| fs.remove_dir(p)),
             Task::Trash { path } => self.simple(path, |fs, p| fs.trash(p)),
@@ -471,6 +472,7 @@ impl Run<'_> {
         target: &VfsPath,
         size: u64,
         modified: std::time::SystemTime,
+        attributes: Attributes,
     ) -> Flow {
         let target = self.redirected(target);
         let (target, overwriting) = match self.settle(source, false, target) {
@@ -493,6 +495,13 @@ impl Run<'_> {
                 // A copy that keeps the original's date is a copy of the
                 // file, not a new file with the same bytes.
                 if let Err(error) = self.target_fs.set_modified(&target, modified) {
+                    self.fail(&target, error);
+                }
+                // Permissions last: taking write permission away first would
+                // stop the timestamp being set at all. Reported like any
+                // other per-path failure — a copy that silently loses its
+                // `+x` is a broken copy that looks fine.
+                if let Err(error) = self.target_fs.set_attributes(&target, attributes) {
                     self.fail(&target, error);
                 }
                 self.progress.emit(Progress::Finished {

@@ -442,3 +442,55 @@ mod symlinks {
         assert!(!dangling.is_dir());
     }
 }
+
+/// Permissions, and the copy that has to keep them.
+///
+/// Unix only: on Windows `std` can set the read-only flag and nothing else,
+/// so there is no round trip to assert. `LocalFs` reads the attributes on
+/// both platforms.
+#[cfg(unix)]
+mod attributes {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn mode_of(path: &std::path::Path) -> u32 {
+        fs::metadata(path).unwrap().permissions().mode() & 0o7777
+    }
+
+    #[test]
+    fn permissions_survive_a_stat_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let native = dir.path().join("script.sh");
+        fs::write(&native, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&native, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let entry = LocalFs.stat(&LocalFs::vfs_path(&native)).unwrap();
+
+        let elsewhere = dir.path().join("copy.sh");
+        fs::write(&elsewhere, "").unwrap();
+        LocalFs
+            .set_attributes(&LocalFs::vfs_path(&elsewhere), entry.attributes)
+            .unwrap();
+
+        assert_eq!(mode_of(&elsewhere), 0o755);
+    }
+
+    #[test]
+    fn a_listing_reports_each_entry_with_its_own_permissions() {
+        let dir = TempDir::new().unwrap();
+        for (name, mode) in [("open.txt", 0o644), ("script.sh", 0o755)] {
+            let path = dir.path().join(name);
+            fs::write(&path, "x").unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+        }
+
+        let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
+
+        assert_ne!(
+            find(&entries, "open.txt").attributes,
+            find(&entries, "script.sh").attributes,
+            "two files with different modes must not read alike"
+        );
+    }
+}

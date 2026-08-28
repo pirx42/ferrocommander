@@ -72,7 +72,7 @@ type has no error case and needs no `Result`.
 
 ## `Entry`
 
-`name`, `kind`, `size`, `modified`, `hidden`.
+`name`, `kind`, `size`, `modified`, `attributes`, `hidden`.
 
 - **`kind`** is `Dir`, `File`, or `Symlink(SymlinkTarget)` where the target is
   `Dir`, `File`, or `Broken`. Links keep their own variant rather than being
@@ -84,6 +84,12 @@ type has no error case and needs no `Result`.
   because of one is useless.
 - **`size`** is 0 for directories. A directory's inode size tells the user
   nothing and would turn size-sorting into noise; the UI renders `<DIR>`.
+- **`attributes`** is an opaque `Copy` value, not a rendered string: the pane
+  renders it for the Attr column and the copy engine restores it onto the
+  copy, and both need the same thing. Only `vfs::platform` reads the bits,
+  because what they mean is entirely different on the two platforms. A copy
+  restores them *after* the timestamp — taking write permission away first
+  would stop the timestamp being set at all.
 - **`hidden`** is decided by the *backend*, not by the listing layer. On Unix
   it is the leading dot; on Windows it is `FILE_ATTRIBUTE_HIDDEN`, which
   cannot be derived from the name at all. A dot-prefixed file such as
@@ -135,6 +141,8 @@ file.
 | Native path | the VFS path itself | `/C:/Users/pirx` → `C:\Users\pirx` |
 | Hidden | leading dot in the name | `FILE_ATTRIBUTE_HIDDEN` |
 | VFS root `/` | the real root directory | synthetic: the list of drives |
+| Attributes | Unix mode bits, shown as `rwxr-xr-x` | Win32 file attributes, shown as `RHSA` |
+| Setting them | the full permission bits | the read-only flag only — `std` sets nothing else |
 | Trash errors | the crate wraps the real `io::Error`, so `NotFound` survives | Win32 status codes, kept as `Io` |
 
 **Why trash errors are a platform function.** The `trash` crate's error
@@ -189,10 +197,6 @@ mingw toolchain.
 for writing, which no platform hands out for a directory, so a copied
 directory carries the time it was created rather than the original's. Files —
 which is what the size and date columns are about — keep their date.
-
-**Copies do not carry permission bits.** `Entry` has no mode, so an
-executable script copied through the engine arrives without its `+x`. A
-portable permission model belongs with phase 3's attributes column.
 
 Both live in [future-improvements.md](future-improvements.md) with their
 reasons.

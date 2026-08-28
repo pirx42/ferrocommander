@@ -28,6 +28,7 @@ fn dir_entry(name: &str, modified: u64) -> Entry {
         kind: EntryKind::Dir,
         size: 0,
         modified: at(modified),
+        attributes: Default::default(),
         hidden: name.starts_with('.'),
     }
 }
@@ -38,6 +39,7 @@ fn file_entry(name: &str, size: u64, modified: u64) -> Entry {
         kind: EntryKind::File,
         size,
         modified: at(modified),
+        attributes: Default::default(),
         hidden: name.starts_with('.'),
     }
 }

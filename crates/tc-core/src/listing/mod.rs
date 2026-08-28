@@ -16,7 +16,7 @@ use std::collections::HashSet;
 
 use crate::glob;
 use crate::vfs::constants::PARENT;
-use crate::vfs::{Entry, EntryKind, VfsError, VfsPath, VirtualFs};
+use crate::vfs::{Attributes, Entry, EntryKind, VfsError, VfsPath, VirtualFs};
 
 use constants::{DEFAULT_SHOW_HIDDEN, DEFAULT_SORT_KEY, DEFAULT_SORT_ORDER, PARENT_MODIFIED};
 
@@ -98,6 +98,7 @@ impl Listing {
             kind: EntryKind::Dir,
             size: 0,
             modified: PARENT_MODIFIED,
+            attributes: Attributes::default(),
             hidden: false,
         });
         let mut listing = Listing {

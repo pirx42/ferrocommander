@@ -26,6 +26,7 @@ pub const COLUMN_TITLE_NAME: &str = "Name";
 pub const COLUMN_TITLE_EXT: &str = "Ext";
 pub const COLUMN_TITLE_SIZE: &str = "Size";
 pub const COLUMN_TITLE_DATE: &str = "Date";
+pub const COLUMN_TITLE_ATTR: &str = "Attr";
 
 /// Column widths. The name column expands into leftover space; the others
 /// stay fixed so the two panes line up with each other.
@@ -33,6 +34,9 @@ pub const COLUMN_WIDTH_NAME: i32 = 260;
 pub const COLUMN_WIDTH_EXT: i32 = 70;
 pub const COLUMN_WIDTH_SIZE: i32 = 120;
 pub const COLUMN_WIDTH_DATE: i32 = 140;
+/// Wide enough for `rwxr-xr-x`, which is the longest form either platform
+/// produces.
+pub const COLUMN_WIDTH_ATTR: i32 = 90;
 
 /// Cell alignment: sizes right-aligned so digits line up by magnitude,
 /// everything else left.

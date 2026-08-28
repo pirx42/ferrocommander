@@ -12,10 +12,10 @@ use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
     CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
-    CLASS_STATUS_LINE, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE,
-    COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER,
-    PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING,
-    XALIGN_LEFT, XALIGN_RIGHT,
+    CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME,
+    COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
+    COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
+    SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_target, adopted_cursor, focus_after_move, parent_target};
 use crate::row::Row;
@@ -31,10 +31,17 @@ pub enum Column {
     Ext,
     Size,
     Modified,
+    Attributes,
 }
 
 impl Column {
-    pub const ALL: [Column; 4] = [Column::Name, Column::Ext, Column::Size, Column::Modified];
+    pub const ALL: [Column; 5] = [
+        Column::Name,
+        Column::Ext,
+        Column::Size,
+        Column::Modified,
+        Column::Attributes,
+    ];
 
     /// Which ordering this column stands for, if any.
     pub fn sort_key(self) -> Option<SortKey> {
@@ -43,6 +50,9 @@ impl Column {
             Column::Ext => SortKey::Ext,
             Column::Size => SortKey::Size,
             Column::Modified => SortKey::Modified,
+            // Nothing sorts by permissions, and nothing should: the question
+            // it answers is "can I run this", not "where is it in the list".
+            Column::Attributes => return None,
         })
     }
 
@@ -52,6 +62,7 @@ impl Column {
             Column::Ext => COLUMN_TITLE_EXT,
             Column::Size => COLUMN_TITLE_SIZE,
             Column::Modified => COLUMN_TITLE_DATE,
+            Column::Attributes => COLUMN_TITLE_ATTR,
         }
     }
 
@@ -61,6 +72,7 @@ impl Column {
             Column::Ext => COLUMN_WIDTH_EXT,
             Column::Size => COLUMN_WIDTH_SIZE,
             Column::Modified => COLUMN_WIDTH_DATE,
+            Column::Attributes => COLUMN_WIDTH_ATTR,
         }
     }
 
@@ -84,6 +96,7 @@ impl Column {
             Column::Ext => &row.ext,
             Column::Size => &row.size,
             Column::Modified => &row.modified,
+            Column::Attributes => &row.attributes,
         }
     }
 }

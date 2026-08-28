@@ -16,7 +16,13 @@ use std::time::SystemTime;
 
 pub use local::LocalFs;
 pub use path::VfsPath;
-pub use types::{Entry, EntryKind, SymlinkTarget, VfsError};
+pub use types::{Attributes, Entry, EntryKind, SymlinkTarget, VfsError};
+
+/// The attributes of an entry, written the way the platform writes them:
+/// `rwxr-xr-x` on Unix, `RHSA` on Windows.
+pub fn render_attributes(attributes: Attributes) -> String {
+    platform::render_attributes(attributes)
+}
 
 /// A browsable, writable filesystem.
 ///
@@ -75,6 +81,13 @@ pub trait VirtualFs: Send + Sync {
     /// original's date. Directories are not supported: stamping one needs a
     /// writable handle to it, which no platform hands out.
     fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError>;
+
+    /// Puts `attributes` back onto a path, so a copy keeps the original's
+    /// permissions.
+    ///
+    /// Called after [`VirtualFs::set_modified`], because removing write
+    /// permission first would stop the timestamp being set at all.
+    fn set_attributes(&self, path: &VfsPath, attributes: Attributes) -> Result<(), VfsError>;
 
     /// Moves a path to the platform's trash, from where the user can undo it.
     ///

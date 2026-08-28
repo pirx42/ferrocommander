@@ -44,6 +44,8 @@ Each of these was found by writing the test, not by reading the code:
 | Copying a file onto itself **emptied it** and reported success | a sweep of the awkward corners |
 | The cancel rollback could be deleted outright with all tests green — the cancel was landing on an already-finished file | a mutation probe |
 | A conflict dialog with no focused button: answerable only with the mouse | the end-to-end UI suite |
+| Every copy silently dropped the original's permissions, so an executable arrived unrunnable | taking the requirement seriously enough to give `Entry` a mode |
+| Sorting a pane and then copying one file put the order back to name | writing the end-to-end test for sorting |
 
 The second one is the one to remember. Both panes open at the same directory,
 so F5 on a file with the prefilled target accepted was enough — no editing, no

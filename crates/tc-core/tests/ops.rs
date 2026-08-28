@@ -180,6 +180,13 @@ macro_rules! delegate {
             fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError> {
                 self.inner.set_modified(path, time)
             }
+            fn set_attributes(
+                &self,
+                path: &VfsPath,
+                attributes: tc_core::vfs::Attributes,
+            ) -> Result<(), VfsError> {
+                self.inner.set_attributes(path, attributes)
+            }
             fn trash(&self, path: &VfsPath) -> Result<(), VfsError> {
                 self.trash_impl(path)
             }
@@ -1361,5 +1368,90 @@ mod awkward_corners {
         );
 
         assert_eq!(snapshot(&LocalFs, &root), before);
+    }
+}
+
+/// Copies that keep the original's permissions.
+///
+/// An executable that arrives without its `+x` is a broken copy that looks
+/// exactly like a working one, which is why this is a reliability concern and
+/// not a column (`docs/reliability.md`).
+#[cfg(unix)]
+mod permissions {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn mode_of(path: &VfsPath) -> u32 {
+        std::fs::metadata(path.as_str())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777
+    }
+
+    #[test]
+    fn a_copied_executable_is_still_executable() {
+        let (dir, root) = fixture();
+        let script = dir.path().join("tree/script.sh");
+        std::fs::write(&script, "#!/bin/sh\necho hi\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let target_dir = root.child("into");
+
+        run_clean(
+            &Job::Copy {
+                sources: vec![root.child("tree")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+        );
+
+        assert_eq!(mode_of(&target_dir.child("tree/script.sh")), 0o755);
+    }
+
+    #[test]
+    fn a_copy_does_not_hand_out_permissions_the_original_did_not_have() {
+        // The other direction, which a blanket chmod would get wrong: a
+        // private file must not arrive world-readable.
+        let (dir, root) = fixture();
+        let secret = dir.path().join("tree/secret.txt");
+        std::fs::write(&secret, "private").unwrap();
+        std::fs::set_permissions(&secret, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let target_dir = root.child("into");
+
+        run_clean(
+            &Job::Copy {
+                sources: vec![root.child("tree")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+        );
+
+        assert_eq!(mode_of(&target_dir.child("tree/secret.txt")), 0o600);
+    }
+
+    #[test]
+    fn permissions_are_restored_after_the_timestamp_not_before() {
+        // A read-only file has to end up read-only *and* keep its date.
+        // Setting the permissions first would take write access away and the
+        // timestamp would never be set.
+        let (dir, root) = fixture();
+        let locked = dir.path().join("tree/locked.txt");
+        std::fs::write(&locked, "read only").unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444)).unwrap();
+        let original = LocalFs.stat(&root.child("tree/locked.txt")).unwrap();
+        let target_dir = root.child("into");
+
+        run_clean(
+            &Job::Copy {
+                sources: vec![root.child("tree")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+        );
+
+        let copy = LocalFs.stat(&target_dir.child("tree/locked.txt")).unwrap();
+        assert_eq!(mode_of(&target_dir.child("tree/locked.txt")), 0o444);
+        assert_eq!(copy.modified, original.modified);
     }
 }

@@ -8,14 +8,13 @@ in what shipped.
 
 ## Engine
 
-**A copy loses the original's permission bits.**
-`Entry` carries no mode, so an executable script copied through the operation
-engine arrives without its `+x`. Modelling permissions portably — Unix mode
-bits against Windows ACLs — is a design question of its own, and the size and
-date columns were the phase-2 promise, not the attributes column.
-*Home:* phase 3, which adds the attributes column and therefore has to answer
-the modelling question anyway.
-*From:* [vfs.md](vfs.md), phase 2 sub-phase A.
+**Windows copies keep only the read-only flag.**
+`std::fs` can set that and nothing else, so hidden, system and archive are
+read and displayed but not restored onto a copy. Setting them needs
+`SetFileAttributesW`, and this project has no Win32 binding yet. Unix keeps
+the full permission bits.
+*Home:* whenever a Win32 dependency is justified on its own merits.
+*From:* [vfs.md](vfs.md), phase 3 sub-phase E.
 
 **A copied directory does not keep its date.**
 `VirtualFs::set_modified` needs a handle opened for writing, which no platform

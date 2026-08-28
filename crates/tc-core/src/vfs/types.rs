@@ -27,6 +27,26 @@ pub enum SymlinkTarget {
     Broken,
 }
 
+/// The platform's permission or attribute bits for one entry.
+///
+/// An opaque `Copy` value rather than a rendered string: the pane renders it
+/// for the Attr column and the copy engine restores it onto the copy, and
+/// both need the same thing. What the bits *mean* is the platform's business
+/// — Unix mode bits, Windows file attributes — so only `vfs::platform` reads
+/// them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Attributes(pub(super) u32);
+
+impl Attributes {
+    pub(super) fn from_raw(raw: u32) -> Self {
+        Attributes(raw)
+    }
+
+    pub(super) fn raw(self) -> u32 {
+        self.0
+    }
+}
+
 /// One entry in a directory listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -36,6 +56,13 @@ pub struct Entry {
     /// Size in bytes. Directories report 0 — see [`Entry::is_dir`].
     pub size: u64,
     pub modified: SystemTime,
+    /// Permissions on Unix, file attributes on Windows.
+    ///
+    /// Carried on the entry because a copy has to restore them: an executable
+    /// that arrives without its `+x` is a broken copy, which makes this a
+    /// reliability concern rather than a column
+    /// (`docs/reliability.md`).
+    pub attributes: Attributes,
     /// Whether the platform considers this entry hidden.
     ///
     /// Decided by the backend, not by the listing layer: on Windows this is a
@@ -124,6 +151,7 @@ mod tests {
             kind,
             size: 0,
             modified: SystemTime::UNIX_EPOCH,
+            attributes: Attributes::default(),
             hidden: false,
         }
     }

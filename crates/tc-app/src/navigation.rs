@@ -58,6 +58,7 @@ mod tests {
             kind,
             size: 0,
             modified: std::time::SystemTime::UNIX_EPOCH,
+            attributes: Default::default(),
             hidden: false,
         }
     }

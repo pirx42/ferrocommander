@@ -14,7 +14,7 @@ ApplicationWindow
     ├── PaneView.root : Box(vertical)      ← left
     │   ├── Label            .path-bar
     │   └── ScrolledWindow
-    │       └── ColumnView   Name | Ext | Size | Date
+    │       └── ColumnView   Name | Ext | Size | Date | Attr
     └── PaneView.root : Box(vertical)      ← right
 ```
 

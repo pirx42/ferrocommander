@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use super::constants::ROOT;
 use super::path::VfsPath;
 use super::platform;
-use super::types::{Entry, EntryKind, SymlinkTarget, VfsError};
+use super::types::{Attributes, Entry, EntryKind, SymlinkTarget, VfsError};
 use super::VirtualFs;
 
 /// Size reported for directories.
@@ -99,6 +99,10 @@ impl VirtualFs for LocalFs {
         Ok(Box::new(fs::File::create(platform::to_std_path(path))?))
     }
 
+    fn set_attributes(&self, path: &VfsPath, attributes: Attributes) -> Result<(), VfsError> {
+        platform::set_attributes(&platform::to_std_path(path), attributes)
+    }
+
     fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError> {
         // Write access is what the platform demands to stamp a file, which is
         // also why this cannot serve directories.
@@ -121,6 +125,7 @@ impl VirtualFs for LocalFs {
                 kind: EntryKind::Dir,
                 size: DIR_SIZE,
                 modified: SystemTime::UNIX_EPOCH,
+                attributes: Attributes::default(),
                 hidden: false,
             });
         };
@@ -159,6 +164,7 @@ fn entry_from(
     target_path: impl FnOnce() -> PathBuf,
 ) -> Result<Entry, VfsError> {
     let hidden = platform::is_hidden(&name, &link_metadata);
+    let attributes = platform::attributes(&link_metadata);
 
     if link_metadata.file_type().is_symlink() {
         let (kind, size, modified) = match fs::metadata(target_path()) {
@@ -172,6 +178,7 @@ fn entry_from(
             kind: EntryKind::Symlink(kind),
             size,
             modified,
+            attributes,
             hidden,
         });
     }
@@ -186,6 +193,7 @@ fn entry_from(
         kind,
         size,
         modified: link_metadata.modified()?,
+        attributes,
         hidden,
     })
 }

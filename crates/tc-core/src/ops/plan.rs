@@ -7,7 +7,7 @@
 
 use std::time::SystemTime;
 
-use crate::vfs::{Entry, EntryKind, SymlinkTarget, VfsError, VfsPath, VirtualFs};
+use crate::vfs::{Attributes, Entry, EntryKind, SymlinkTarget, VfsError, VfsPath, VirtualFs};
 
 /// One step of a job.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +20,9 @@ pub enum Task {
         size: u64,
         /// Stamped onto the copy, so a copied file keeps its date.
         modified: SystemTime,
+        /// Restored onto the copy: an executable that arrives without its
+        /// `+x` is a broken copy.
+        attributes: Attributes,
     },
     /// Remove a file, or a symlink of any kind — never followed.
     RemoveFile { path: VfsPath },
@@ -171,6 +174,7 @@ fn collect_transfer(
                 target: target.clone(),
                 size: entry.size,
                 modified: entry.modified,
+                attributes: entry.attributes,
             });
         }
         EntryKind::Symlink(SymlinkTarget::Dir | SymlinkTarget::Broken) => item.failures.push((

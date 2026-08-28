@@ -19,6 +19,7 @@ pub struct Row {
     pub ext: String,
     pub size: String,
     pub modified: String,
+    pub attributes: String,
     pub is_dir: bool,
     /// Whether the user has marked this row. Rendered, not decided, here.
     pub selected: bool,
@@ -49,6 +50,12 @@ impl Row {
                 String::new()
             } else {
                 format_modified(entry.modified)
+            },
+            // `..` is a navigation control and carries nobody's permissions.
+            attributes: if is_parent {
+                String::new()
+            } else {
+                tc_core::vfs::render_attributes(entry.attributes)
             },
             is_dir: entry.is_dir(),
             selected,
@@ -104,6 +111,7 @@ mod tests {
             kind: EntryKind::File,
             size,
             modified: UNIX_EPOCH,
+            attributes: Default::default(),
             hidden: false,
         }
     }
@@ -114,6 +122,7 @@ mod tests {
             kind: EntryKind::Dir,
             size: 0,
             modified: UNIX_EPOCH,
+            attributes: Default::default(),
             hidden: false,
         }
     }
