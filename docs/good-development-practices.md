@@ -1,2087 +1,2085 @@
 # Good Development Practices
 
-> **Herkunft:** uebernommen aus dem Chimera-Projekt (`../chimera/docs/good-development-practices.md`,
-> Stand 2026-08-28). Projekt-spezifische Beispiele darin (npm-/vitest-/Playwright-Kommandos,
-> RL-Training, Deploy auf Port 3012, Telegram-Kanal) sind als Illustration zu lesen —
-> die Rust-/Cargo-Aequivalente fuer dieses Projekt stehen im Root-[CLAUDE.md](../CLAUDE.md)
-> und in [skills/25-gruene-suite-vor-commit.md](skills/25-gruene-suite-vor-commit.md).
-> Die Prinzipien (Teil A), der Workflow (Teil B) und der Vier-Phasen-Zyklus (Teil C)
-> gelten unveraendert.
+> **Origin:** adopted from the Chimera project (`../chimera/docs/good-development-practices.md`,
+> as of 2026-08-28). The project-specific examples it contains (npm/vitest/Playwright commands,
+> RL training, deploy on port 3012, Telegram channel) should be read as illustrations —
+> the Rust/Cargo equivalents for this project live in the root [CLAUDE.md](../CLAUDE.md)
+> and in [skills/25-green-suite-before-commit.md](skills/25-green-suite-before-commit.md).
+> The principles (Part A), the workflow (Part B) and the four-phase cycle (Part C)
+> apply unchanged.
 
-Arbeitsregeln, die sich in diesem Projekt bewaehrt haben. Das Dokument
-richtet sich an Menschen **und** AI-Agenten, die am Code mitarbeiten.
-Es ist absichtlich praeskriptiv formuliert: wer abweicht, sollte einen
-bewussten Grund haben.
+Working rules that have proven themselves in this project. The document
+is aimed at humans **and** AI agents contributing to the code.
+It is deliberately prescriptive: anyone who deviates should have a
+conscious reason.
 
-Vier Teile:
+Four parts:
 
-- **Teil A — Prinzipien (thematisch):** Regeln pro Bereich (Code,
-  Tests, Commits, …) mit Begruendung und Beispiel.
-- **Teil B — Workflow (chronologisch):** ein End-to-End-Ablauf von der
-  Aufgabenannahme bis zum Push, in dem die Prinzipien zur Anwendung
-  kommen.
-- **Teil C — Vier-Phasen-Zyklus (praeskriptive Empfehlung):** ein
-  Mehr-Tage-Rhythmus mit klar abgegrenzten Phasen (Feature → Tests →
-  Doku → Refactor) und Zeitrahmen.
-- **Teil D — Beobachteter Arbeitsrhythmus aus der Commit-Historie:**
-  empirische Baseline aus der echten Commit-Historie des Chimera-Projekts,
-  an der sich Teil C orientiert.
+- **Part A — Principles (thematic):** rules per area (code,
+  tests, commits, …) with rationale and example.
+- **Part B — Workflow (chronological):** an end-to-end flow from
+  accepting a task to pushing, in which the principles are put into
+  practice.
+- **Part C — Four-phase cycle (prescriptive recommendation):** a
+  multi-day rhythm with clearly delineated phases (feature → tests →
+  docs → refactor) and time frames.
+- **Part D — Observed working rhythm from the commit history:**
+  empirical baseline from the real commit history of the Chimera project,
+  which Part C is oriented on.
 
-**Arbeitsteilung mit [docs/skills/](skills/CLAUDE.md):** die Skills sind
-das operative Regelwerk — bei inhaltlicher Ueberlappung ist die
-Skill-Datei die kanonische Stelle (SSOT) und dieses Dokument verweist
-dorthin. Das GDP traegt die Landkarte (Teil A als thematischer Ueberblick),
-die Ablaeufe (Teil B/C), die Empirie (Teil D) und Volltext nur fuer
-Regeln ohne eigenes Skill.
-
----
-
-## Teil A — Prinzipien
-
-### 1. Kommunikation mit dem Auftraggeber
-
-#### 1.1 Frage nach, wenn der Auftrag mehrdeutig ist
-
-**Regel.** Bei mehrdeutigen oder option-haltigen Aufgaben frage **vor**
-der Umsetzung nach. Biete benannte Optionen (A/B/C) mit Tradeoffs an,
-nicht nur eine Liste offener Fragen.
-
-**Warum.** Jede Sekunde Klarstellung vor der Arbeit spart Stunden
-Rueckbau. Optionen benannt zu machen ist hoeflicher und leichter zu
-beantworten als ein offenes „Wie soll das genau sein?".
-
-**Beispiel.** Wenn eine Feature-Beschreibung wie „adde ein Skip-Button"
-kommt, klaere:
-- Wie viele Penalties bei Skip? (1 zufaellig / alle / keine)
-- Auf welchen Sektoren aktiv / ausgegraut?
-- Confirm-Dialog oder Ein-Klick?
-
-Danach auf die Antwort warten, nicht spekulativ anfangen.
-
-#### 1.1a Nichts erfinden — verifizieren oder nachfragen (seit 2026-07-18)
-
-**Regel.** Aussagen ueber Spielverhalten, Code oder Anforderungen werden
-NIE aus Annahme geschrieben: erst gegen die Implementierung verifizieren
-(Code/gepflegte Doku); bleibt es unklar, IMMER nachfragen statt raten
-(Owner msg 15477/15478). „Plausibel" ist kein Beleg.
-
-**Warum.** Handbuch-Vorfall 2026-07-18: ~9 Annahme-Fehler (Kabel-Button,
-„Munition", Infiltration verkehrt herum, …) — jede Korrektur-Runde kostet
-mehr als die Verifikation. Details in
-[docs/skills/65-nichts-erfinden-verifizieren-oder-fragen.md](skills/65-nichts-erfinden-verifizieren-oder-fragen.md).
+**Division of labor with [docs/skills/](skills/CLAUDE.md):** the skills
+are the operative rulebook — where content overlaps, the skill file is
+the canonical place (SSOT) and this document points there. The GDP
+carries the map (Part A as a thematic overview), the workflows
+(Parts B/C), the empirical data (Part D) and full text only for rules
+without a skill of their own.
 
 ---
 
-#### 1.2 Halte Rueckmeldungen knapp und konkret
+## Part A — Principles
 
-**Regel.** Antworten in der Chat-/Terminal-Schnittstelle sind standardmaessig
-kurz. Details nur wenn sie direkt Entscheidungsrelevant sind. End-of-Turn-
-Summary passt in 1–2 Saetze.
+### 1. Communication with the client
 
-**Warum.** Lange Zusammenfassungen am Ende jeder Iteration kosten
-Zeit, sind kaum lesbar und wiederholen Informationen, die im Diff
-stehen.
+#### 1.1 Ask when the assignment is ambiguous
 
-**Beispiel.** „Deployed (abc1234). 1580 Tests gruen." reicht. Kein
-Absatz ueber jeden geaenderten Selektor.
+**Rule.** For ambiguous or option-laden tasks, ask **before**
+implementing. Offer named options (A/B/C) with tradeoffs,
+not just a list of open questions.
 
-#### 1.3 Meta-Fragen direkt beantworten
+**Why.** Every second of clarification before the work saves hours of
+rework. Naming the options is more polite and easier to answer than an
+open-ended "how exactly should this be?".
 
-**Regel.** Auf Fragen wie „gepusht?" / „schon committed?" / „in welcher
-Datei?" liefere zuerst die Antwort, dann ggf. Kontext.
+**Example.** If a feature description like "add a skip button"
+comes in, clarify:
+- How many penalties on skip? (1 random / all / none)
+- Active / grayed out on which sectors?
+- Confirm dialog or one click?
 
-**Warum.** Wenn jemand fragt „gepusht?", hilft „ja, Commit abc1234"
-sofort — ein Absatz Vorrede ist irrelevant.
+Then wait for the answer — do not start speculatively.
 
-#### 1.4 Bestaetigung fuer destructive / shared-state Aktionen
+#### 1.1a Invent nothing — verify or ask (since 2026-07-18)
 
-**Regel.** Operationen mit nicht-lokaler Wirkung brauchen explizites
-Einverstaendnis: `git push` **von Produktions-Code**, force-push, dependency
-downgrades, DB-Migrationen, Dienste neu starten, Nachrichten an Dritte,
-API-Calls mit Kosten. Einmalige Zustimmung gilt nur fuer den konkreten Scope.
+**Rule.** Statements about game behavior, code or requirements are
+NEVER written from assumption: first verify against the implementation
+(code/maintained docs); if it remains unclear, ALWAYS ask instead of
+guessing (Owner msg 15477/15478). "Plausible" is not evidence.
 
-**Push-Freigabe (Stand Branch-Workflow 2026-07-18, §6.7 / Skill 64):**
-JEDER Push auf dev oder main braucht eine Freigabe — der Abnahme-Merge
-eines Plans zaehlt als Freigabe. Nur Topic-Branch-Pushes sind frei (kein
-CI-/Deploy-Effekt). `git push --force` IMMER fragen. Historie: die
-fruehere Ausnahme „reine Test-/Doku-Aenderungen direkt pushen" (User-Spec
-msg 11745, 2026-06-09) ist damit ABGELOEST (siehe §6.7).
-
-**Warum.** Ein versehentliches `git push --force` auf main kann
-Arbeit anderer zerstoeren. Ein Restart im falschen Moment kann Nutzer
-mitten im Level abwuergen. Die Kosten fuer das Nachfragen sind klein,
-die Kosten fuer einen Fehler oft gross.
-
-**Beispiel.** Selbst wenn das CLAUDE.md sagt „Fuehre git commits
-selbststaendig durch", ist ein Push auf dev/main dennoch ein separater
-Schritt mit eigener Freigabe — weil er Sichtbarkeit nach aussen hat.
-
-#### 1.5 Multi-Phasen-Plan: alle Phasen durchziehen, nur bei Entscheidungen unterbrechen
-
-**Regel.** Sobald ein Plan vom Auftraggeber freigegeben ist, alle Phasen
-am Stueck durcharbeiten. Unterbrochen wird ausschliesslich fuer echte
-Entscheidungen (Tradeoffs, Schema-Brueche, neue Anforderungen). Nach
-jeder Phase pushen, knapp Bescheid geben, weitermachen.
-
-**Warum.** Sich nach jedem Sub-Schritt zu vergewissern produziert
-unnoetige Wartezeiten und macht es schwer, einen Plan in einem Stueck
-mental zu halten. Wenn der Plan vorher abgestimmt war, ist Wegarbeiten
-das Default.
-
-**Anti-Pattern.** „Phase 1 fertig — soll ich Phase 2 anfangen?" wenn der
-Plan Phase 1+2+3+4 enthielt und es keine neuen Erkenntnisse gibt.
-
-#### 1.6 Updates bei langen Aufgaben (~20-min-Kadenz + Meilensteine)
-
-**10-Minuten-Kontrollpunkt (seit 2026-07-18, msg 15522).** Laengere Laufe
-werden nach spaetestens 10 Minuten INHALTLICH geprueft (Scope/Parameter/
-Durchsatz/Restdauer) — nicht nur Fortschritt gemeldet. CPU-Last beweist
-nur „rechnet", nicht „das Richtige" (simulateAll-Vorfall: 1,9 h falscher
-Suite-Scope). Details Skill [05](skills/05-updates-bei-langen-tasks.md).
-
-**Regel.** Bei Aufgaben, die laenger als ~5 Minuten reine Arbeitszeit
-brauchen, etwa alle **~20 Minuten** kurz Bescheid geben — was passiert
-gerade, was ist der naechste Schritt — **plus** ein Status-Ping nach
-jedem abgeschlossenen Meilenstein (Plan-Teilaufgabe/Phase/Sub-Agent).
-Kadenz vom User am 2026-07-09 von ~5 min auf ~20 min hochgesetzt
-(Memory `feedback_long_task_updates`); nicht mehr im starren 5-Minuten-
-Takt. Bei Sub-Agent-Spawns gilt das Stagger-Update fuer den auf Antwort
-wartenden Hauptthread.
-
-**Warum.** Stille ueber mehr als ein paar Minuten erzeugt Unsicherheit
-beim Auftraggeber — ist es noch dran, haengt es, ist es vergessen?
-Kurze Sichtbarkeit kostet wenig und beruhigt viel.
-
-**Hintergrund-Jobs beobachtbar machen** (2026-07-16): Output in eine
-Log-DATEI (`> job.log 2>&1`), nie nur durch `| tail`; vor jeder
-Haenger-Diagnose die Lauf-Konfiguration/Defaults pruefen (100 % CPU
-beweist nur „rechnet", nicht „terminiert"). Details Skill
-[05](skills/05-updates-bei-langen-tasks.md).
-
-#### 1.7 Pausen explizit ansagen
-
-**Regel.** Wenn die Arbeit einen Halte-Punkt hat (warten auf User-
-Entscheidung, fertig ohne weitere Tasks, Sub-Agent laeuft im Background
-und Hauptthread idle), das **explizit** melden. Nie stillschweigend
-verstummen.
-
-**Warum.** Aus Sicht des Auftraggebers ist „kein neuer Output" identisch
-mit „crashed", „vergessen" oder „wartet auf mich" — er muss
-selbst nachfragen, um den Unterschied zu sehen. Eine Zeile „warte auf
-Entscheidung zu X" oder „alle Tasks durch — bereit fuer naechste
-Runde" loest die Mehrdeutigkeit.
-
-#### 1.8 Nacht-/Offline-Autonomie
-
-**Regel.** Wenn der Auftraggeber explizit ankuendigt offline zu gehen
-(„ich gehe schlafen", „bin morgen wieder da", aehnlich), arbeite bis
-zur angegebenen Wiederkehr-Zeit (typisch ~7:00) autonom an
-entscheidungsfreien Tasks. Nicht idle warten. Tasks die Rueckfragen
-brauchen werden NICHT angefangen — die warten bis morgens.
-
-**Warum.** Die wachen Stunden des Auftraggebers sind die einzige Zeit,
-in der Entscheidungen geklaert werden koennen. Decisions-required-Tasks
-in der Nacht zu blockieren waere Verschwendung dieser Zeit. Niedrig-Risiko-
-Tasks (Doku, Test-Nachzug, klare Bugfixes, Translation, Audit-Folgen)
-sind dagegen ideal — der Auftraggeber findet morgens Fortschritt vor.
-
-**Verhalten.**
-- Vor Beginn: vorhandene Memory-Eintraege (Pflichtregeln, Konventionen)
-  laden und befolgen — nicht die Gelegenheit nehmen, Hausregeln zu
-  brechen.
-- Risiko-Filter: keine Schema-Brueche, keine Refactors die viele Konsumenten
-  beruehren, keine destruktiven Git-Operationen ohne ausdrueckliche
-  Vorab-Zustimmung. Bei aufkommender Entscheidung: vermerken (Memory /
-  Plan-Doku) und liegen lassen.
-- Stoppen wenn alle entscheidungsfreien Tasks durch sind — nicht
-  Risiko-Tasks angehen, nur um die Zeit zu fuellen. Ein kurzer
-  End-of-Night-Status reicht.
-
-#### 1.9 Auf demselben Kanal antworten
-
-**Regel.** Antwort + alle Rueckfragen gehen ueber den **Kanal zurueck,
-ueber den die Nachricht eingegangen ist**. Telegram-Eingang → Telegram-
-Reply. Terminal-Eingang → Terminal-Output. Nie stillschweigend wechseln,
-auch nicht „weil das gerade einfacher ist".
-
-**Warum.** Der Sender liest nur den Kanal, ueber den er geschrieben hat —
-seine Push-Notifications und seine Aufmerksamkeit sind dort. Wenn die
-Antwort woanders landet, sieht er sie nicht. Insbesondere: Telegram-
-Eingang mit Terminal-Reply ist fuer den Sender wie kein Reply.
-
-**Verhalten.**
-- Telegram-Eingang → `reply`-Tool mit `chat_id` aus dem `<channel>`-Tag;
-  `react` fuer Bestaetigung, `edit_message` fuer Live-Status, **neue**
-  `reply` am Ende einer langen Task (Edits triggern keine Push-
-  Notification).
-- Terminal-Eingang → direkter Text-Output, keine Telegram-Tools.
-- Keine `AskUserQuestion`-Dialoge im Terminal, wenn die Anfrage per
-  Telegram kam.
-
-#### 1.10 Vor aufwaendigem Selbst-Bauen kurz fragen
-
-**Regel.** Bevor ein Artefakt **muehsam von Hand zusammengebaut** wird,
-das der User interaktiv (im Spiel, im Tool, aus seinem Kopf) schneller
-und zuverlaessiger erzeugen koennte, erst kurz fragen: „Kannst du X
-schneller vorbereiten/exportieren?". Dann entscheidet der User, ob er
-etwas vorbereitet oder ob ich es selbst baue. Nicht stillschweigend
-lostuefteln.
-
-**Warum.** User-Spec msg 11713 (2026-06-08). Ausloeser: ein
-Infiltrations-Save fuer e2e-Tests sollte synthetisch erzeugt werden
-(Bot-Sim-Dump + Hand-Edit der JSON + mehrere Fehlproben fuer
-`activeBossBody` + Energie-Netz + Infiltrator-Charge). Der User hat
-denselben Aufbau im Spiel in Sekunden gebaut und als Save geschickt —
-exakt korrekt. Eine Frage vorab haette den Umweg gespart.
-
-**Verhalten.**
-- Erkennen: „Das baue ich jetzt aufwaendig von Hand" — besonders bei
-  Spielstaenden, Fixtures, Setups, die im Tool interaktiv entstehen.
-- Kurze, konkrete Frage ueber den aktiven Kanal stellen + sagen, wo ich
-  das Ergebnis ablege.
-- Auf Antwort warten; bei „bau du" den Eigen-Weg gehen.
-- **Nicht** fragen bei trivialen oder rein code-seitigen Artefakten,
-  oder wenn der User offline ist (Nacht-Autonomie → guenstigsten
-  Eigen-Weg waehlen, Ergebnis spaeter zur Review stellen).
-
-Siehe Skill [51](skills/51-vor-aufwand-fragen.md).
+**Why.** Handbook incident 2026-07-18: ~9 assumption errors (cable
+button, "ammunition", infiltration backwards, …) — each correction round
+costs more than the verification. Details in
+[docs/skills/65-verify-or-ask-never-assume.md](skills/65-verify-or-ask-never-assume.md).
 
 ---
 
-#### 1.11 Vorschau-Bilder fuer visuelles Feedback erstellen
+#### 1.2 Keep feedback short and concrete
 
-**Regel.** Erzeugt eine Aufgabe ein **visuelles Ergebnis** (Icon/Emblem,
-Karten-Grafik, Layout, Farbpalette, Rendering-Variante), zuerst ein
-**Vorschau-Bild aller Varianten nebeneinander** rendern, selbst per `Read`
-pruefen und dann dem User schicken — statt ihn im Spiel danach suchen zu
-lassen. Das Galerie-Script **ins Repo committen**, weil man es bei jedem
-Tweak wieder braucht.
+**Rule.** Replies in the chat/terminal interface are short by default.
+Details only when they are directly decision-relevant. An end-of-turn
+summary fits in 1–2 sentences.
 
-**Warum.** User-Spec msg 13771 (2026-07-02, Upgrade-Medaillen): „diese
-vorschau ist super gut. bitte merke dir bei solchen aufgaben immer
-vorschauen zu erstellen fuer feedback. das geht viel schneller als im spiel
-selbst." Im Spiel treten nicht alle Events/Upgrades/Items pro Run auf — man
-saehe die Varianten nie zusammen und muesste bis zum Boss spielen. Ein
-Seite-an-Seite-Board kostet einen Render-Zyklus und macht subjektive
-Design-Fragen (Emblem, Kontrast, Farbe) sofort entscheidbar. So baut man
-nicht N Motive „blind" fertig, bevor der User eins sieht.
+**Why.** Long summaries at the end of every iteration cost time,
+are barely readable and repeat information that is already in the
+diff.
 
-**Verhalten.**
-- Galerie-Entry mit der **echten Komponente** fuer ALLE Varianten (kein
-  Nachbau → keine Divergenz); Instanzen ueber vorhandene Factories
-  (`createModule(def)` fuer Items, Effekt-Literale fuer Events/Upgrades).
-- Headless screenshotten: kurzlebiger Vite-Dev-Server + Playwright
-  `fullPage`. In Chimera fertig als **`npm run gallery`**
+**Example.** "Deployed (abc1234). 1580 tests green." is enough. No
+paragraph about every changed selector.
+
+#### 1.3 Answer meta-questions directly
+
+**Rule.** For questions like "pushed?" / "committed yet?" / "in which
+file?", deliver the answer first, then context if needed.
+
+**Why.** When someone asks "pushed?", "yes, commit abc1234" helps
+immediately — a paragraph of preamble is irrelevant.
+
+#### 1.4 Confirmation for destructive / shared-state actions
+
+**Rule.** Operations with non-local effects need explicit consent:
+`git push` **of production code**, force-push, dependency
+downgrades, DB migrations, restarting services, messages to third
+parties, API calls that cost money. A one-time approval applies only to
+the concrete scope.
+
+**Push approval (as of branch workflow 2026-07-18, §6.7 / Skill 64):**
+EVERY push to dev or main needs an approval — the acceptance merge of a
+plan counts as approval. Only topic-branch pushes are free (no
+CI/deploy effect). `git push --force`: ALWAYS ask. History: the earlier
+exception "push pure test/doc changes directly" (user spec
+msg 11745, 2026-06-09) is hereby SUPERSEDED (see §6.7).
+
+**Why.** An accidental `git push --force` to main can destroy other
+people's work. A restart at the wrong moment can cut users off in the
+middle of a level. The cost of asking is small; the cost of a mistake
+is often large.
+
+**Example.** Even if CLAUDE.md says "perform git commits
+autonomously", a push to dev/main is still a separate step with its
+own approval — because it has outward visibility.
+
+#### 1.5 Multi-phase plan: work through all phases, interrupt only for decisions
+
+**Rule.** Once a plan has been approved by the client, work through all
+phases in one go. Interruptions happen exclusively for real
+decisions (tradeoffs, schema breaks, new requirements). After
+each phase, push, give a brief update, keep going.
+
+**Why.** Checking back after every sub-step produces unnecessary
+waiting time and makes it hard to hold a plan in your head as one
+piece. If the plan was agreed beforehand, working it through is the
+default.
+
+**Anti-pattern.** "Phase 1 done — should I start phase 2?" when the
+plan contained phases 1+2+3+4 and there are no new findings.
+
+#### 1.6 Updates during long tasks (~20-min cadence + milestones)
+
+**10-minute checkpoint (since 2026-07-18, msg 15522).** Longer runs
+are checked SUBSTANTIVELY after at most 10 minutes (scope/parameters/
+throughput/remaining time) — not just progress-reported. CPU load only
+proves "it's computing", not "the right thing" (simulateAll incident:
+1.9 h with the wrong suite scope). Details Skill [05](skills/05-updates-during-long-tasks.md).
+
+**Rule.** For tasks that take longer than ~5 minutes of pure working
+time, give a brief update roughly every **~20 minutes** — what is
+happening right now, what is the next step — **plus** a status ping
+after every completed milestone (plan sub-task/phase/sub-agent).
+Cadence raised by the user on 2026-07-09 from ~5 min to ~20 min
+(memory `feedback_long_task_updates`); no longer a rigid 5-minute
+beat. For sub-agent spawns, the stagger update applies to the main
+thread waiting for the reply.
+
+**Why.** Silence for more than a few minutes creates uncertainty for
+the client — is it still working, is it stuck, has it been forgotten?
+Brief visibility costs little and reassures a lot.
+
+**Make background jobs observable** (2026-07-16): output goes into a
+log FILE (`> job.log 2>&1`), never only through `| tail`; before any
+hang diagnosis, check the run configuration/defaults (100 % CPU
+only proves "computing", not "terminating"). Details Skill
+[05](skills/05-updates-during-long-tasks.md).
+
+#### 1.7 Announce pauses explicitly
+
+**Rule.** When the work reaches a stopping point (waiting for a user
+decision, done with no further tasks, sub-agent running in the
+background with the main thread idle), report that **explicitly**.
+Never fall silent quietly.
+
+**Why.** From the client's point of view, "no new output" is identical
+to "crashed", "forgotten" or "waiting for me" — they have to
+ask themselves to see the difference. A single line "waiting for a
+decision on X" or "all tasks done — ready for the next round"
+resolves the ambiguity.
+
+#### 1.8 Night/offline autonomy
+
+**Rule.** When the client explicitly announces going offline
+("I'm going to sleep", "back tomorrow", similar), work autonomously
+until the stated return time (typically ~7:00) on decision-free
+tasks. Do not wait idle. Tasks that need clarification are NOT
+started — those wait until morning.
+
+**Why.** The client's waking hours are the only time in which
+decisions can be clarified. Blocking decisions-required tasks
+during the night would waste that time. Low-risk tasks
+(docs, test backfill, clear bug fixes, translation, audit follow-ups)
+are ideal instead — the client finds progress in the morning.
+
+**Behavior.**
+- Before starting: load existing memory entries (mandatory rules,
+  conventions) and follow them — do not take the opportunity to break
+  house rules.
+- Risk filter: no schema breaks, no refactors that touch many
+  consumers, no destructive git operations without explicit
+  prior consent. If a decision comes up: note it down (memory /
+  plan doc) and leave it be.
+- Stop when all decision-free tasks are done — do not tackle
+  risky tasks just to fill the time. A short
+  end-of-night status is enough.
+
+#### 1.9 Reply on the same channel
+
+**Rule.** The answer + all follow-up questions go back over the
+**channel the message came in on**. Telegram inbound → Telegram
+reply. Terminal inbound → terminal output. Never switch silently,
+not even "because it happens to be easier right now".
+
+**Why.** The sender only reads the channel they wrote on —
+their push notifications and their attention are there. If the
+answer lands elsewhere, they do not see it. In particular: Telegram
+inbound with a terminal reply is, for the sender, the same as no reply.
+
+**Behavior.**
+- Telegram inbound → `reply` tool with `chat_id` from the `<channel>` tag;
+  `react` for acknowledgment, `edit_message` for live status, a **new**
+  `reply` at the end of a long task (edits do not trigger push
+  notifications).
+- Terminal inbound → direct text output, no Telegram tools.
+- No `AskUserQuestion` dialogs in the terminal when the request came
+  via Telegram.
+
+#### 1.10 Ask briefly before laboriously building things yourself
+
+**Rule.** Before an artifact is **laboriously assembled by hand**
+that the user could produce faster and more reliably interactively
+(in the game, in the tool, from their head), first ask briefly: "Can
+you prepare/export X faster?". Then the user decides whether they
+prepare something or whether I build it myself. Do not silently start
+tinkering.
+
+**Why.** User spec msg 11713 (2026-06-08). Trigger: an
+infiltration save for e2e tests was to be produced synthetically
+(bot-sim dump + hand-editing the JSON + several failed attempts for
+`activeBossBody` + energy network + infiltrator charge). The user built
+the same setup in the game in seconds and sent it as a save —
+exactly correct. One question up front would have saved the detour.
+
+**Behavior.**
+- Recognize: "I am about to build this laboriously by hand" — especially
+  for savegames, fixtures, setups that arise interactively in the tool.
+- Ask a short, concrete question over the active channel + say where I
+  will put the result.
+- Wait for the answer; on "you build it", take the do-it-yourself route.
+- Do **not** ask for trivial or purely code-side artifacts,
+  or when the user is offline (night autonomy → choose the cheapest
+  do-it-yourself route, present the result for review later).
+
+See Skill [51](skills/51-ask-before-expensive-setup.md).
+
+---
+
+#### 1.11 Create preview images for visual feedback
+
+**Rule.** If a task produces a **visual result** (icon/emblem,
+map graphic, layout, color palette, rendering variant), first render a
+**preview image of all variants side by side**, inspect it yourself via
+`Read` and then send it to the user — instead of making them hunt for
+it in the game. **Commit the gallery script to the repo**, because you
+need it again on every tweak.
+
+**Why.** User spec msg 13771 (2026-07-02, upgrade medals): "this
+preview is really good. please remember to always create previews for
+feedback on tasks like this. it's much faster than in the game
+itself." In the game, not all events/upgrades/items occur per run — you
+would never see the variants together and would have to play up to the
+boss. A side-by-side board costs one render cycle and makes subjective
+design questions (emblem, contrast, color) immediately decidable. That
+way you don't finish building N motifs "blind" before the user sees one.
+
+**Behavior.**
+- Gallery entry with the **real component** for ALL variants (no
+  rebuild → no divergence); instances via existing factories
+  (`createModule(def)` for items, effect literals for events/upgrades).
+- Screenshot headless: short-lived Vite dev server + Playwright
+  `fullPage`. In Chimera ready-made as **`npm run gallery`**
   (`scripts/gallery.mjs` → `docs/visual-gallery.png`, `src/devPreview/`).
-- Erst selbst ansehen (`Read` aufs PNG), dann ueber den aktiven Kanal
-  schicken ([1.9](#19-auf-demselben-kanal-antworten)) mit knapper Legende.
-- Wegwerf-Einmal-Previews wieder loeschen; das reproduzierbare Board bleibt.
-- Ergaenzt — ersetzt NICHT — den finalen In-Game-Pilot bei
-  Interaktions-/Feel-Fragen ([7.6](#76-pilot-deploy-vor-massen-rollout--bei-kritischen--sichtbaren-änderungen-seit-2026-07-01) / Skill 54).
+- Look at it yourself first (`Read` on the PNG), then send it over the
+  active channel ([1.9](#19-reply-on-the-same-channel)) with a brief legend.
+- Delete throwaway one-off previews again; the reproducible board stays.
+- Complements — does NOT replace — the final in-game pilot for
+  interaction/feel questions ([7.6](#76-pilot-deploy-before-mass-rollout--for-critical--visible-changes-since-2026-07-01) / Skill 54).
 
-Siehe Skill [55](skills/55-vorschau-bilder-fuer-visuelles-feedback.md).
+See Skill `55-vorschau-bilder-fuer-visuelles-feedback.md` (Chimera only).
 
 ---
 
-### 2. Planung und Scope
+### 2. Planning and scope
 
-#### 2.1 Scope vor Implementierung festzurren
+#### 2.1 Nail down the scope before implementation
 
-**Regel.** Vor der ersten Codezeile: schreibe dir selbst auf (oder sag
-dem Auftraggeber), was zu dieser Aufgabe gehoert. Wenn bei der Umsetzung
-Scope-Erweiterung aufkommt („das sollten wir auch gleich saeubern"),
-kein Ja vor Rueckfrage.
+**Rule.** Before the first line of code: write down for yourself (or
+tell the client) what belongs to this task. If a scope expansion comes
+up during implementation ("we should clean that up too while we're at
+it"), no yes before asking back.
 
-**Warum.** Scope-Creep erzeugt grosse, schwer reviewbare Diffs,
-verwaessert den Fix mit unverwandten Aenderungen und macht git-blame
-nutzlos.
+**Why.** Scope creep produces large, hard-to-review diffs,
+dilutes the fix with unrelated changes and makes git-blame
+useless.
 
-**Beispiel.** Aufgabe: „Fix Bug X". Waehrend du den Bug liest, faellt
-dir ein unuebersichtliches Modul auf. Nicht mit-refactorn — entweder
-anschliessend als separate PR oder erst nach Rueckfrage.
+**Example.** Task: "Fix bug X". While reading the bug, you notice a
+messy module. Do not refactor it along the way — either as a separate
+PR afterwards, or only after asking.
 
-#### 2.2 Mehrphasige Aenderungen in separate Commits
+#### 2.2 Multi-phase changes into separate commits
 
-**Regel.** Nicht-triviale Refactors in Phasen teilen — jede Phase ein
-Commit, getestet + build-green einzeln. Keine Batch-Commits mit mehreren
-unabhaengigen Aenderungen.
+**Rule.** Split non-trivial refactors into phases — each phase one
+commit, tested + build-green individually. No batch commits with several
+independent changes.
 
-**Warum.** Revert-Granularitaet + Review-Lesbarkeit. Ein bisect findet
-den Fehler leichter in 10 kleinen Commits als in 1 grossen. Getrennte
-Phasen zwingen dich zu ueberlegen, ob die Zwischenschritte wirklich
-lauffaehig sind.
+**Why.** Revert granularity + review readability. A bisect finds
+the error more easily in 10 small commits than in 1 big one. Separate
+phases force you to consider whether the intermediate steps are really
+runnable.
 
-**Beispiel.** Ein groesseres Refactor „Data Model X abloesen": Phase 1 =
-neue Typen + Loader + JSON-Migration. Phase 2 = Runtime umstellen.
-Phase 3 = UI nachziehen. Jede Phase fuer sich gruen.
+**Example.** A larger refactor "replace data model X": phase 1 =
+new types + loader + JSON migration. Phase 2 = switch the runtime.
+Phase 3 = update the UI. Each phase green on its own.
 
-#### 2.3 Major-Dependency-Upgrades isoliert
+#### 2.3 Major dependency upgrades in isolation
 
-**Regel.** Keine Major-Version-Bumps einer Dependency im Rahmen eines
-anderen Tasks oder im `npm update`-Sweep. Jeder Major ist sein eigener
-Task mit eigenem Regressionsfenster.
+**Rule.** No major-version bumps of a dependency in the course of
+another task or in an `npm update` sweep. Every major is its own
+task with its own regression window.
 
-**Warum.** Major-Bumps bringen Breaking Changes, die Debugging-Zeit
-kosten. Mit anderem Task vermischt wird der Fehler unauffindbar.
+**Why.** Major bumps bring breaking changes that cost debugging
+time. Mixed with another task, the error becomes untraceable.
 
-**Beispiel.** TypeScript 5 → 6 gehoert in einen eigenen Tag mit
-`strict`-Check, nicht in einen Bug-Fix-Commit.
+**Example.** TypeScript 5 → 6 belongs in its own day with a
+`strict` check, not in a bug-fix commit.
 
-#### 2.4 Korrektere Variante statt Quick-and-Dirty
+#### 2.4 The more correct variant instead of quick-and-dirty
 
-**Regel.** Bei Refactor-Scope-Entscheidungen den **substantiellen Pfad**
-waehlen, nicht das Scaffolding-Minimum. Wenn zwei Varianten zur Auswahl
-stehen — eine „macht es richtig", die andere „setzt nur das Gerippe",
-ist die richtige Variante das Default, sofern Aufwand und Risiko
-vertretbar sind.
+**Rule.** In refactor scope decisions, choose the **substantial path**,
+not the scaffolding minimum. If two variants are on offer — one
+"does it right", the other "only sets up the skeleton",
+the right variant is the default, provided effort and risk
+are acceptable.
 
-**Quick-Fixes brauchen explizite User-Freigabe** (User-Spec msg 10982,
-2026-05-31): wenn (b) gerechtfertigt scheint, fragt der Assistent
-zurueck — er trifft die Entscheidung nicht stillschweigend. Konkrete
-Form: „hier waere ein Quick-Fix moeglich der X umgeht — soll ich, oder
-soll ich die richtige Variante umsetzen?" und auf Freigabe warten.
-Ausnahme: die unten genannten Faelle (Spike, Hot-Fix, reine Migration)
-darf der Assistent ohne neue Freigabe als Quick-Fix umsetzen — der
-User-Auftrag muss aber erkennbar einen dieser Faelle anvisieren.
+**Quick fixes need explicit user approval** (user spec msg 10982,
+2026-05-31): if (b) seems justified, the assistant asks
+back — it does not make the decision silently. Concrete
+form: "a quick fix would be possible here that works around X — should
+I, or should I implement the proper variant?" and wait for approval.
+Exception: the cases named below (spike, hot-fix, pure migration)
+may be implemented by the assistant as a quick fix without new approval —
+but the user's assignment must recognizably target one of those cases.
 
-**Warum.** Scaffolding-Loesungen haben die Eigenschaft, dauerhaft zu
-bleiben. „Quick-and-Dirty jetzt, sauber spaeter" wird in der Praxis
-selten nachgezogen, weil der naechste Druck aus einer anderen Richtung
-kommt. Ein bisschen mehr Zeit jetzt erspart einen Refactor in 6 Monaten
-plus die Begleiterscheinungen (mehrere Stellen muessen umgezogen werden,
-Tests anders, Konsumenten geaendert). Die Freigabe-Pflicht zwingt den
-Assistenten, die echte Kosten/Nutzen-Rechnung offen zu legen statt sie
-wegzukapseln — und schliesst die Pattern „erst Quick-Fix einbauen,
-dann nachschieben muessen" aus, das in dieser Codebase schon mehrfach
-zu Korrektur-Iterationen gefuehrt hat (zuletzt pulseMod-Display-Layer-
-Quick-Fix vor msg 10982).
+**Why.** Scaffolding solutions have the property of staying
+permanently. "Quick-and-dirty now, clean later" is rarely followed
+up in practice, because the next pressure comes from a different
+direction. A little more time now saves a refactor in 6 months
+plus the side effects (several places have to be migrated,
+tests differ, consumers change). The approval requirement forces the
+assistant to lay the real cost/benefit calculation open instead of
+encapsulating it away — and rules out the pattern "build the quick fix
+first, then have to follow up", which has already led to correction
+iterations several times in this codebase (most recently the
+pulseMod display-layer quick fix before msg 10982).
 
-**Wann _doch_ Minimum.** Bei tatsaechlich exploriertem Spike-Code, der
-explizit als Throwaway markiert ist und auch wieder geloescht wird (nicht
-in main gemergt). Oder bei Hot-Fix unter Zeitdruck — dann mit
-ausdruecklicher Folge-Story.
+**When the minimum _is_ right.** For genuinely exploratory spike code
+that is explicitly marked as throwaway and is also deleted again (not
+merged into main). Or for a hot-fix under time pressure — then with an
+explicit follow-up story.
 
-**Beispiel.** Bei einer Property-Bag-Erweiterung sind zwei Varianten
-moeglich: (a) neues Feld direkt in `VALUE_KEYS` aufnehmen und im
-Resolver mit allen Regeln integrieren, oder (b) Sonderbehandlung im
-Caller. (a) ist substantiell, (b) ist Scaffolding. (a) waehlen, wenn
-nicht ein expliziter Grund (b) rechtfertigt.
+**Example.** For a property-bag extension, two variants are
+possible: (a) add the new field directly to `VALUE_KEYS` and integrate
+it in the resolver with all rules, or (b) special-case handling in the
+caller. (a) is substantial, (b) is scaffolding. Choose (a) unless an
+explicit reason justifies (b).
 
-#### 2.5 Neues Item-Kind: Pflicht- und Optional-Touch-Set
+#### 2.5 New item kind: mandatory and optional touch set
 
-**Wann.** Auftrag verlangt ein neues Item im `ITEM_CATALOG` — egal ob
-Modifier-Sub-Modul oder Main-Item (Producer/Consumer/Storage).
+**When.** The assignment demands a new item in the `ITEM_CATALOG` — whether
+a modifier sub-module or a main item (producer/consumer/storage).
 
-**Regel.** Touch-Set nach Klasse abarbeiten. Niemals Catalog-Eintrag ohne
-i18n-Labels committen (Memory `feedback_chimera_i18n_rule`).
+**Rule.** Work through the touch set by class. Never commit a catalog entry
+without i18n labels (memory `feedback_chimera_i18n_rule`).
 
-**Pflicht (gemeinsam, alle Items):**
-1. `src/types/base.ts` — `ItemKind`-Union erweitern.
-2. `src/itemCatalog.ts` — `ItemDef`-Eintrag mit Pflichtfeldern (`kind`, `icon`, `subSlotCount`, `category`, `color`, `botRole`, `maxCables`). **Kein `label`-Feld** — der user-facing Name lebt seit 2026-06-05 ausschliesslich in i18n (`items.<kind>`, via `getItemLabel`).
-3. `src/i18n/de_DE.ts` + `src/i18n/en_US.ts` — `items.<kind>` = der Item-Name (Single-Source) + optional `help`.
-4. `docs/items.md` — narrativer Eintrag + danach `npm run docs:items` fuer den AUTO-GENERATED-Block (Plan 2026-06-02-propertybag-modularisation Teil B).
-5. `npm run generate:norms` — bei JEDER Katalog-Property-Aenderung (auch an bestehenden Items, z.B. neue Kategorie), sonst reisst `propertyNormFactors.test.ts` im CI (Vorfall 2026-07-11: nova → damage-Cat → intrinsischer Trait wechselte).
-6. `src/simulation/rlObservation.ts` — neuen Kind ans ENDE von `KIND_ORDER` appenden (append-only!) + Laengen-Waechter in `rlObservation.test.ts`. Der Waechter laeuft NUR in der Sim-Suite, nicht in `npm test` — nach dem Append explizit `npx vitest run --config vitest.simulation.config.ts src/simulation/rlObservation.test.ts` fahren (zweimal verpasst: nova/firewall 07-12, catalyst/harvester 07-17).
+**Mandatory (shared, all items):**
+1. `src/types/base.ts` — extend the `ItemKind` union.
+2. `src/itemCatalog.ts` — `ItemDef` entry with mandatory fields (`kind`, `icon`, `subSlotCount`, `category`, `color`, `botRole`, `maxCables`). **No `label` field** — the user-facing name lives exclusively in i18n since 2026-06-05 (`items.<kind>`, via `getItemLabel`).
+3. `src/i18n/de_DE.ts` + `src/i18n/en_US.ts` — `items.<kind>` = the item name (single source) + optional `help`.
+4. `docs/items.md` — narrative entry + afterwards `npm run docs:items` for the AUTO-GENERATED block (plan 2026-06-02-propertybag-modularisation part B).
+5. `npm run generate:norms` — on EVERY catalog property change (including on existing items, e.g. a new category), otherwise `propertyNormFactors.test.ts` breaks in CI (incident 2026-07-11: nova → damage cat → intrinsic trait changed).
+6. `src/simulation/rlObservation.ts` — append the new kind at the END of `KIND_ORDER` (append-only!) + length guard in `rlObservation.test.ts`. The guard runs ONLY in the sim suite, not in `npm test` — after appending, explicitly run `npx vitest run --config vitest.simulation.config.ts src/simulation/rlObservation.test.ts` (missed twice: nova/firewall 07-12, catalyst/harvester 07-17).
 
-**Modifier-spezifisch:**
-- `subSlotCount: 0` (oder 1 wenn er selbst Sub-Mods nimmt), `botRole: "modifier"`, kein Energy-Profil noetig.
-- `modifierMultiplierEffect` und/oder `modifierValueEffect` mit `output`/`cost`/`stealth`/`damage`/`health`/`experience`/`spatial`/`shield`/`diffusion` als Zahl oder `"invert"`.
-- Falls Sondermathematik (kontext-/zeit-abhaengig): `src/itemHooks/<kind>.ts` als Hook (heatExtractor-Pattern).
-- Falls Container den Kind-Beitrag N-fach anwendet: `hooks: { childApplyCount: 2 }` (duplicator-Pattern, transparente Expansion).
+**Modifier-specific:**
+- `subSlotCount: 0` (or 1 if it takes sub-mods itself), `botRole: "modifier"`, no energy profile needed.
+- `modifierMultiplierEffect` and/or `modifierValueEffect` with `output`/`cost`/`stealth`/`damage`/`health`/`experience`/`spatial`/`shield`/`diffusion` as a number or `"invert"`.
+- If special math is needed (context-/time-dependent): `src/itemHooks/<kind>.ts` as a hook (heatExtractor pattern).
+- If a container applies the kind's contribution N-fold: `hooks: { childApplyCount: 2 }` (duplicator pattern, transparent expansion).
 
-**Main-Item-spezifisch:**
-- `botRole: "container"` (Consumer) oder `"producer"`, eigenes Energy-Profil in `src/energyProfiles.ts`.
-- `categories: { output: [...], cost: [...], stealth: [...], health: [...], experience: [...] }` — listet die VALUE_KEYS pro Cat (`output: ["production"]` fuer Generator, `cost: ["demand", "heat"]` fuer Engine).
-- `drawDecoration` in `src/renderer/itemDecorations.ts` (fast immer noetig).
-- `defaultMaxHP` falls Item HP/Zerstoerung haben soll (Standard 100 via DEFAULT_MAX_HP-Fallback).
-- `damage`/`damageRate`/`visualEffect: "laser"` fuer Bolt-Spawner.
-- `rootOnly: true` fuer Items die nicht in Sub-Slots passen (infiltrator).
-- `defaultThreshold` + `src/probeTypes.ts`-Eintrag fuer Diagnose-Items (auto-derived DIAGNOSTIC_KINDS).
-- Save-Format-Bump in `src/persistence.ts` NUR wenn neues PropertyBag-Feld noetig (selten).
+**Main-item-specific:**
+- `botRole: "container"` (consumer) or `"producer"`, its own energy profile in `src/energyProfiles.ts`.
+- `categories: { output: [...], cost: [...], stealth: [...], health: [...], experience: [...] }` — lists the VALUE_KEYS per cat (`output: ["production"]` for generator, `cost: ["demand", "heat"]` for engine).
+- `drawDecoration` in `src/renderer/itemDecorations.ts` (almost always needed).
+- `defaultMaxHP` if the item should have HP/destruction (default 100 via DEFAULT_MAX_HP fallback).
+- `damage`/`damageRate`/`visualEffect: "laser"` for bolt spawners.
+- `rootOnly: true` for items that do not fit into sub-slots (infiltrator).
+- `defaultThreshold` + `src/probeTypes.ts` entry for diagnostic items (auto-derived DIAGNOSTIC_KINDS).
+- Save-format bump in `src/persistence.ts` ONLY if a new PropertyBag field is needed (rare).
 
-**Auto-Derived Konstanten** (KEINE manuelle Pflege noetig): `VALID_LOCK_KINDS`, `DIAGNOSTIC_KINDS`, `DEFAULT_THRESHOLDS`, `CONTAINER_KINDS`, `PRODUCER_KINDS`, `MODIFIER_KINDS` werden aus dem Catalog generiert. Korrektes `botRole`/`category`/`lockable` setzen reicht.
+**Auto-derived constants** (NO manual maintenance needed): `VALID_LOCK_KINDS`, `DIAGNOSTIC_KINDS`, `DEFAULT_THRESHOLDS`, `CONTAINER_KINDS`, `PRODUCER_KINDS`, `MODIFIER_KINDS` are generated from the catalog. Setting the correct `botRole`/`category`/`lockable` is enough.
 
 **Workflow.**
-1. Catalog + Types + i18n in einem Commit.
-2. Decoration + Energy-Profil im gleichen Commit.
-3. Hooks/Codex falls noetig.
+1. Catalog + types + i18n in one commit.
+2. Decoration + energy profile in the same commit.
+3. Hooks/codex if needed.
 4. Tests in `src/__tests__/`.
-5. `npm run docs:items` fuer SSOT-Regeneration.
-6. Build + Deploy + Spieltest.
+5. `npm run docs:items` for SSOT regeneration.
+6. Build + deploy + playtest.
 
-**Aufwand.** Historische Beobachtungswerte: pure Modifier 3 Files ~1 h;
-Main-Item ohne Sondermathematik 5-6 Files ~2-3 h; Main-Item mit eigener
-Sub-Mechanik 8-12 Files, gehoert in einen Plan-Doc. Fuer Plan-Schaetzungen
-gilt die gelebte Faktor-Regel aus Skill
-[45-aufwand-schaetzung-kalibrieren.md](skills/45-aufwand-schaetzung-kalibrieren.md)
-(Refactor ×0.10, Feature ×0.25) — nicht diese Absolut-Zahlen fortschreiben.
+**Effort.** Historical observations: pure modifier 3 files ~1 h;
+main item without special math 5-6 files ~2-3 h; main item with its own
+sub-mechanic 8-12 files, belongs in a plan doc. For plan estimates,
+the lived factor rule from Skill
+[45-calibrate-effort-estimates.md](skills/45-calibrate-effort-estimates.md)
+applies (refactor ×0.10, feature ×0.25) — do not perpetuate these absolute numbers.
 
-**Warum.** Items-Hinzufuegen ist ein wiederkehrender Aufgabentyp mit hoher
-Drift-Anfaelligkeit (i18n vergessen → UI-Fallback, energyProfile vergessen
-→ Item produziert nix, categories-Map vergessen → overclocker wirkt nicht,
-botRole falsch → Bot-Heuristik verwirrt). Checkliste vermeidet stille
-Fehler die erst beim Spieltest auffallen. Volldetails in
-[docs/skills/46-neues-item-hinzufuegen.md](skills/46-neues-item-hinzufuegen.md).
+**Why.** Adding items is a recurring task type with high
+drift susceptibility (forget i18n → UI fallback, forget energyProfile
+→ item produces nothing, forget categories map → overclocker has no effect,
+wrong botRole → bot heuristic confused). The checklist avoids silent
+errors that only show up during the playtest. Full details in
+`docs/skills/46-neues-item-hinzufuegen.md` (Chimera only).
 
-#### 2.6 Letzte Plan-Phase = Refaktorierungs-Audit mit Korrektur
+#### 2.6 Last plan phase = refactoring audit with correction
 
-**Wann.** Jeder Mehr-Phasen-Plan in `docs/plans/`.
+**When.** Every multi-phase plan in `docs/plans/`.
 
-**Regel.** Die abschliessende Phase jedes Plans ist ein **Refaktorierungs-
-Audit + Korrektur** ueber die **gesamte** im Plan umgesetzte Implementierung —
-geprueft gegen Architektur und Redundanz, gefundene Verbesserungen werden in
-derselben Phase **umgesetzt** (nicht nur notiert). Wird beim Planschreiben
-bereits als letzte Phase mitgeplant; ein Plan gilt nicht als „Umgesetzt",
-bevor diese Phase durch ist.
+**Rule.** The concluding phase of every plan is a **refactoring
+audit + correction** over the **entire** implementation delivered by the plan —
+checked against architecture and redundancy; improvements found are
+**implemented** in the same phase (not just noted). It is already planned
+as the last phase when the plan is written; a plan does not count as
+"Implemented" before this phase is done.
 
-**Audit-Achsen.** Redundanz/DRY (gleiche Logik ueber mehrere Plan-Commits →
-geteilter Helper/Typ/Konstante), Architektur (Sonderfaelle die ein gemeinsames
-Muster verdecken, Handler-Map statt Switch, pure Reducer, zu grosse
-Funktionen), Konsistenz (Naming, Layer-Verortung, Schnittstellen-Form),
-tote Reste (Shims, ungenutzte Exporte, Scaffolding).
+**Audit axes.** Redundancy/DRY (same logic across several plan commits →
+shared helper/type/constant), architecture (special cases that hide a common
+pattern, handler map instead of switch, pure reducers, oversized
+functions), consistency (naming, layer placement, interface shape),
+dead remnants (shims, unused exports, scaffolding).
 
-**Scope.** Nur was DIESER Plan angefasst hat — nicht die ganze Codebasis
-(dafuer der Subagent-Audit aus
-[docs/skills/47-architektur-audit-mit-subagents.md](skills/47-architektur-audit-mit-subagents.md)).
+**Scope.** Only what THIS plan touched — not the whole codebase
+(that is what the subagent audit from
+[docs/skills/47-architecture-audit-with-subagents.md](skills/47-architecture-audit-with-subagents.md) is for).
 
-**Warum.** Ueber mehrere Phasen entstehen lokal sinnvolle, in Summe aber
-suboptimale Strukturen (duplizierte Logik, inline-Unions die zentral
-gehoeren, verdeckte Muster). Im Gesamt-Blick am Plan-Ende — Suite gruen,
-Verhalten verifiziert — ist Konsolidierung am billigsten und sichersten.
-Volldetails in
-[docs/skills/49-plan-abschluss-refaktorierungs-audit.md](skills/49-plan-abschluss-refaktorierungs-audit.md).
+**Why.** Across several phases, structures arise that are locally sensible
+but suboptimal in sum (duplicated logic, inline unions that belong
+centralized, hidden patterns). In the overall view at the plan's end — suite
+green, behavior verified — consolidation is cheapest and safest.
+Full details in
+[docs/skills/49-final-phase-refactoring-audit.md](skills/49-final-phase-refactoring-audit.md).
 
-#### 2.7 Spielregel-Semantik: eine lernbare Regel, keine Sonderfaelle (seit 2026-07-05)
+#### 2.7 Game-rule semantics: one learnable rule, no special cases (since 2026-07-05)
 
-**Regel.** Spielmechanik-Semantik-Fragen (was BEDEUTET ein Wert/Modifier
-auf einem Item?) werden ERST per Telegram diskutiert, DANN implementiert —
-und die Loesung muss eine GLOBALE, fuer Spieler lernbare Regel sein, keine
-Per-Item-Sonderfaelle. Litmus: *Kann ein Spieler die Regel aus einem Satz
-lernen und auf alle Items anwenden?* (User-Spec msg 14116.)
+**Rule.** Game-mechanic semantics questions (what does a value/modifier
+MEAN on an item?) are FIRST discussed via Telegram, THEN implemented —
+and the solution must be a GLOBAL rule learnable by players, no
+per-item special cases. Litmus: *Can a player learn the rule from one
+sentence and apply it to all items?* (User spec msg 14116.)
 
-**Warum.** Ein Item, das eine deklarierte Mechanik stillschweigend anders
-interpretiert, bricht das mentale Modell der Spieler. Beispiel: fan(inverter)
-sollte saugen — die Sonderfall-Loesung (`inverterDirectionCategories`-Flag)
-wurde revertiert; richtig war die globale Vorzeichen-Regel (Inverter macht
-Werte echt negativ, jedes Geraet interpretiert das Vorzeichen physikalisch).
-Volldetails in
-[docs/skills/56-spielregel-semantik-ohne-sonderfaelle.md](skills/56-spielregel-semantik-ohne-sonderfaelle.md).
-
----
-
-#### 2.8 Katalog-/Config-Audits: Block-Extraktion statt Einzeilen-Grep (seit 2026-07-11)
-
-**Regel.** Aussagen ueber ALLE Eintraege einer Katalog-/Config-Datei
-(Klassifikationen, "welche Items haben X?") nie per Einzeilen-Regex
-gewinnen — Eintraege koennen mehrzeilig sein und fallen still raus.
-Block-Extraktion (Anker bis naechster Anker) oder gleich die Struktur
-laden; bei Wirkungs-Audits zusaetzlich `propertyBag/reader.ts`
-(Kontext-Effekte), `itemHooks/` und `energyProfiles.ts` pruefen.
-Extraktion mit 2-3 bekannten Faellen gegenpruefen. Vorfall: falsche
-Q3b-Restliste im XP-Level-Plan (msg 14802). Details in
-[docs/skills/58-block-extraktion-statt-einzeilen-grep.md](skills/58-block-extraktion-statt-einzeilen-grep.md).
+**Why.** An item that silently interprets a declared mechanic
+differently breaks the players' mental model. Example: fan(inverter)
+was supposed to suck — the special-case solution (`inverterDirectionCategories`
+flag) was reverted; the right answer was the global sign rule (the inverter
+makes values genuinely negative, every device interprets the sign
+physically). Full details in
+`docs/skills/56-spielregel-semantik-ohne-sonderfaelle.md` (Chimera only).
 
 ---
 
-#### 2.9 User-gegebene Objekte: ganz uebernehmen oder frisch ersetzen (seit 2026-06-12)
+#### 2.8 Catalog/config audits: block extraction instead of single-line grep (since 2026-07-11)
 
-**Regel.** Gibt der User konkrete Items/Builds/JSON-Vorlagen zum Einbetten
-oder Transformieren, dann entweder den KOMPLETTEN Property-Satz durchreichen
-oder eine frische Instanz desselben Typs bauen — nie selektiv Properties
-strippen (nur eindeutig runtime-lokale Felder wie `currentHP` duerfen weg).
-Explizit leere Sub-Slots `{ "module": null }` in Vorlagen 1:1 erhalten —
-Auto-Pad greift nur fuer Container-Kinds.
+**Rule.** Never derive statements about ALL entries of a catalog/config
+file (classifications, "which items have X?") via single-line regex
+— entries can span multiple lines and silently drop out.
+Block extraction (anchor to next anchor) or load the structure
+directly; for effect audits additionally check `propertyBag/reader.ts`
+(context effects), `itemHooks/` and `energyProfiles.ts`.
+Cross-check the extraction with 2-3 known cases. Incident: wrong
+Q3b remainder list in the XP-level plan (msg 14802). Details in
+[docs/skills/58-block-extraction-over-single-line-grep.md](skills/58-block-extraction-over-single-line-grep.md).
 
-**Warum.** Partielles Uebernehmen erzeugt einen Frankenstein-Zustand
-(User-Spec msg 12100): 2026-06-12 hat `xp`-Strippen die vom User ueber
-Item-Level austarierte Energie-Balance gebrochen; 2026-05-08 fehlte ein
-explizit leerer Generator-Slot in der Library. Details in
-[docs/skills/62-user-objekte-ganz-oder-frisch.md](skills/62-user-objekte-ganz-oder-frisch.md).
+---
 
-### 3. Code-Qualitaet
+#### 2.9 User-provided objects: adopt wholesale or replace fresh (since 2026-06-12)
 
-#### 3.1 Editiere bestehende Dateien, erzeuge keine neuen leichtfertig
+**Rule.** If the user provides concrete items/builds/JSON templates to embed
+or transform, then either pass through the COMPLETE property set
+or build a fresh instance of the same type — never selectively strip
+properties (only unambiguously runtime-local fields like `currentHP` may go).
+Preserve explicitly empty sub-slots `{ "module": null }` in templates 1:1 —
+auto-pad only applies to container kinds.
 
-**Regel.** Wenn eine Aenderung in eine bestehende Datei passt, geh dort
-hinein. Neue Dateien nur bei neuen konzeptuellen Einheiten.
+**Why.** Partial adoption produces a Frankenstein state
+(user spec msg 12100): on 2026-06-12, stripping `xp` broke the energy
+balance the user had tuned via item levels; on 2026-05-08 an
+explicitly empty generator slot was missing in the library. Details in
+`docs/skills/62-user-objekte-ganz-oder-frisch.md` (Chimera only).
 
-**Warum.** Datei-Proliferation erschwert Navigation. Die erste Frage
-sollte lauten: „Wo ist der natuerliche Platz?", nicht „Wo erzeuge ich
-eine neue Datei?".
+### 3. Code quality
 
-#### 3.2 Trenne Pure Reducer von Stateful Hooks
+#### 3.1 Edit existing files, do not create new ones lightly
 
-**Regel.** Business-Logik in reinen Funktionen (deterministisch, keine
-Seiteneffekte) — IO / State / Timing in Hooks oder Thin Wrappers. Hook
-delegiert an Reducer, nicht umgekehrt.
+**Rule.** If a change fits into an existing file, go in there.
+New files only for new conceptual units.
 
-**Warum.** Pure Funktionen sind trivial testbar und komponierbar. Hooks
-lassen sich schwer testen; wenn Hooks Logik enthalten, haengt die Logik
-an React-Rendering.
+**Why.** File proliferation hampers navigation. The first question
+should be: "Where is the natural place?", not "Where do I create a
+new file?".
 
-**Beispiel.** Reducer `advanceToNextSection(state, runDef, gameTimeMs)`
-hat keine Seiteneffekte — ein Hook ruft ihn via `setGameState(gs =>
-advanceToNextSection(gs, …))` auf.
+#### 3.2 Separate pure reducers from stateful hooks
 
-#### 3.2a Grosse Hooks: Tick-Sub-Funktionen als pure Module extrahieren
+**Rule.** Business logic in pure functions (deterministic, no
+side effects) — IO / state / timing in hooks or thin wrappers. The hook
+delegates to the reducer, not the other way around.
 
-**Regel.** Sobald ein Hook mehrere hundert LOC ueberschreitet und in der
-zentralen Tick-Funktion 5+ inline-Sub-Funktionen liegen (`applyXXX()`),
-ziehe diese in `src/<bereich>/<concern>Tick.ts` als pure Funktion
-(`runXXXTick(input)`) raus. Der Hook bleibt Orchestrator: Setup-Effekte,
-HeatManager-/State-Refs, Reihenfolge der Aufrufe. Jede extrahierte
-Funktion bekommt **alle Deps** (HM-Refs, Charge-Maps, Schild-Maps,
-Callbacks) als Input-Objekt — keine versteckten Closure-Captures.
+**Why.** Pure functions are trivially testable and composable. Hooks
+are hard to test; if hooks contain logic, the logic is tied
+to React rendering.
 
-**Warum.** Inline-Sub-Funktionen erben den gesamten Closure-State der
-tick()-Funktion und sind dadurch nicht isoliert testbar; das Hauptziel
-des Hooks (was wird wann gerufen) verschwindet hinter der Sub-Logik.
-Pure-Modul-Extraktion macht jeden Tick-Pfad einzeln testbar, reduziert
-die Hook-LOC drastisch und erzwingt explizite Dependency-Listen, die
-versteckte Kopplungen sichtbar machen.
+**Example.** Reducer `advanceToNextSection(state, runDef, gameTimeMs)`
+has no side effects — a hook calls it via `setGameState(gs =>
+advanceToNextSection(gs, …))`.
 
-**Beispiel.** `useHeatSimulation` war 982 LOC mit 7 inline-Sub-Funktionen
+#### 3.2a Large hooks: extract tick sub-functions as pure modules
+
+**Rule.** As soon as a hook exceeds several hundred LOC and the
+central tick function contains 5+ inline sub-functions (`applyXXX()`),
+pull these out into `src/<area>/<concern>Tick.ts` as pure functions
+(`runXXXTick(input)`). The hook remains the orchestrator: setup effects,
+HeatManager/state refs, order of the calls. Every extracted
+function receives **all deps** (HM refs, charge maps, shield maps,
+callbacks) as an input object — no hidden closure captures.
+
+**Why.** Inline sub-functions inherit the entire closure state of the
+tick() function and are therefore not testable in isolation; the main
+purpose of the hook (what gets called when) disappears behind the
+sub-logic. Pure-module extraction makes every tick path individually
+testable, reduces the hook LOC drastically and forces explicit
+dependency lists that make hidden couplings visible.
+
+**Example.** `useHeatSimulation` was 982 LOC with 7 inline sub-functions
 (applyEmergencyShutdown, applyExtremeTemperatureDamage,
 applyFieldLockDisplacement, applyThermoInjections, applyRepairPaste,
-applyShooterBolts, applyLaserCutters). Nach Extraktion in
-`src/run/*Tick.ts` ist der Hook 637 LOC; jede Sub-Funktion hat ein
-typisiertes Input-Interface, schliesst keine Refs mehr ein und ist
-isoliert testbar. tickMitigateCombined wandert als Callback durch die
-Input-Objekte — beim Refactor wurde explizit, welche Pfade Schild-
-Mitigation brauchen.
+applyShooterBolts, applyLaserCutters). After extraction into
+`src/run/*Tick.ts` the hook is 637 LOC; every sub-function has a
+typed input interface, no longer closes over any refs and is
+testable in isolation. tickMitigateCombined travels as a callback through
+the input objects — the refactor made explicit which paths need shield
+mitigation.
 
-**Reihenfolge.** Eine Extraktion pro Commit, jeweils mit gruenen Tests.
-Nicht batch — der Reducer-Verkehr (Reihenfolge der Tick-Schritte ist
-semantisch wichtig) wird sonst undurchsichtig. Bei jeder Extraktion
-unbenutzte Imports und nun toter Code (Konstanten, Closures) im Hook
-mit aufraeumen.
+**Order.** One extraction per commit, each with green tests.
+Do not batch — the reducer traffic (the order of the tick steps is
+semantically important) otherwise becomes opaque. With every extraction,
+also clean up unused imports and now-dead code (constants, closures) in
+the hook.
 
-#### 3.3 Keine Magic Values
+#### 3.3 No magic values
 
-**Regel.** Zahlen / Strings mit Bedeutung als Konstanten mit Namen,
-nicht inline. Schwellenwerte, Timeouts, Einheiten — alles benannt.
+**Rule.** Numbers / strings with meaning become named constants,
+not inline. Thresholds, timeouts, units — everything named.
 
-**Warum.** Benannte Konstanten sind Dokumentation. `const
-TASK_START_DELAY_MS = 5000` erklaert sich selbst; `5000` in einem
-Timer-Aufruf nicht.
+**Why.** Named constants are documentation. `const
+TASK_START_DELAY_MS = 5000` explains itself; `5000` in a
+timer call does not.
 
-#### 3.3a Konstanten zentralisieren, sobald sie thematisch verwandt sind
+#### 3.3a Centralize constants as soon as they are thematically related
 
-**Regel.** Wenn drei oder mehr Konstanten zum gleichen Subsystem gehoeren
-(Heat-Sim, Energy-Pool, Cable-Physics, Tutorial-Run-Timing) und ueber
-mehrere Dateien wandern, sammle sie in einer dedizierten
-`<bereich>Constants.ts`-Datei. Feature-spezifische UI-/Timing-Konstanten
-(`BEAM_FLASH_COOLDOWN_MS`, `FIELD_LOCK_SNAP_DURATION_MS`) bleiben in
-ihren Feature-Modulen — sie sind keine Sim-Parameter und gehoeren zur
-jeweiligen Logik.
+**Rule.** When three or more constants belong to the same subsystem
+(heat sim, energy pool, cable physics, tutorial-run timing) and wander
+across several files, collect them in a dedicated
+`<area>Constants.ts` file. Feature-specific UI/timing constants
+(`BEAM_FLASH_COOLDOWN_MS`, `FIELD_LOCK_SNAP_DURATION_MS`) stay in
+their feature modules — they are not sim parameters and belong to the
+respective logic.
 
-**Warum.** Versprenkelte Konstanten driften: zwei Stellen halten dasselbe
-Konzept mit minimal unterschiedlichen Werten, oder die Doku zitiert
-einen Wert, der so nirgends mehr existiert. Ein zentraler Sammelpunkt
-macht Game-Mechanik-Tuning lokal und vereinfacht Doku-Verweise.
+**Why.** Scattered constants drift: two places hold the same
+concept with minimally different values, or the docs cite a value
+that no longer exists anywhere in that form. A central collection point
+makes game-mechanic tuning local and simplifies doc references.
 
-**Beispiel.** `src/heatConstants.ts` haelt `HEATMAP_DIFFUSION_RATE`,
+**Example.** `src/heatConstants.ts` holds `HEATMAP_DIFFUSION_RATE`,
 `BORDER_COOLING_EXTRA`, `ITEM_HEAT_DURATION_MS`, `CABLE_HEAT_FULL_FLOW`,
-`ZONE_HEAT_DAMAGE_THRESHOLD`. Vorher waren diese in `heatPhysics.ts`,
-`useHeatSimulation.ts`, `thermoInjectionTick.ts` und
-`extremeTemperatureTick.ts` verteilt; `docs/heat-system.md` referenziert
-sie als Spielmechanik-Parameter — nur sinnvoll mit einem Standort.
+`ZONE_HEAT_DAMAGE_THRESHOLD`. Previously these were spread across
+`heatPhysics.ts`, `useHeatSimulation.ts`, `thermoInjectionTick.ts` and
+`extremeTemperatureTick.ts`; `docs/heat-system.md` references
+them as game-mechanic parameters — only sensible with a single home.
 
-#### 3.3b Balance-/Content-Werte datengetrieben, nicht hartverdrahtet (seit 2026-06-24)
+#### 3.3b Balance/content values data-driven, not hard-wired (since 2026-06-24)
 
-**Regel.** Ist ein Wert oder Verhalten etwas, das **Autoren/Spieler pro Content
-tunen** sollen (Zonen-Boni, Boss-/Run-Parameter), gehört er ins **Content-Schema
-(JSON)**, nicht in eine Code-Konstante — auch keine zentrale `…Constants.ts`. Der
-Solver liest den Wert aus den Daten; Code hält nur die Mechanik, nicht den
-gewünschten Wert.
+**Rule.** If a value or behavior is something that **authors/players should
+tune per content** (zone bonuses, boss/run parameters), it belongs in the
+**content schema (JSON)**, not in a code constant — not even a central
+`…Constants.ts`. The solver reads the value from the data; code holds only
+the mechanic, not the desired value.
 
-**Warum.** Eine Code-Konstante zwingt für jede Balance-Änderung einen Build +
-Deploy und macht pro-Chassis/-Boss-Varianz unmöglich. Beispiel (msg 12940): der
-Torso-Produktions-Bonus war `TORSO_PRODUCTION_BONUS = 1.5` hart im Solver. Umbau
-auf `ZoneBonusEntry.productionMultiplier` / `BossZoneDef.productionMultiplier` →
-pro Zone/Chassis/Boss frei einstellbar, der Solver bekommt eine `zoneProductionMul`-
-Map. Der frühere Arm-„Bonus" (×1,5 Verbrauch) war faktisch eine Strafe und wurde
-ersatzlos entfernt — hartverdrahtete „Boni" entziehen sich der Sichtbarkeit + dem
-Tuning. Abgrenzung zu 3.3a: reine Sim-/UI-Timing-Konstanten bleiben im Code;
-gemeint sind **Authoring-/Balance-Größen**.
+**Why.** A code constant forces a build + deploy for every balance change and
+makes per-chassis/per-boss variance impossible. Example (msg 12940): the
+torso production bonus was hard-coded in the solver as `TORSO_PRODUCTION_BONUS = 1.5`.
+Converted to `ZoneBonusEntry.productionMultiplier` / `BossZoneDef.productionMultiplier` →
+freely adjustable per zone/chassis/boss; the solver receives a `zoneProductionMul`
+map. The former arm "bonus" (×1.5 consumption) was effectively a penalty and was
+removed without replacement — hard-wired "bonuses" escape visibility and
+tuning. Distinction from 3.3a: pure sim/UI timing constants stay in code;
+what is meant are **authoring/balance quantities**.
 
-#### 3.3c Abgeleitete Listen/Werte generieren statt duplizieren (gegen Drift, seit 2026-06-30)
+#### 3.3c Generate derived lists/values instead of duplicating them (against drift, since 2026-06-30)
 
-**Regel.** Eine Liste oder ein Wert, der sich aus einer **Source-of-Truth ableiten
-lässt** (vorhandene Dateien im Build-Output, `package.json`, installierte Versionen),
-wird zur **Build-Zeit generiert**, nicht von Hand an einer zweiten Stelle gepflegt.
-Generiertes File eingecheckt (damit Dev ohne Build funktioniert) UND im `npm run build`
-neu erzeugt (immer frisch). Muster: `src/generated/propertyNormFactors.ts`,
+**Rule.** A list or value that can be **derived from a source of truth**
+(existing files in the build output, `package.json`, installed versions)
+is **generated at build time**, not maintained by hand in a second place.
+The generated file is checked in (so dev works without a build) AND regenerated
+in `npm run build` (always fresh). Pattern: `src/generated/propertyNormFactors.ts`,
 `scripts/generate-*.ts`.
 
-**Warum.** Jede handgepflegte Kopie driftet von ihrer Quelle weg. Beispiele
-(2026-06-30, je nach einem User-Report):
-- **Run-Liste:** `NewRunScreen` probierte eine hartkodierte `ALL_RUN_IDS`-Liste per
-  `fetch` durch → 404-Blind-Proben für gestrippte Runs im Public-Build. Fix: ein
-  Build-Manifest (`runs/index.json`, `generate-run-manifest.ts`) listet die
-  tatsächlich ausgelieferten Runs → es wird nur geladen, was existiert.
-- **Credits-Lizenzliste:** die hartkodierte Tool-/Versionsliste war zu 6/10 veraltet
-  + unvollständig (Playwright/Fonts fehlten). Fix: `generate-licenses.ts` liest
-  `package.json` × `node_modules` → Versionen, Lizenzen und Lizenztexte können nicht
-  mehr veralten.
+**Why.** Every hand-maintained copy drifts away from its source. Examples
+(2026-06-30, each following a user report):
+- **Run list:** `NewRunScreen` probed a hard-coded `ALL_RUN_IDS` list via
+  `fetch` → 404 blind probes for stripped runs in the public build. Fix: a
+  build manifest (`runs/index.json`, `generate-run-manifest.ts`) lists the
+  runs actually shipped → only what exists gets loaded.
+- **Credits license list:** the hard-coded tool/version list was 6/10 outdated
+  + incomplete (Playwright/fonts missing). Fix: `generate-licenses.ts` reads
+  `package.json` × `node_modules` → versions, licenses and license texts can no
+  longer go stale.
 
-**Abgrenzung.** Bewusst statische Werte (z. B. das README-Test-Count-Badge, User-Wunsch
-2026-06-23) bleiben hand-gepflegt — das ist eine Entscheidung, kein Drift-Bug. Gemeint
-sind **ableitbare** Daten, deren Hand-Kopie nur eine Fehlerquelle ist. Folge-Falle: was
-generiert/gestrippt wird, darf die App nicht an anderer Stelle hart referenzieren
-(siehe 7.4). Skill: [53-generieren-statt-duplizieren.md](skills/53-generieren-statt-duplizieren.md).
+**Distinction.** Deliberately static values (e.g. the README test-count badge,
+user wish 2026-06-23) remain hand-maintained — that is a decision, not a drift
+bug. What is meant are **derivable** data whose hand-copy is only a source of
+error. Follow-up trap: what gets generated/stripped must not be hard-referenced
+by the app elsewhere (see 7.4). Skill: [53-generate-instead-of-duplicating.md](skills/53-generate-instead-of-duplicating.md).
 
-#### 3.4 Kommentare erklaeren das „Warum", nicht das „Was"
+#### 3.4 Comments explain the "why", not the "what"
 
-**Regel.** Kein Kommentar, der die Code-Zeile paraphrasiert. Kommentare
-fuer verborgene Invarianten, Workarounds, Design-Entscheidungen, die
-dem Leser ohne Kontext nicht klar waeren.
+**Rule.** No comment that paraphrases the code line. Comments
+are for hidden invariants, workarounds, design decisions that
+would not be clear to the reader without context.
 
-**Warum.** Der Code sagt was er tut; der Kommentar soll sagen, warum.
-„Increments counter" ist Laerm; „Retry-Zaehler — dient dem Jitter im
-Reconnect-Flow (Issue #412)" ist Kontext.
+**Why.** The code says what it does; the comment should say why.
+"Increments counter" is noise; "Retry counter — provides the jitter in
+the reconnect flow (issue #412)" is context.
 
-#### 3.5 Vertraue Framework-Garantien, validiere nur an Systemgrenzen
+#### 3.5 Trust framework guarantees, validate only at system boundaries
 
-**Regel.** Keine defensive Programmierung fuer Szenarien, die das
-Framework ausschliesst. Validation nur an Aussengrenzen (User-Input,
-externe APIs, File-Parser).
+**Rule.** No defensive programming for scenarios the framework
+rules out. Validation only at outer boundaries (user input,
+external APIs, file parsers).
 
-**Warum.** Ueberdefensiver Code verbirgt die tatsaechliche
-Geschaeftslogik unter Null-Checks und Try/Catches. Wenn der Compiler
-oder das Framework garantiert, dass X nicht passiert, verschwende keine
-Zeile darauf.
+**Why.** Over-defensive code buries the actual business logic under
+null checks and try/catches. If the compiler or the framework
+guarantees that X cannot happen, do not waste a line on it.
 
-**Beispiel.** In einem TypeScript-Typ `{ foo: string }` keinen `if
-(typeof obj.foo !== "string")`-Check einbauen.
+**Example.** For a TypeScript type `{ foo: string }`, do not add an `if
+(typeof obj.foo !== "string")` check.
 
-#### 3.6 Keine Backward-Compatibility-Shims beim Refactoring
+#### 3.6 No backward-compatibility shims when refactoring
 
-**Regel.** Wenn du etwas ersetzt, entferne das Alte vollstaendig. Kein
-`_unused` leftover, kein `// removed`-Kommentar, kein Re-Export der
-alten API „fuer den Fall, dass". Altcode rottet.
+**Rule.** When you replace something, remove the old thing completely. No
+`_unused` leftover, no `// removed` comment, no re-export of the
+old API "just in case". Old code rots.
 
-**Warum.** Dead Code ist schlimmer als kein Code: er wirkt wie
-lebender, schickt Leser in falsche Richtungen.
+**Why.** Dead code is worse than no code: it looks like living
+code and sends readers in wrong directions.
 
-**Ausnahme.** Oeffentliche APIs und persistierte Daten mit externen
-Consumern brauchen oft Migrationen / Deprecation-Pfade. Interner Code
-nicht.
+**Exception.** Public APIs and persisted data with external
+consumers often need migrations / deprecation paths. Internal code
+does not.
 
-#### 3.6a Keine Redundanzen / kein doppelter Code (seit 2026-05-31)
+#### 3.6a No redundancy / no duplicated code (since 2026-05-31)
 
-**Regel.** Gleiche Logik kommt **einmal** vor — was sich an mehreren
-Stellen wiederholt, wandert in einen geteilten Helper, eine Funktion oder
-eine Konstante (zentral, siehe [3.3a](#33a-konstanten-zentralisieren-sobald-sie-thematisch-verwandt-sind)).
-Auch 3-5 Zeilen lohnen die Extraktion, BEVOR die zweite Kopie committet
-wird. Grenze: gleiche **Bedeutung**, nicht gleiche Optik — semantisch
-verschiedene Aehnlichkeiten nicht prematur abstrahieren.
+**Rule.** The same logic occurs **once** — whatever repeats in several
+places moves into a shared helper, a function or a
+constant (centralized, see [3.3a](#33a-centralize-constants-as-soon-as-they-are-thematically-related)).
+Even 3-5 lines are worth the extraction, BEFORE the second copy is
+committed. Boundary: same **meaning**, not same appearance —
+do not prematurely abstract semantically different similarities.
 
-**Warum.** Duplikate divergieren: das Burst-Window-Muster
-`(now - fireTime) < THRESHOLD` lebte an drei Stellen (heatPhysics,
-instanceStatRows, engine); beim Umzug der Zeitbasis auf gameTimeMs wurde
-nur eine umgestellt — die anderen kollabierten still, der Bug fiel erst
-dem User auf (msg 10991). Anwendungs-Checkliste, Smell-Test
-(„muss ich bei einer Aenderung eine zweite Stelle anfassen?") und
-Ausnahmen: Skill [44-keine-redundanzen.md](skills/44-keine-redundanzen.md).
-Quelle: User-Spec msg 11002 (2026-05-31).
+**Why.** Duplicates diverge: the burst-window pattern
+`(now - fireTime) < THRESHOLD` lived in three places (heatPhysics,
+instanceStatRows, engine); when the time base moved to gameTimeMs, only
+one was converted — the others silently collapsed, the bug was only
+noticed by the user (msg 10991). Application checklist, smell test
+("do I have to touch a second place when changing this?") and
+exceptions: Skill [44-no-redundancy.md](skills/44-no-redundancy.md).
+Source: user spec msg 11002 (2026-05-31).
 
-#### 3.7 Discriminated Unions: Handler-Map statt verteilter `kind`-Switches
+#### 3.7 Discriminated unions: handler map instead of scattered `kind` switches
 
-**Regel.** Sobald eine diskriminierte Union (`kind`/`type`/`action`) an mehr
-als zwei Call-Sites auf den Discriminator verzweigt, wird das Verhalten in
-eine **Handler-Map** ausgelagert: ein Handler-File pro Variante, zentrale
-`Record<Kind, Handler>`-Map mit TS-erzwungener Vollstaendigkeit, Caller
-dispatchen ueber `HANDLERS[e.kind].method?.(...)`. Das Pattern ist die
-Default-Wahl — neue Discriminated Unions werden direkt so angelegt, nicht
-erst nach dem dritten Switch refactored.
+**Rule.** As soon as a discriminated union (`kind`/`type`/`action`) branches
+on the discriminator at more than two call sites, the behavior moves into
+a **handler map**: one handler file per variant, a central
+`Record<Kind, Handler>` map with TS-enforced completeness, callers
+dispatch via `HANDLERS[e.kind].method?.(...)`. The pattern is the
+default choice — new discriminated unions are laid out this way from the
+start, not refactored only after the third switch.
 
-**Warum.** Verteilte `kind`-Switches muessen bei jeder neuen Variante alle
-gefunden und ergaenzt werden — ein Vergessen wird oft erst zur Laufzeit
-sichtbar; die Map macht es zum Compile-Error und buendelt das Wissen pro
-Variante in einem File. Drei Chimera-Refactors (NPC_HANDLERS, TASK_HANDLERS,
-EFFECT_HANDLERS) haben so ~140 verstreute Switch-Stellen aufgeloest.
+**Why.** Scattered `kind` switches must all be found and extended for
+every new variant — a miss often only becomes visible at runtime;
+the map turns it into a compile error and bundles the knowledge per
+variant into one file. Three Chimera refactors (NPC_HANDLERS, TASK_HANDLERS,
+EFFECT_HANDLERS) resolved ~140 scattered switch sites this way.
 
-Bauanleitung (vier Konventionen), Gegenanzeigen (Parser/Loader,
-Type-Narrowing-Guards, einzelne lokale Lookups), Hilfsregeln und
-Mini-Skelett: Skill
-[21-handler-map-pattern.md](skills/21-handler-map-pattern.md).
-Live-Beispiele: `src/run/effectHandlers/`, `src/run/taskHandlers/`,
+Construction guide (four conventions), contraindications (parsers/loaders,
+type-narrowing guards, single local lookups), auxiliary rules and
+mini skeleton: Skill
+`21-handler-map-pattern.md` (Chimera only).
+Live examples: `src/run/effectHandlers/`, `src/run/taskHandlers/`,
 `src/run/npcHandlers/`.
 
-#### 3.8 i18n-Pflicht fuer user-facing Texte (seit 2026-05-22)
+#### 3.8 i18n requirement for user-facing texts (since 2026-05-22)
 
-**Regel.** Jeder neue user-facing Text muss i18n-faehig sein. Zwei Pfade:
-im TS/TSX-Code definierter Text ueber `t()` aus `useTranslation()` (bzw.
-`getStaticTranslation` ausserhalb React) mit Keys in `src/i18n/en_US.ts`
-UND `de_DE.ts`; in JSON definierter Text als `LocalizedString`
-(`{ de_DE, en_US }`; Loader `parseLocalizedFromAny`, Display
-`resolveLocalized`). Verboten: hardcoded UI-Literale, DE-Fallback per `??`,
-fehlende Locale-Variante.
+**Rule.** Every new user-facing text must be i18n-capable. Two paths:
+text defined in TS/TSX code goes through `t()` from `useTranslation()` (or
+`getStaticTranslation` outside React) with keys in `src/i18n/en_US.ts`
+AND `de_DE.ts`; text defined in JSON as a `LocalizedString`
+(`{ de_DE, en_US }`; loader `parseLocalizedFromAny`, display
+`resolveLocalized`). Forbidden: hardcoded UI literals, DE fallback via `??`,
+missing locale variant.
 
-**Warum.** Jeder durchgerutschte String ist ein Bug im EN-Locale, den der
-User bisher per Screenshot fangen musste („[object Object]", TaskHUD
-„ODER", „Hitzeschaden") — vor dem Commit pruefen statt nachziehen.
-Volldetails (JSON-Dateiliste, Ja/Nein-Beispiele, Migrator- +
-Translation-Skripte): Skill [22-i18n-pflicht.md](skills/22-i18n-pflicht.md);
-Architektur: `docs/architecture.md` → „Internationalization".
+**Why.** Every string that slips through is a bug in the EN locale, which
+the user so far had to catch via screenshot ("[object Object]", TaskHUD
+"ODER", "Hitzeschaden") — check before the commit instead of following up.
+Full details (JSON file list, yes/no examples, migrator +
+translation scripts): Skill `22-i18n-pflicht.md` (Chimera only);
+architecture: `docs/architecture.md` → "Internationalization".
 
-#### 3.9 Design-Invarianten kennen und respektieren — nicht als Bug fixen
+#### 3.9 Know and respect design invariants — do not fix them as bugs
 
-Reports der Form „X wirkt nicht auf Y" / „der Wert pulst/skaliert nicht wie
-erwartet" erst gegen die **bewussten System-Invarianten** halten, bevor man
-an der Engine schraubt. Was isoliert wie ein Fehler aussieht, ist oft
-gewollte Semantik.
+Reports of the form "X has no effect on Y" / "the value doesn't pulse/scale as
+expected" are first held against the **deliberate system invariants** before
+touching the engine. What looks like an error in isolation is often
+intended semantics.
 
-Bekannte Chimera-Invarianten (Stand 2026-06-13):
+Known Chimera invariants (as of 2026-06-13):
 
-- **Boss-Event-Effekte ohne Dauer (`durationMs`/`recoveryMs` = null) sind
-  PERMANENT — gewollte Engine-Semantik, kein Bug.** Auf einem Loop-Boss
-  (`loopTimeMs`) feuert das Event jeden Zyklus neu und die Instanzen STAPELN
-  (kein Replace). Ein akkumulierendes Hazard (fieldLock sperrt pro Loop weitere
-  Felder, zoneCompression kollabiert die Zone) ist eine VERGESSENE Dauer im
-  Boss-JSON, kein Engine-Fehler. Warnexempel 2026-06-13: ich baute auf Verdacht
-  einen „Replace-on-Refire"-Engine-Fix (fieldLock, dann fälschlich auf
-  zoneCompression verallgemeinert) — vom User komplett revertiert, der echte Fix
-  war `durationMs:6000` im JSON. Zusatzfehler: das Lebensdauer-Feld ist je Kind
-  verschieden (fieldLock `durationMs`, **zoneCompression `recoveryMs`**) — mein
-  Scan prüfte nur `durationMs` und las Compressions falsch als permanent. Lehre:
-  erst Design-Intent + Daten (fehlendes Feld?) prüfen, nicht die Engine; und das
-  RICHTIGE Feld pro Kind nachschlagen.
-- **Modifier wirken nur Child→Parent, nie auf Siblings.** Ein Sub-Modul
-  modifiziert seinen Parent, nicht seine Geschwister im selben Container.
-  `mux(pulseMod, repairPaste)` lässt die Reparatur NICHT pulsen (Siblings) —
-  die pulsende Komposition ist `repairPaste(pulseMod)` (Nesting). Technisch:
-  Two-Pass-Aggregation in `src/propertyBag/resolve.ts` + Owner-Scope (nur der
-  Kategorie-Besitzer bekommt Child-Multiplier auf seine Werte). User-
-  Entscheidung msg 11370: „childs wirken nur auf parents aber nicht auf
-  siblings" — die Engine-Aenderung wurde explizit abgelehnt.
-- **`inverterMod` ist kategorie-selektiv und wird vom ersten Vorfahren mit
-  passendem Kategorie-Faktor ODER `categories`-Deklaration konsumiert.** Er
-  kippt die Werte/Multiplier genau EINER Kategorie. Container OHNE Faktor/
-  Deklaration in der Ziel-Kategorie sind transparent — der Inverter propagiert
-  durch sie nach oben. **Ein Item mit `categories`-Deklaration ist eine
-  Absorptions-Grenze (Owner-Scope, `phaseC` `hostOwnsCategories`):** es
-  absorbiert ALLE verbleibenden Inverter-Counts → der Inverter erreicht den
-  Parent nicht mehr. Verifiziert: `engine(duplicator(inverterMod))` → speed 0
-  (durch den cat-losen duplicator propagiert), aber `engine(sensor(inverterMod))`
-  → speed 50 (sensor hat `categories` → absorbiert). Folge fuer Item-Bauer: soll
-  ein Inverter eine Host-VALUE kippen (cooler/heatSink: heatCooling→heat), muss
-  er DIREKTES Kind des Hosts sein; eine `categories`-Map auf einem Zwischen-Item
-  macht es bewusst zur Inverter-Grenze. Detail-Skill:
-  [46-neues-item-hinzufuegen.md](skills/46-neues-item-hinzufuegen.md) →
-  „Inverter-Propagation".
-- **Drag darf nie die Sim aendern oder blockieren** (Sim-Output identisch zu
-  nicht-gedragged).
+- **Boss event effects without a duration (`durationMs`/`recoveryMs` = null) are
+  PERMANENT — intended engine semantics, not a bug.** On a loop boss
+  (`loopTimeMs`) the event fires anew every cycle and the instances STACK
+  (no replace). An accumulating hazard (fieldLock locks more fields per loop,
+  zoneCompression collapses the zone) is a FORGOTTEN duration in the
+  boss JSON, not an engine error. Cautionary example 2026-06-13: on a hunch I
+  built a "replace-on-refire" engine fix (fieldLock, then wrongly generalized to
+  zoneCompression) — completely reverted by the user; the real fix
+  was `durationMs:6000` in the JSON. Additional error: the lifetime field differs
+  per kind (fieldLock `durationMs`, **zoneCompression `recoveryMs`**) — my
+  scan checked only `durationMs` and wrongly read compressions as permanent. Lesson:
+  first check design intent + data (missing field?), not the engine; and look up
+  the RIGHT field per kind.
+- **Modifiers act only child→parent, never on siblings.** A sub-module
+  modifies its parent, not its siblings in the same container.
+  `mux(pulseMod, repairPaste)` does NOT make the repair pulse (siblings) —
+  the pulsing composition is `repairPaste(pulseMod)` (nesting). Technically:
+  two-pass aggregation in `src/propertyBag/resolve.ts` + owner scope (only the
+  category owner receives child multipliers on its values). User
+  decision msg 11370: "childs only act on parents but not on
+  siblings" — the engine change was explicitly rejected.
+- **`inverterMod` is category-selective and is consumed by the first ancestor with
+  a matching category factor OR a `categories` declaration.** It
+  flips the values/multipliers of exactly ONE category. Containers WITHOUT a
+  factor/declaration in the target category are transparent — the inverter
+  propagates up through them. **An item with a `categories` declaration is an
+  absorption boundary (owner scope, `phaseC` `hostOwnsCategories`):** it
+  absorbs ALL remaining inverter counts → the inverter no longer reaches the
+  parent. Verified: `engine(duplicator(inverterMod))` → speed 0
+  (propagated through the category-less duplicator), but `engine(sensor(inverterMod))`
+  → speed 50 (sensor has `categories` → absorbs). Consequence for item builders: if
+  an inverter is to flip a host VALUE (cooler/heatSink: heatCooling→heat), it must
+  be a DIRECT child of the host; a `categories` map on an intermediate item
+  deliberately makes it an inverter boundary. Detail skill:
+  `46-neues-item-hinzufuegen.md` (Chimera only) →
+  "Inverter propagation".
+- **Drag must never change or block the sim** (sim output identical to
+  not-dragged).
 
-Vorgehen: Pfad empirisch nachstellen (Wegwerf-Dump-Test, der
-`resolveTree(...)` / `buildInstanceStatRows(...)` fürs gemeldete Setup
-loggt), gegen die Invariante halten, erst dann Bug-vs-Intended entscheiden.
-Wenn Intended → kein Fix, sondern Diagnose + korrekte Komposition empfehlen;
-eine echte Engine-Aenderung als bewusste Design-Frage mit Blast-Radius
-benennen (siehe Skill
-[48-design-invarianten-respektieren.md](skills/48-design-invarianten-respektieren.md)).
+Procedure: reproduce the path empirically (throwaway dump test that
+logs `resolveTree(...)` / `buildInstanceStatRows(...)` for the reported setup),
+hold it against the invariant, only then decide bug vs. intended.
+If intended → no fix, but a diagnosis + recommending the correct composition;
+name a genuine engine change as a deliberate design question with its blast
+radius (see Skill
+`48-design-invarianten-respektieren.md` (Chimera only)).
 
 ---
 
-#### 3.10 Browser-geteilte Module: kein `require` — `process.getBuiltinModule` (seit 2026-07-11)
+#### 3.10 Browser-shared modules: no `require` — `process.getBuiltinModule` (since 2026-07-11)
 
-**Regel.** Module, die Browser UND Node/Sim teilen, duerfen fuer synchrone
-Node-APIs (`node:fs` etc.) kein `require` nutzen — unter ESM/tsx liefert das
-still `null` und der Sim-Pfad verliert die Funktionalitaet, waehrend vitest
-(CJS-interop) es verdeckt: **Unit-gruen ≠ Sim-gruen**. Stattdessen den
-geteilten Helfer (`getNodeSyncFs` via `process.getBuiltinModule`) verwenden
-und den Sim-Pfad (`npm run simulate`-Smoke) separat verifizieren. Siehe
-Memory `project_chimera_esm_require_getbuiltinmodule`.
+**Rule.** Modules shared by browser AND Node/sim must not use `require` for
+synchronous Node APIs (`node:fs` etc.) — under ESM/tsx this silently returns
+`null` and the sim path loses the functionality, while vitest
+(CJS interop) masks it: **unit-green ≠ sim-green**. Instead use the
+shared helper (`getNodeSyncFs` via `process.getBuiltinModule`)
+and verify the sim path (`npm run simulate` smoke) separately. See
+memory `project_chimera_esm_require_getbuiltinmodule`.
 
 ---
 
 ### 4. Testing
 
-#### 4.1 Tests begleiten Features und Fixes
+#### 4.1 Tests accompany features and fixes
 
-**Regel.** Ein neuer Feature-Commit bringt Tests fuer die neue Logik.
-Ein Bug-Fix bringt einen Regression-Test, der ohne den Fix fehlschlaegt.
+**Rule.** A new feature commit brings tests for the new logic.
+A bug fix brings a regression test that fails without the fix.
 
-**Warum.** Ohne Tests weisst du nur „funktioniert gerade", nicht
-„bleibt korrekt". Bug-Regressions-Tests dokumentieren zudem, was das
-gemeldete Problem war.
+**Why.** Without tests you only know "works right now", not
+"stays correct". Bug regression tests additionally document what the
+reported problem was.
 
-#### 4.2 Erklaere + frage, bevor du bestehende Tests veraenderst
+#### 4.2 Explain + ask before changing existing tests
 
-**Regel.** Tests werden nicht einfach „angepasst, damit sie gruen sind".
-Ein existierender Test hat einen Grund. Wenn eine Aenderung ihn zum
-Scheitern bringt: (a) zuerst ueberlegen, ob die Aenderung wirklich das
-dokumentierte Verhalten brechen soll. (b) Wenn ja, die Aenderung erklaeren
-und — bei echten Verhaltensregeln — mit dem Auftraggeber abstimmen.
+**Rule.** Tests are not simply "adjusted so they go green".
+An existing test has a reason. If a change makes it
+fail: (a) first consider whether the change is really supposed to break
+the documented behavior. (b) If yes, explain the change
+and — for real behavioral rules — align with the client.
 
-**Warum.** Tests sind kodifizierte Anforderungen. Einen Test zu
-aendern, um einen Build zu reparieren, loescht oft genau die Invariante,
-die der Test schuetzt.
+**Why.** Tests are codified requirements. Changing a test
+to repair a build often deletes exactly the invariant
+the test protects.
 
-#### 4.3 Greene Suite vor jedem Commit
+#### 4.3 Green suite before every commit
 
-**Regel.** `tsc --noEmit`, die komplette Test-Suite, **die e2e-Tests
-(`npm run e2e`, Playwright — laufen NICHT in `npm test` mit!)**,
-**`npm run lint`** und der Production-Build laufen gruen, bevor ein
-Commit gemacht wird. Wenn einer rot ist: fixen, nicht committen.
-(e2e ergaenzt seit 2026-06-07, User-Spec msg 11609; lint ergaenzt seit
-2026-07-06 nach CI-Fail msg 14129 — ein einziger eslint-ERROR, auch in
-Test-Dateien, laesst den GitHub-Workflow fehlschlagen; Bestands-Warnings
-sind ok. Siehe Memory `feedback_e2e_before_commit`.)
+**Rule.** `tsc --noEmit`, the complete test suite, **the e2e tests
+(`npm run e2e`, Playwright — they do NOT run as part of `npm test`!)**,
+**`npm run lint`** and the production build run green before a
+commit is made. If one is red: fix it, do not commit.
+(e2e added since 2026-06-07, user spec msg 11609; lint added since
+2026-07-06 after CI fail msg 14129 — a single eslint ERROR, even in
+test files, makes the GitHub workflow fail; pre-existing warnings
+are ok. See memory `feedback_e2e_before_commit`.)
 
-**Warum.** Rote Commits verbrennen Zeit fuer jeden, der danach checkt
-out. Bisect bricht. CI-Credits werden verschwendet. e2e lief frueher
-out-of-band und blieb unbemerkt rot (veraltete Save-Version) — daher
-ab jetzt Teil des Gates bei App-Code-Aenderungen.
+**Why.** Red commits burn time for everyone who checks out
+afterwards. Bisect breaks. CI credits are wasted. e2e used to run
+out-of-band and stayed red unnoticed (outdated save version) — hence
+from now on part of the gate for app-code changes.
 
-**Beispiel-Sequenz:**
+**Example sequence:**
 ```
 npx tsc --noEmit && npm run lint && npm test -- --run && npm run e2e && npm run build
 ```
-Bei reinen Doku-/Test-Datei-Commits ohne App-Code-Aenderung kann `npm run e2e`
-entfallen. Vermeide ausserdem in e2e-Tests Werte, die mit der Source driften
-(z.B. `CURRENT_SAVE_VERSION` zur Laufzeit aus `src/persistence.ts` lesen).
+For pure doc/test-file commits without app-code changes, `npm run e2e`
+may be skipped. Also avoid values in e2e tests that drift with the source
+(e.g. read `CURRENT_SAVE_VERSION` at runtime from `src/persistence.ts`).
 
-**Pipe-Exit-Falle:** `npm test | tail -3` maskiert den Exit-Code (Pipe
-liefert den Status von `tail`) — ein `&&`-Gate laeuft trotz roter Tests
-weiter (passiert 2026-07-05: 3 Failures unbemerkt). `set -o pipefail`
-setzen oder die Summary-Zeile explizit pruefen.
+**Pipe-exit trap:** `npm test | tail -3` masks the exit code (the pipe
+returns the status of `tail`) — an `&&` gate keeps running despite red tests
+(happened 2026-07-05: 3 failures unnoticed). Set `set -o pipefail`
+or check the summary line explicitly.
 
-**Nach einem Merge: kein zweiter Lauf ohne Aenderung** (Owner-Spec
-2026-08-14). Das Gate laeuft VOR dem Merge auf dem Topic-Branch; ist
-`git diff --quiet topic/<plan> dev` nach dem Merge leer (Baum identisch mit
-dem getesteten Stand), wird die Suite NICHT erneut gefahren. Ist der Diff
-nicht leer (fremde dev-Commits, Konflikt-Aufloesung), laeuft das volle Gate
-auf dem Merge-Ergebnis. Details: Skill
-[25-gruene-suite-vor-commit.md](skills/25-gruene-suite-vor-commit.md) →
-„Nach einem Merge" + Skill 64 Regel 4.
+**After a merge: no second run without changes** (owner spec
+2026-08-14). The gate runs BEFORE the merge on the topic branch; if
+`git diff --quiet topic/<plan> dev` is empty after the merge (tree identical
+to the tested state), the suite is NOT run again. If the diff is
+not empty (foreign dev commits, conflict resolution), the full gate runs
+on the merge result. Details: Skill
+[25-green-suite-before-commit.md](skills/25-green-suite-before-commit.md) →
+"After a merge" + Skill 64 rule 4.
 
-#### 4.4 Verhaltens-Tests vor Struktur-Tests
+#### 4.4 Behavioral tests before structural tests
 
-**Regel.** Tests pruefen Beobachtbarkeit — was der Code tut, nicht
-wie er intern aufgebaut ist. Kein Test, der einen Dateipfad oder eine
-interne Klassen-Hierarchie asserten muss, um zu ueberleben.
+**Rule.** Tests check observability — what the code does, not
+how it is built internally. No test that has to assert a file path or an
+internal class hierarchy in order to survive.
 
-**Warum.** Struktur-Tests brechen bei jedem harmlos aussehenden
-Refactor. Verhaltens-Tests ueberleben Refactors und schuetzen echte
-Invarianten.
+**Why.** Structural tests break on every harmless-looking
+refactor. Behavioral tests survive refactors and protect real
+invariants.
 
-#### 4.5 Coverage-Luecken: erreichbare Pfade testen, defensive Pfade dokumentieren
+#### 4.5 Coverage gaps: test reachable paths, document defensive paths
 
-**Regel.** Beim Coverage-Lueckenschluss drei Faelle unterscheiden:
-(a) **erreichbar ueber API-Aufruf** → Test schreiben; (b) **Defensiv-Guard**
-gegen strukturell ausgeschlossene Faelle → entfernen oder im Commit-Body
-explizit als solchen benennen; (c) **Hook-Code fuer noch-nicht-eingebautes
-Feature** → per `vi.mock(... importOriginal())` mit synthetischem Item-Def
-aktivieren (testbare Spec-Doku statt Loeschen).
+**Rule.** When closing coverage gaps, distinguish three cases:
+(a) **reachable via API call** → write a test; (b) **defensive guard**
+against structurally excluded cases → remove, or explicitly name it as such
+in the commit body; (c) **hook code for a not-yet-integrated
+feature** → activate via `vi.mock(... importOriginal())` with a synthetic item
+def (testable spec documentation instead of deleting).
 
-**Warum.** 100 % Branch-Coverage fuer dead code erzeugt Mock-Theater oder
-streicht Schutz-Code. Triage-Ablauf + Chimera-Beispiel (heatPhysics
-91.78 % → 97.26 %, letzte 4 Branches = dokumentierte defensive Guards):
-Skill [27-coverage-luecken-triage.md](skills/27-coverage-luecken-triage.md).
+**Why.** 100 % branch coverage for dead code produces mock theater or
+strips protective code. Triage flow + Chimera example (heatPhysics
+91.78 % → 97.26 %, last 4 branches = documented defensive guards):
+Skill [27-coverage-gap-triage.md](skills/27-coverage-gap-triage.md).
 
-#### 4.5b Coverage misst Ausfuehrung, nicht Behauptung — die Mutations-Probe
+#### 4.5b Coverage measures execution, not assertion — the mutation probe
 
-**Regel.** Eine Zeile gilt als „covered", sobald irgendein Test sie durchlaeuft
-— unabhaengig davon, ob ueber ihr Ergebnis je etwas assertet wird. Ein Feature
-kann **100 % Coverage haben und 0 % getestet sein**. Aus einer Coverage-Zahl
-darf darum NIE auf Absicherung geschlossen werden. Der einzige verlaessliche
-Nachweis ist die **Mutations-Probe**: die Wirkung abschalten und schauen, ob die
-Suite schreit.
+**Rule.** A line counts as "covered" as soon as any test passes through it
+— regardless of whether anything is ever asserted about its result. A feature
+can have **100 % coverage and be 0 % tested**. Therefore NEVER infer
+protection from a coverage number. The only reliable
+proof is the **mutation probe**: switch off the effect and see whether the
+suite screams.
 
-| Signal | Aussagekraft |
+| Signal | Significance |
 |---|---|
-| Coverage 0 % | Echte Luecke. Zuverlaessig. |
-| Coverage 100 % | **Sagt nichts** ueber Absicherung. |
-| Mutation ueberlebt | Echtes Loch. Zuverlaessig. |
-| Mutation stirbt | Waechter existiert. Zuverlaessig. |
+| Coverage 0 % | Real gap. Reliable. |
+| Coverage 100 % | **Says nothing** about protection. |
+| Mutation survives | Real hole. Reliable. |
+| Mutation dies | A guard exists. Reliable. |
 
-**Warum.** 2026-07-14: die per-Tick-XP-Vergabe (`energyStep`) war komplett
-ungetestet. Mit hart deaktivierter Vergabe liefen **8482 Tests gruen durch** —
-nach Monaten mit Coverage-Checks und Coverage-Verbesserungen. Der Grund ist
-strukturell: die XP-Zeilen laufen in JEDEM Test mit, der die Sim tickt, sind
-also bestens „abgedeckt" — und tauchen in einer Luecken-Triage (4.5) per
-Definition nie auf, denn die listet nur NICHT-abgedeckte Zeilen. Das
-Housekeeping war gegen diese Klasse blind by design.
+**Why.** 2026-07-14: the per-tick XP grant (`energyStep`) was completely
+untested. With the grant hard-disabled, **8482 tests ran green** —
+after months of coverage checks and coverage improvements. The reason is
+structural: the XP lines run in EVERY test that ticks the sim, so they are
+excellently "covered" — and by definition never appear in a gap
+triage (4.5), because it lists only NON-covered lines. The
+housekeeping was blind to this class by design.
 
-**Wie.** Pro Subsystem die **beobachtbaren Ausgaben** auflisten (Sim-Kern: `xp`,
-`charge`, `heat`, `itemHP`, Schild-Ladung, Fire-Timestamps, Siphon-Netto,
-Waermebombe), je eine Mutation, die genau diese Wirkung loescht (Zuweisung
-neutralisieren / Rumpf kappen / Setter no-op), volle Suite je Mutation, Restore
-im `finally`, danach `git diff` = leer. Details + Skript-Muster:
-[skills/59-mutations-probe-statt-coverage-prozent.md](skills/59-mutations-probe-statt-coverage-prozent.md).
-Der Mutations-Pass ist seit 2026-07-14 fester Bestandteil des
-Idle-Housekeepings (Skill 42, Pass 2).
+**How.** Per subsystem, list the **observable outputs** (sim core: `xp`,
+`charge`, `heat`, `itemHP`, shield charge, fire timestamps, siphon net,
+heat bomb), one mutation each that deletes exactly this effect (neutralize
+the assignment / cut the body / setter no-op), full suite per mutation, restore
+in `finally`, afterwards `git diff` = empty. Details + script pattern:
+[skills/59-mutation-probe-over-coverage-percent.md](skills/59-mutation-probe-over-coverage-percent.md).
+The mutation pass has been a fixed part of the
+idle housekeeping since 2026-07-14 (Skill 42, pass 2).
 
-#### 4.6 e2e-Tests (Playwright): Pyramide + Mechaniken
+#### 4.6 e2e tests (Playwright): pyramid + mechanics
 
-**Regel.** Die Test-Pyramide ernst nehmen: Effekt-/Logik-Coverage gehoert in
-schnelle **Unit-/Integrations-Tests** (vitest, ~1–5 ms), e2e bleibt eine
-**duenne Smoke-Schicht** fuer den UI-Pfad (Browser-Render, Klick-Flows). e2e
-NICHT „massiv erweitern", um Logik zu pruefen — das ist langsam (2–5 s/Test) und
-flaky-anfaellig. Pro Feature wenige repraesentative e2e-Smokes; die
-Verhaltens-Breite deckt die Unit-Ebene ab (z.B. tabellengetrieben ueber alle
-Varianten). Detail-Plan: `docs/plans/archive/2026-06-08-event-card-test-expansion.md`.
+**Rule.** Take the test pyramid seriously: effect/logic coverage belongs in
+fast **unit/integration tests** (vitest, ~1–5 ms); e2e remains a
+**thin smoke layer** for the UI path (browser render, click flows). Do
+NOT "massively expand" e2e to check logic — that is slow (2–5 s/test) and
+flake-prone. Per feature, a few representative e2e smokes; the
+behavioral breadth is covered by the unit level (e.g. table-driven across all
+variants). Detail plan: `docs/plans/archive/2026-06-08-event-card-test-expansion.md`.
 
-**Konventionen.**
-- Selektoren ausschliesslich ueber `data-testid` (NICHT Text — i18n bricht
-  sonst). Fehlt eine Test-Anker-id, im Komponenten-Code ergaenzen (+ ggf.
-  `data-<state>` fuer Zustaende, z.B. `data-filled`).
-- Canvas-Drag via `page.mouse.down()/move()/up()`, nicht `dragTo()`.
-- Wartestrategie explizit (`waitForSelector`/`waitForFunction`/`toBeVisible`),
-  keine fixen `waitForTimeout`-Werte (Flake-Quelle).
+**Conventions.**
+- Selectors exclusively via `data-testid` (NOT text — i18n breaks
+  otherwise). If a test anchor id is missing, add it in the component code (+ if
+  needed `data-<state>` for states, e.g. `data-filled`).
+- Canvas drag via `page.mouse.down()/move()/up()`, not `dragTo()`.
+- Waiting strategy explicit (`waitForSelector`/`waitForFunction`/`toBeVisible`),
+  no fixed `waitForTimeout` values (flake source).
 
-**Chimera-spezifische State-Mechaniken** (teuer erlernt, msg 11676):
-- **Der laufende Run wird waehrend des Spielens NICHT debounce-gespeichert**
-  (Tick-Starvation: der 500 ms-Auto-Save-Debounce wird durch die State-Updates
-  staendig zurueckgesetzt). Persistiert wird erst ueber den `pagehide`-Handler
-  beim Reload/Navigieren. Wer den laufenden Run im localStorage braucht, muss
-  also erst einen Reload ausloesen.
-- **Save-Resume fuehrt NICHT automatisch in die Console.** Nach einem Reload mit
-  Run-Save landet man auf dem StartScreen; `start-continue` klicken, um in die
-  laufende Console zurueckzukehren. Die Console regulaer erreichen:
-  `clickThroughRunStart` (Start-Flow) — `tests/e2e/helpers.ts`.
-- **State-Injektion** (z.B. ein Item in einen Run-Slot setzen): Save lesen →
-  modifizieren → ueber `context.addInitScript(...)` setzen → `reload`. Ein
-  direktes `localStorage.setItem` VOR dem Reload wird vom `pagehide`-Save der
-  alten Seite ueberschrieben; `addInitScript` laeuft auf der naechsten
-  Navigation NACH dem pagehide-Save und vor den App-Skripten und gewinnt damit.
+**Chimera-specific state mechanics** (learned the hard way, msg 11676):
+- **The running run is NOT debounce-saved while playing**
+  (tick starvation: the 500 ms auto-save debounce is constantly reset
+  by the state updates). Persistence only happens via the `pagehide` handler
+  on reload/navigation. Whoever needs the running run in localStorage must
+  therefore trigger a reload first.
+- **Save-resume does NOT lead automatically into the console.** After a reload
+  with a run save you land on the StartScreen; click `start-continue` to return
+  to the running console. Reaching the console the regular way:
+  `clickThroughRunStart` (start flow) — `tests/e2e/helpers.ts`.
+- **State injection** (e.g. placing an item into a run slot): read the save →
+  modify → set via `context.addInitScript(...)` → `reload`. A
+  direct `localStorage.setItem` BEFORE the reload is overwritten by the
+  `pagehide` save of the old page; `addInitScript` runs on the next
+  navigation AFTER the pagehide save and before the app scripts, and thus wins.
 
-**Warum.** e2e ist die oberste, teuerste Pyramidenstufe — sie verifiziert „der
-echte Browser rendert + reagiert", nicht die Effekt-Mathematik. Die
-Save/Resume/Injektions-Mechaniken sind nicht offensichtlich und kosten ohne
-Notiz jedes Mal eine Debug-Runde; deshalb fest dokumentiert. Skill:
-[docs/skills/50-e2e-tests-erstellen.md](skills/50-e2e-tests-erstellen.md).
+**Why.** e2e is the topmost, most expensive pyramid level — it verifies "the
+real browser renders + reacts", not the effect math. The
+save/resume/injection mechanics are not obvious and cost a debug round
+every time without a note; hence firmly documented. Skill:
+`docs/skills/50-e2e-tests-erstellen.md` (Chimera only).
 
-#### 4.6a jsdom-Render-Tests: `cleanup()` ist Pflicht + Queries scopen (isolate:false, seit 2026-07-16)
+#### 4.6a jsdom render tests: `cleanup()` is mandatory + scope queries (isolate:false, since 2026-07-16)
 
-**Regel.** Jede jsdom-Test-Datei (`// @vitest-environment jsdom` + `render(...)`
-aus `@testing-library/react`) MUSS `afterEach(() => cleanup())` rufen — es gibt
-KEIN Auto-cleanup (die vitest-Config hat kein `globals: true`, also registriert
-Testing-Library seinen `afterEach`-Hook nicht selbst). Zusaetzlich: DOM-Queries
-im Test bevorzugt auf den eigenen Render-Container scopen
-(`within(container).getByText(...)` statt `screen.getByText(...)`); nur
-Portal-Inhalt (`createPortal(..., document.body)`, z.B. die `InfoTip`-Blase)
-bleibt bei `screen`.
+**Rule.** Every jsdom test file (`// @vitest-environment jsdom` + `render(...)`
+from `@testing-library/react`) MUST call `afterEach(() => cleanup())` — there is
+NO auto-cleanup (the vitest config has no `globals: true`, so Testing
+Library does not register its `afterEach` hook itself). Additionally: prefer
+scoping DOM queries in the test to your own render container
+(`within(container).getByText(...)` instead of `screen.getByText(...)`); only
+portal content (`createPortal(..., document.body)`, e.g. the `InfoTip`
+bubble) stays with `screen`.
 
-**Warum.** Die Suite laeuft mit `pool: "threads"` + **`isolate: false`**
-(vite.config.ts, Boss-Registry-Scan-Kosten) → alle Dateien EINES Workers teilen
-sich `document` und den React-Modul-State. Ohne `cleanup()` bleibt der gerenderte
-Baum im geteilten `document.body` stehen und **leakt in die naechste Datei
-desselben Workers**. Zwei Schadbilder, beide **lokal gruen / in CI rot** (haengt
-an Worker-/File-Reihenfolge):
-- **`Found multiple elements`** — ein Leaker rendert denselben Text (z.B.
-  `taskHud.sectorGoal`), das Opfer findet ihn per `screen.getByText` doppelt.
-  Genau so 2026-07-16 (`taskHudNameFallback` → `taskHudTooltips`, commit
-  8f6427ab): Fix an zwei Fronten — `cleanup()` im Leaker + `within(container)`
-  im Opfer.
-- **`NotFoundError: The node to be removed is not a child of this node`** — ein
-  spaeterer Portal-Test crasht beim Unmount am haengenden React-Root (commit
-  e4833605). `document.body.innerHTML = ""` allein reicht NICHT — erst
-  `cleanup()` (React-Unmount), dann optional den Rest-DOM wischen.
+**Why.** The suite runs with `pool: "threads"` + **`isolate: false`**
+(vite.config.ts, boss-registry scan cost) → all files of ONE worker share
+`document` and the React module state. Without `cleanup()` the rendered
+tree remains in the shared `document.body` and **leaks into the next file
+of the same worker**. Two failure modes, both **green locally / red in CI**
+(depends on worker/file order):
+- **`Found multiple elements`** — a leaker renders the same text (e.g.
+  `taskHud.sectorGoal`), the victim finds it twice via `screen.getByText`.
+  Exactly this on 2026-07-16 (`taskHudNameFallback` → `taskHudTooltips`, commit
+  8f6427ab): fix on two fronts — `cleanup()` in the leaker + `within(container)`
+  in the victim.
+- **`NotFoundError: The node to be removed is not a child of this node`** — a
+  later portal test crashes on unmount on the dangling React root (commit
+  e4833605). `document.body.innerHTML = ""` alone is NOT enough — first
+  `cleanup()` (React unmount), then optionally wipe the remaining DOM.
 
-Reproduzieren:
+Reproduce:
 `npx vitest run --no-isolate --no-file-parallelism <leaker>.test.tsx <victim>.test.tsx`
-erzwingt einen Worker + Reihenfolge; der ehrliche Gegencheck bleibt die volle
-`npm test`, weil vitest das `document` je nach File-Scheduling doch mal
-zuruecksetzt und der Leak dann nur unter der echten Worker-Packung zuschlaegt.
-Siehe `src/__tests__/CLAUDE.md` (Hook-Tests) + Memory
+forces one worker + order; the honest counter-check remains the full
+`npm test`, because vitest does occasionally reset the `document` depending on
+file scheduling and the leak then only strikes under the real worker
+packing. See `src/__tests__/CLAUDE.md` (hook tests) + memory
 `project_chimera_jsdom_cleanup_isolate_false`.
 
-#### 4.7 Content-/Sim-Invarianten-Tests fuer authored Content (seit 2026-06-13)
+#### 4.7 Content/sim invariant tests for authored content (since 2026-06-13)
 
-**Regel.** Fuer authored Content (Boss-/Run-JSONs) reichen Unit-Tests mit
-SYNTHETISCHEN Inputs nicht — ein Boss-JSON kann sauber parsen und sich trotzdem
-falsch VERHALTEN. Zwei Suiten-Typen dazu:
-- **Sim-Invarianten** (`bossContentSimInvariants.test.ts`): laedt JEDEN echten
-  Boss, tickt ihn (z.B. 90 s Kaltstart) und prueft physikalische Invarianten
-  (kein Self-Cook, `firesAtPlayer`-Emitter feuert + ueberlebt, Schilde laden,
-  Generatoren produzieren).
-- **Parse-Vollstaendigkeit** (`bossEventsParse.test.ts`): prueft, dass JEDES Event
-  JEDES Bosses parst (kein still-rejected Event). Der Parser verwirft ungueltige
-  Payloads nur per `console.warn` + ueberspringt sie — die Sim/Content-Suite merkt
-  das sonst nicht (Item/Boss tickt trotzdem).
+**Rule.** For authored content (boss/run JSONs), unit tests with
+SYNTHETIC inputs are not enough — a boss JSON can parse cleanly and still
+BEHAVE wrongly. Two suite types for this:
+- **Sim invariants** (`bossContentSimInvariants.test.ts`): loads EVERY real
+  boss, ticks it (e.g. 90 s cold start) and checks physical invariants
+  (no self-cook, `firesAtPlayer` emitter fires + survives, shields charge,
+  generators produce).
+- **Parse completeness** (`bossEventsParse.test.ts`): checks that EVERY event
+  of EVERY boss parses (no silently rejected event). The parser discards invalid
+  payloads only via `console.warn` + skips them — the sim/content suite otherwise
+  does not notice (the item/boss still ticks).
 
-**Warum.** Beide fingen reale Content-Bugs, die Synthetik-Unit-Tests durchliessen:
-fireTimestamps-`gameTimeMs`-Hitze, gestrippte `xp` (Level-0-Schild laedt nicht),
-r2-cold `energyEater` `zones`→`zone`. User-Frage msg 12100 („welche Test-Klasse
-haben wir vergessen?") → genau diese: echtes authored-Verhalten gegen Invarianten,
-nicht nur Funktionen mit konstruierten Inputs. Beim Hinzufuegen neuer Content-Typen
-solche Lade-+Tick-Guards mitziehen.
+**Why.** Both caught real content bugs that synthetic unit tests let through:
+fireTimestamps `gameTimeMs` heat, stripped `xp` (level-0 shield does not charge),
+r2-cold `energyEater` `zones`→`zone`. User question msg 12100 ("which test class
+did we forget?") → exactly this: real authored behavior against invariants,
+not just functions with constructed inputs. When adding new content types,
+bring such load-and-tick guards along.
 
-#### 4.8 Erhaltungs-/Physik-Invarianten statt Wert-Asserts (Solver/Sim-Code)
+#### 4.8 Conservation/physics invariants instead of value asserts (solver/sim code)
 
-**Regel.** Für Code mit einer **physikalischen/strukturellen Invariante**
-(Energie, Hitze, Druck, Flüsse, Aggregation) teste die **Invariante** über
-viele/kombinierte Inputs — nicht nur konkrete Output-Werte einzelner Fälle.
-`expect(cableFlow).toBe(15)` schreibt bei einem Bug genau den falschen Wert als
-„korrekt" fest; `expect(export).toBeLessThanOrEqual(netProduction)` fällt über
-JEDE Topologie, die die Erhaltung verletzt.
+**Rule.** For code with a **physical/structural invariant**
+(energy, heat, pressure, flows, aggregation), test the **invariant** across
+many/combined inputs — not just concrete output values of individual cases.
+`expect(cableFlow).toBe(15)` enshrines exactly the wrong value as
+"correct" when there is a bug; `expect(export).toBeLessThanOrEqual(netProduction)` trips over
+EVERY topology that violates the conservation.
 
-**Warum.** Wert-Tests entstehen oft charakterisierend (aktuelles Verhalten
-beobachten + festschreiben). Leakt die Implementierung, schützt der Test den Bug.
-Genau das passierte 2026-06-24: ein `generator(sensor)` exportierte BRUTTO statt
-NETTO (lieferte 20 aus 15 Produktion). ~5200 Tests fingen es nicht — sie asserten
-Werte, und das Leck sah funktional gesund aus (Schild lud, Sensor lief), selbst
-die Boss-Sim-Invarianten blieben grün, WEIL der Bug „funktionierendes" Verhalten
-erzeugte. Erst eine Anzeige, die Produktion vs. Verbrauch SUMMIERTE, machte es
-sichtbar. Der Regressions-Test ist eine Invariante („Quelle exportiert ≤
-effProduction − effDemand", 38 Topologien) — gegengeprüft rot auf Buggy-Code,
-grün mit Fix.
+**Why.** Value tests often arise characterizing (observe current behavior
++ pin it down). If the implementation leaks, the test protects the bug.
+Exactly that happened 2026-06-24: a `generator(sensor)` exported GROSS instead of
+NET (delivered 20 out of 15 production). ~5200 tests did not catch it — they assert
+values, and the leak looked functionally healthy (shield charged, sensor ran); even
+the boss-sim invariants stayed green, BECAUSE the bug produced "working"
+behavior. Only a display that SUMMED production vs. consumption made it
+visible. The regression test is an invariant ("source exports ≤
+effProduction − effDemand", 38 topologies) — cross-checked red on buggy code,
+green with the fix.
 
-**Spiegelfall — dieselbe Invariante, umgekehrt (2026-07-12).** Nicht „zu viel
-Fluss", sondern legitimer Fluss STUMM geblockt: ein siphon-getroffener Nicht-Source-
-Knoten (Ventilator) wurde Quelle, aber `applyStorageBottlenecks` gab jedem Nicht-
-Source-Knoten Export-Kapazität hart `0` → der Überschuss wurde als „aus dem Nichts"
-gewertet, der Abfluss genullt; ein gecableter Kondensator lud nie. Wieder fingen es
-~6800 Tests nicht: der neue Beitrag war im Reader UND in `buildHydraulicNode`
-korrekt, aber die dritte Solver-Stufe kannte ihn nicht — kein Test prüfte end-to-end,
-dass ein Produzenten-Überschuss einen gecableten Speicher ERREICHT. Lehre: die
-Erhaltung gilt beidseitig (`geliefert ≤ produziert` UND „Überschuss kommt an"), und
-ein neuer Beitrag muss durch ALLE Stufen (Reader → Node-Build → Bottleneck → Charge)
-gefädelt + per System-Level-Test abgesichert werden.
+**Mirror case — the same invariant, reversed (2026-07-12).** Not "too much
+flow", but legitimate flow SILENTLY blocked: a siphon-hit non-source
+node (ventilator) became a source, but `applyStorageBottlenecks` gave every
+non-source node a hard export capacity of `0` → the surplus was counted as
+"out of nowhere", the outflow zeroed; a cabled capacitor never charged. Again
+~6800 tests did not catch it: the new contribution was correct in the reader AND
+in `buildHydraulicNode`, but the third solver stage did not know about it — no test
+checked end-to-end that a producer surplus REACHES a cabled storage.
+Lesson: the conservation holds in both directions (`delivered ≤ produced` AND
+"surplus arrives"), and a new contribution must be threaded through ALL stages
+(reader → node build → bottleneck → charge) + secured by a system-level test.
 
 **How.**
-- Erhaltung explizit formulieren: Σ Output ≤ Σ Input (+ Speicher-Entladung);
-  beidseitig — verbundener Überschuss muss den Speicher/Verbraucher auch erreichen.
-- Ein neuer Beitrag muss durch ALLE Pipeline-Stufen ankommen (Reader → Node-Build →
-  Bottleneck → Charge) — System-Level-Test statt nur Per-Funktion.
-- Property-/tabellengetrieben über Kombinationen (Bauteile × Verschaltung ×
-  Anfangszustände), Invariante in JEDER prüfen — über mehrere Ticks.
-- Am richtigen Punkt messen: echte Fluss-/Ladungs-Größe (Kabel-Flow, Ladungs-
-  Delta), NICHT eine Display-Aggregat-Kennzahl, die Pool-Bezug + Selbst-
-  Entladung mischt (`totalActualConsumption` zählt bei vollem ChargeSink den
-  ganzen internalDrain).
-- **Wächter verifizieren:** Fix kurz zurücknehmen → Test MUSS rot werden.
+- Formulate the conservation explicitly: Σ output ≤ Σ input (+ storage
+  discharge); in both directions — a connected surplus must also reach the
+  storage/consumer.
+- A new contribution must arrive through ALL pipeline stages (reader → node
+  build → bottleneck → charge) — system-level test instead of per-function only.
+- Property-/table-driven across combinations (components × wiring ×
+  initial states), checking the invariant in EVERY one — across several ticks.
+- Measure at the right point: the real flow/charge quantity (cable flow, charge
+  delta), NOT a display aggregate metric that mixes pool draw + self-discharge
+  (`totalActualConsumption` counts the entire internalDrain when the
+  ChargeSink is full).
+- **Verify the guard:** briefly revert the fix → the test MUST go red.
 
-**Verwandtes Prinzip (auch außerhalb Tests).** Verifiziere die INVARIANTE, nicht
-das Oberflächen-Muster. Content-Migration (46 JSONs): erster Regex-Pass auf
-`"zone":"torso"` traf auch Item-`location`s + Events; Catch via Struktur-Check
-(nur Objekte mit `maxHp` = echte Zonen-Defs) → revert → Anker auf `maxHp` +
-Count-Verifikation. Skill:
-[docs/skills/52-erhaltungs-invarianten-testen.md](skills/52-erhaltungs-invarianten-testen.md).
+**Related principle (also outside tests).** Verify the INVARIANT, not
+the surface pattern. Content migration (46 JSONs): the first regex pass on
+`"zone":"torso"` also hit item `location`s + events; caught via structure check
+(only objects with `maxHp` = real zone defs) → revert → anchor on `maxHp` +
+count verification. Skill:
+[docs/skills/52-test-conservation-invariants.md](skills/52-test-conservation-invariants.md).
 
-#### 4.9 Diagnose/Anzeige nutzt die echten berechneten Werte (kein Re-Compute)
+#### 4.9 Diagnostics/display use the real computed values (no re-compute)
 
-**Regel.** Eine Anzeige, die eine interne Berechnung „aufschlüsselt" (Energie-
-Bilanz, Resolve-Trace), darf die Werte nicht NEU rechnen — sie emittiert die
-echten Solver-Zwischenwerte am Berechnungs-Punkt (gegated/optional, damit
-Headless/Sim allocation-frei bleibt). Sonst driftet die Anzeige vom tatsächlichen
-Verhalten ab und „erklärt" etwas Falsches.
+**Rule.** A display that "breaks down" an internal computation (energy
+balance, resolve trace) must not compute the values ANEW — it emits the
+real solver intermediate values at the point of computation (gated/optional so
+that headless/sim stays allocation-free). Otherwise the display drifts from the
+actual behavior and "explains" something wrong.
 
-**Warum.** Ein paralleler Re-Compute ist ein zweiter Wahrheits-Strang, der bei
-jeder Solver-Änderung still divergiert. Die Energie-Breakdown-Anzeige (msg 12895)
-reicht `breakdownOut` IN den Solver und liest dessen echte Werte zurück — dadurch
-machte sie den `generator(sensor)`-Leak überhaupt erst sichtbar, statt ihn mit
-einer geschönten Parallel-Rechnung zu kaschieren.
+**Why.** A parallel re-compute is a second strand of truth that silently
+diverges with every solver change. The energy breakdown display (msg 12895)
+passes `breakdownOut` INTO the solver and reads back its real values — that is
+what made the `generator(sensor)` leak visible in the first place, instead of
+papering over it with a beautified parallel computation.
 
-#### 4.10 Sim↔Game-Divergenz: das Spiel ist die Referenz
+#### 4.10 Sim↔game divergence: the game is the reference
 
-**Regel.** Zeigen Headless-Sim/Bot und das echte Spiel fuer dieselbe Mechanik
-unterschiedliches Verhalten, gilt das SPIEL als korrekt (besser getestet) —
-die Sim wird angeglichen, nie umgekehrt. Erste Verdachts-Quelle ist Logik,
-die nur im React-Hook lebt und nie in die geteilte Engine kam (bewiesene
-Faelle: zoneEnergyProduction, Satelliten-Treffer, visibilityTier). Ein
-RL-Retrain fixt Platzierungs-Sektoren nicht (`planSector` = Heuristik).
+**Rule.** If headless sim/bot and the real game show different behavior for
+the same mechanic, the GAME counts as correct (better tested) —
+the sim is aligned, never the other way around. The first suspect is logic
+that lives only in the React hook and never made it into the shared engine
+(proven cases: zoneEnergyProduction, satellite hits, visibilityTier). An
+RL retrain does not fix placement sectors (`planSector` = heuristic).
 Details in
-[docs/skills/63-sim-game-divergenz-spiel-ist-referenz.md](skills/63-sim-game-divergenz-spiel-ist-referenz.md).
+`docs/skills/63-sim-game-divergenz-spiel-ist-referenz.md` (Chimera only).
 
-#### 4.x Ref-Flags, die setState-Updater steuern, gehören in die Queue
+#### 4.x Ref flags that steer setState updaters belong in the queue
 
-**Regel.** Wenn ein Ref-Flag das Verhalten von setState-Updatern steuert
-(z. B. „merge die nächsten Pushes"), müssen die Flag-Flips selbst als
-No-op-Updater durch DIESELBE setState-Queue laufen — nie synchron neben ihr.
+**Rule.** If a ref flag steers the behavior of setState updaters
+(e.g. "merge the next pushes"), the flag flips themselves must run as
+no-op updaters through the SAME setState queue — never synchronously beside it.
 
-**Warum.** React batcht: Updater laufen später als der synchrone Code, der
-sie enqueued hat. Ein synchrones `end()` im `finally` eines Drop-Handlers
-liefe VOR dem noch gequeueten Drop-Push — die Geste zerfiele wieder in
-mehrere Undo-Einträge. Beispiel: `useGameHistory.beginHistoryGesture/
-endHistoryGesture/resetHistory` (2026-07-06, msg 14271). Zwilling der
-bestehenden Regel „keine Ref-Mutationen in Updatern ohne Idempotenz-Guard"
-(e2e-Undo-Flake): dort ging es um Mehrfach-Invokes, hier um Reihenfolge.
+**Why.** React batches: updaters run later than the synchronous code that
+enqueued them. A synchronous `end()` in the `finally` of a drop handler
+would run BEFORE the still-queued drop push — the gesture would again fall apart
+into several undo entries. Example: `useGameHistory.beginHistoryGesture/
+endHistoryGesture/resetHistory` (2026-07-06, msg 14271). Twin of the
+existing rule "no ref mutations in updaters without an idempotency guard"
+(e2e undo flake): that one was about multiple invokes, this one is about order.
 
-#### 4.y Effekt-Cleanups fangen ihre Objekte im Closure ein
+#### 4.y Effect cleanups capture their objects in the closure
 
-**Regel.** Ein useEffect-Cleanup meldet sich am SELBEN Objekt ab, an dem es
-sich angemeldet hat — Objekt beim Mount in eine Closure-Variable fassen,
-nicht im Cleanup erneut durchs globale `window`/Singleton greifen.
+**Rule.** A useEffect cleanup unsubscribes from the SAME object it
+subscribed to — capture the object in a closure variable at mount time,
+do not reach through the global `window`/singleton again in the cleanup.
 
-**Warum.** Test-Harnesse (und Hot-Reload) können das globale Objekt zwischen
-Mount und Unmount austauschen: auf CI lief der RTL-Auto-Unmount NACH
-`vi.unstubAllGlobals()` — `window.speechSynthesis` war weg, der Cleanup warf
-(lokal grün, CI rot, weil die afterEach-Reihenfolge mit der Datei-Verteilung
-auf Worker variiert; 2026-07-06, msg 14250).
+**Why.** Test harnesses (and hot reload) can swap the global object between
+mount and unmount: on CI the RTL auto-unmount ran AFTER
+`vi.unstubAllGlobals()` — `window.speechSynthesis` was gone, the cleanup threw
+(green locally, red in CI, because the afterEach order varies with the file
+distribution across workers; 2026-07-06, msg 14250).
 
-#### 4.v Reward-/Zaehler-Emission an denselben Guard koppeln wie die State-Mutation
+#### 4.v Couple reward/counter emission to the same guard as the state mutation
 
-Ein unbedingtes `reward += X` (oder Stat-Zaehler) direkt NACH einem idempotenten
-State-Transformer ist eine Divergenz-Falle: re-entert der Loop den Transformer
-(weil ein Sub-State wie `pendingLoot` das Advance blockiert), zaehlt der Reward
-mit, der State-Counter nicht (Multi-Pick-Boss-Bug 2026-07-08, engine.ts
-if→while). Emission immer an denselben Guard binden wie die Mutation.
+An unconditional `reward += X` (or stat counter) directly AFTER an idempotent
+state transformer is a divergence trap: if the loop re-enters the transformer
+(because a sub-state like `pendingLoot` blocks the advance), the reward
+counts, the state counter does not (multi-pick boss bug 2026-07-08, engine.ts
+if→while). Always bind the emission to the same guard as the mutation.
 
-#### 4.w Signatur-/Parse-teure Persistenz-Reads NIE ungecacht im Hot-Path
+#### 4.w Signature-/parse-heavy persistence reads NEVER uncached in the hot path
 
-`loadProfiles`/`chimeraSettings`-Reads laufen durch HMAC-SHA256 + Bounded-Parse
-ueber den ganzen Blob. Ungecacht im Frame-Pfad (auch versteckt: `getStaticTranslation`
-→ Settings → Profile) kostete das 75 % CPU bei 8-12 fps (Bug 2026-06-29, Fix:
-In-Memory-Cache in profileStorage). Regel: solche Reads cachen; bei Perf-Jagd
-zuerst Chrome-Profiler Bottom-Up (self-time) statt Collection-Groessen raten —
-„langsam von Anfang an" + flache Collections = Recompute-Hotspot, kein Leak.
+`loadProfiles`/`chimeraSettings` reads go through HMAC-SHA256 + bounded parse
+over the whole blob. Uncached in the frame path (even hidden: `getStaticTranslation`
+→ settings → profile) this cost 75 % CPU at 8-12 fps (bug 2026-06-29, fix:
+in-memory cache in profileStorage). Rule: cache such reads; when hunting perf,
+first Chrome profiler bottom-up (self-time) instead of guessing collection sizes —
+"slow from the start" + flat collections = recompute hotspot, not a leak.
 
-#### 4.z Analyse-Werkzeuge als env-gated Vitest-Dateien
+#### 4.z Analysis tools as env-gated vitest files
 
-**Regel.** Balance-/Statistik-Werkzeuge, die die echte Engine-Pipeline
-brauchen (Loader-Bootstrap!), als `*.analysis.test.ts` mit
-`describe.runIf(process.env.X === "1")` anlegen — laufen nie in der
-normalen Suite, starten aber mit einem Env-Flag ohne eigene Infrastruktur.
+**Rule.** Balance/statistics tools that need the real engine pipeline
+(loader bootstrap!) are created as `*.analysis.test.ts` with
+`describe.runIf(process.env.X === "1")` — they never run in the
+normal suite, but start with an env flag without infrastructure of their own.
 
-**Warum.** Standalone-Skripte (tsx) scheitern am CJS-`require` des
-staticJsonLoader; die Vitest-Umgebung bringt den kompletten Bootstrap
-gratis mit. Beispiel: Loot-Odds-Monte-Carlo (`LOOT_ODDS=1`, 2026-07-06) —
-Muster analog zur Slow-Suite.
+**Why.** Standalone scripts (tsx) fail on the CJS `require` of the
+staticJsonLoader; the vitest environment brings the complete bootstrap
+for free. Example: loot-odds Monte Carlo (`LOOT_ODDS=1`, 2026-07-06) —
+pattern analogous to the slow suite.
 
 ---
 
-### 5. Dokumentation
+### 5. Documentation
 
-#### 5.1 Doku im gleichen Commit wie die Code-Aenderung
+#### 5.1 Docs in the same commit as the code change
 
-**Regel.** Wenn ein Feature / ein Refactor / ein Fix die dokumentierte
-Realitaet aendert, updated die Doku im selben Commit (oder in einem
-direkt folgenden).
+**Rule.** If a feature / a refactor / a fix changes the documented
+reality, update the docs in the same commit (or in one
+immediately following).
 
-**Warum.** Asynchrone Doku veraltert nie von selbst — sie veraltert,
-weil niemand sie ihren Weg hinterher pflegt. Im selben Commit zu bleiben
-zwingt den Autor, die Doku zu sehen.
+**Why.** Asynchronous docs never go stale by themselves — they go stale
+because nobody maintains them along the way. Staying in the same commit
+forces the author to look at the docs.
 
-#### 5.2 Ein Topic pro Datei, klare Verlinkung
+#### 5.2 One topic per file, clear linking
 
-**Regel.** `docs/`-Ordner nach Themen gegliedert (Architektur,
-Testing, Deploy, pro grosser Subsystem eine Datei). `CLAUDE.md` oder
-`README.md` als Index mit Kurzbeschreibung + Link.
+**Rule.** The `docs/` folder is organized by topics (architecture,
+testing, deploy, one file per large subsystem). `CLAUDE.md` or
+`README.md` as an index with a short description + link.
 
-**Warum.** Eine 3000-Zeilen-Monster-Doku liest niemand. Kleine,
-topic-fokussierte Dateien werden gelesen und gepflegt.
+**Why.** Nobody reads a 3000-line monster doc. Small,
+topic-focused files get read and maintained.
 
-#### 5.3 Dokumentiere das „Warum" hinter Design-Entscheidungen
+#### 5.3 Document the "why" behind design decisions
 
-**Regel.** Wenn eine Architektur-Entscheidung nicht aus dem Code
-ablesbar ist, gehoert sie in die Doku: „Warum pure Reducer statt OOP?
-Warum SQLite statt Postgres? Warum diese Zustandsmaschine und nicht
-eine andere?".
+**Rule.** If an architecture decision cannot be read from the code,
+it belongs in the docs: "Why pure reducers instead of OOP?
+Why SQLite instead of Postgres? Why this state machine and not
+another one?".
 
-**Warum.** Sechs Monate spaeter weiss niemand mehr, warum X so ist.
-Ohne Doku entsteht die Versuchung, X wegzuoptimieren und dieselben
-alten Fallstricke neu zu erleben.
+**Why.** Six months later, nobody remembers why X is the way it is.
+Without docs, the temptation arises to optimize X away and relive the
+same old pitfalls.
 
-#### 5.4 Keine Duplikate von Code-/Git-Informationen
+#### 5.4 No duplicates of code/git information
 
-**Regel.** In Doku niemals Inhalte wiederholen, die sich im Code oder
-in `git log` finden lassen. API-Signaturen, Datei-Pfade, Commit-
-Historie — das lebt in den originalen Quellen.
+**Rule.** Never repeat content in docs that can be found in the code or
+in `git log`. API signatures, file paths, commit
+history — that lives in the original sources.
 
-**Warum.** Duplizierte Infos driften. Die Kopie veraltet, die Leser
-vertrauen der falschen.
+**Why.** Duplicated information drifts. The copy goes stale, readers
+trust the wrong one.
 
-#### 5.5 Doku-Konventionen (verbindlich seit 2026-05-05)
+#### 5.5 Doc conventions (binding since 2026-05-05)
 
-Beim naechsten Touch jeder Doku-Datei drive-by anwenden:
+Apply drive-by on the next touch of each doc file:
 
-**Sprache:** Deutsch. User-Base ist deutschsprachig, neue Docs sind
-durchgaengig deutsch. Bestehende mischsprachige Files (heat-system,
-energy-system, simulation, bot-training, game-events, features)
-werden beim naechsten substantiellen Edit eingedeutscht — kein eigener
-Pass noetig.
+**Language:** English (repo-wide rule for this project — the Chimera
+original mandated German here). Everything in this repository is English:
+docs, code, comments, commit messages. Files that slip in another language
+are translated on the next substantial edit.
 
-**H1-Stil:** `# Chimera — <Topic>`. Bei Subsystem-Doku auch `# <Topic>`
-(ohne "Chimera —") akzeptiert.
+**H1 style:** `# <Topic>` for subsystem docs.
 
-**Test-Coverage-Sektion:** wenn vorhanden, immer `## Test-Coverage`
-(nicht "Tests" oder "Test-Abdeckung"). Subsystem-Docs ohne Test-Sektion
-bekommen mindestens einen Pointer am Ende ("Tests in
+**Test-coverage section:** if present, always `## Test-Coverage`
+(not "Tests" or "Test-Abdeckung"). Subsystem docs without a test section
+get at least a pointer at the end ("Tests in
 `src/__tests__/<file>.test.ts`").
 
 **Linking:**
-- Interne Refs auf Markdown-Files: relative `.md`-Pfade mit Anker:
-  `[runs.md → Loot-Pools](runs.md#loot-pools-boss-runjson)`.
-- Plan-Refs als Markdown-Link, nicht als Code-Span: `[plan-name.md](plans/...)`
-  statt `` `plans/...` ``.
-- Aktive Plaene: `docs/plans/...md`. Archivierte: `docs/plans/archive/...md`.
-- Cross-Refs immer mit-umbiegen, wenn ein Plan archiviert wird.
+- Internal refs to Markdown files: relative `.md` paths with anchor:
+  `` `runs.md → Loot-Pools` `` (Chimera only).
+- Plan refs as Markdown links, not as code spans: `[plan-name.md](plans/...)`
+  instead of `` `plans/...` ``.
+- Active plans: `docs/plans/...md`. Archived: `docs/plans/archive/...md`.
+- Always redirect cross-refs when a plan is archived.
 
-**Datei-Granularitaet:** Subsystem-Docs sollten 200-1500 Zeilen halten.
-Unter 100 Zeilen: pruefen ob Sektion in einer groesseren Datei besser
-aufgehoben waere. Ueber 2000 Zeilen: pruefen ob ein eigenstaendiges
-Sub-Topic herausgeloest werden kann (siehe als Beispiel: `tasks.md`
-NPC-Subsystem → `npcs.md`).
-
----
-
-### 6. Commits und Git
-
-#### 6.1 Conventional-Commit-Prefix
-
-**Regel.** Subject-Line beginnt mit `feat|fix|refactor|docs|test|chore|
-perf` gefolgt von optionalem Scope und Doppelpunkt. Konsistent im
-ganzen Repo.
-
-**Warum.** Macht Changelogs, Filter und bisect trivial. Tools wie
-semantic-release hebeln darauf.
-
-**Beispiel.**
-```
-feat(tasks): Section-SuccessCondition ersetzt per-Task holdMs
-fix(runs/pruefstand): kein Start-Clause mehr bei t=0 erfuellt
-refactor(hud): Schaltplan-Darstellung fuer Sektor-Condition
-docs: dev-analysis.md — Vorgehen fuer Commit-Statistik
-```
-
-#### 6.2 Commit-Nachricht erklaert Warum + Was
-
-**Regel.** Subject-Line (kurz, praezise). Leerzeile. Body mit Kontext:
-welches Problem, welcher Loesungsansatz, welche Konsequenzen. Body ist
-optional bei trivialen Commits, aber empfohlen ab 10+ Zeilen Diff.
-
-**Warum.** In 6 Monaten ist „fix bug" nichts wert. „fix: Sticky-
-Fulfilled hat Debounce gecancelt → Sektor endete nie" gibt dir das
-gesamte Debugging-Ergebnis zurueck.
-
-#### 6.3 Ein logischer Schritt = ein Commit
-
-**Regel.** Ein Commit sollte genau eine gedankliche Aenderung enthalten.
-Zwei unabhaengige Fixes = zwei Commits, auch wenn sie im selben Kontext
-aufgefallen sind.
-
-**Warum.** Revert-Granularitaet (siehe 2.2). Einfacher Code-Review.
-Klarerer Bisect.
-
-#### 6.3a Pro Schritt SOFORT committen, nicht am Ende sammeln
-
-**Regel.** Bei mehrschrittigen Tasks (Plan mit N Phasen, Bug-Round mit
-mehreren Fixes, Refactor in Tranchen) wird **jeder abgearbeitete
-Einzelschritt direkt committed** — nicht am Ende eines Tages oder
-Mehr-Phasen-Plans gesammelt.
-
-**Warum.** Sammel-Commits verlieren die Phasen-Granularitaet, die 6.3
-und 2.2 schuetzen wollen. Wenn drei Phasen am Stueck implementiert und
-dann zusammen committed werden, hilft Bisect/Revert nicht mehr — und der
-Push-pro-Phase aus 1.5 (Multi-Phasen-Autonomie) wird auch unmoeglich.
-
-**Verhalten.**
-1. Schritt N: implementieren → `tsc + tests + build` gruen.
-2. **Sofort** `git add <files> && git commit -m "..."`.
-3. Push (wenn nicht-trivial; siehe 1.4).
-4. Direkt mit Schritt N+1 weiter.
-
-**Anti-Pattern.** Sieben Schritte abarbeiten, am Ende einen riesigen
-`feat: damping + count + tests + doku`-Commit. Bisect findet nichts mehr.
-
-#### 6.4 Hooks nicht ueberspringen, commits nicht amenden
-
-**Regel.** Pre-commit-Hooks sind da, um Fehler zu fangen. Wenn einer
-schlaegt, den Fehler fixen — nicht `--no-verify` oder `--no-gpg-sign`.
-Nach einem Hook-Fail einen NEUEN Commit machen, nicht amenden (der
-fehlerhafte Commit existierte nie).
-
-**Warum.** Hooks sind der letzte Schutz vor Kaputtem im Repo. Umgehen
-unterwandert das Team-Vertrauen. Amend auf bereits-gepushten Commits
-zerstoert Git-Historie anderer Branches.
-
-#### 6.5 Keine `--force`-Pushes auf Shared Branches
-
-**Regel.** `git push --force` auf `main` oder andere Shared Branches
-ist verboten — auch wenn der eigene Branch „nur noch schoener" waere.
-
-**Warum.** Zerstoert Arbeit anderer. Einmal gemacht, dauerhaft
-schmerzhaft. Fuer eigene Feature-Branches OK; fuer Shared Branches nie.
-
-#### 6.6 Push traegt ALLE unpushed Commits mit
-
-**Regel.** Vor jedem Push `git log @{u}..HEAD --oneline` pruefen: die
-Push-Freigabe-Regel gilt fuer den GESAMTEN Commit-Stapel — ein „harmloser"
-Doku-Push wuerde sonst ungefragte Commits mitschieben. Details in
-[docs/skills/57-push-traegt-alles-mit.md](skills/57-push-traegt-alles-mit.md).
+**File granularity:** subsystem docs should stay at 200-1500 lines.
+Under 100 lines: check whether the section would be better placed in a
+larger file. Over 2000 lines: check whether a standalone
+sub-topic can be extracted (see as an example: `tasks.md`
+NPC subsystem → `npcs.md`).
 
 ---
 
-#### 6.7 Branch-Workflow: dev / Topic-Branches / main (seit 2026-07-18, Test-Phase)
+### 6. Commits and git
 
-**Regel** (Owner msg 15495/15497). main deployt automatisch zu ECHTEN
-Testern — gearbeitet wird nie mehr direkt auf main:
+#### 6.1 Conventional-commit prefix
 
-- **Jeder Plan startet mit einem eigenen Topic-Branch auf dev**
-  (`topic/<plan-slug>`); waehrend des Plans wird nur dorthin committet.
-  **Topic-Pushes sind frei** (kein CI-/Deploy-Effekt).
-- **Abnahme = `git merge --no-ff topic/<plan> ` nach dev** — der Plan
-  bleibt als Einheit in der Historie. **dev-Pushes nur nach Freigabe**
-  (die fruehere Test/Doku-frei-Ausnahme ist abgeloest); Kleinkram
-  ausserhalb von Plaenen wird direkt auf dev committet, Push nach Freigabe.
-- **Release = `merge dev → main` ausschliesslich auf explizite
-  Owner-Ansage** (+ `release/<n>`-Tag) — der Push deployt sofort. Der
-  dev→main-Merge MUSS **`--ff-only`** sein (Owner msg 15904: haelt
-  `BUILD_COUNT` auf main identisch zu dev — ein Merge-Commit erzeugte
-  ein Off-by-one zu Release-Notes-Namen + Tag; Details Skill 64 Regel 5).
-  Nicht verwechseln: topic→dev bleibt `--no-ff`.
-- **Lokal laeuft immer dev** (Abnahmen innerhalb eines Plans deployen
-  naturgemaess den Topic-Stand, danach wieder dev). CI (ci.yml) laeuft auf
-  main- UND dev-Pushes.
+**Rule.** The subject line starts with `feat|fix|refactor|docs|test|chore|
+perf` followed by an optional scope and a colon. Consistent across the
+whole repo.
 
-Vollstaendig: [docs/skills/64-branch-workflow-dev-topic-main.md](skills/64-branch-workflow-dev-topic-main.md).
+**Why.** Makes changelogs, filters and bisect trivial. Tools like
+semantic-release leverage it.
+
+**Example.**
+```
+feat(tasks): section SuccessCondition replaces per-task holdMs
+fix(runs/pruefstand): no start clause fulfilled at t=0 anymore
+refactor(hud): circuit-diagram rendering for sector condition
+docs: dev-analysis.md — approach for commit statistics
+```
+
+#### 6.2 The commit message explains why + what
+
+**Rule.** Subject line (short, precise). Blank line. Body with context:
+which problem, which solution approach, which consequences. The body is
+optional for trivial commits, but recommended from 10+ lines of diff.
+
+**Why.** In 6 months, "fix bug" is worth nothing. "fix: sticky
+fulfilled canceled the debounce → sector never ended" gives you the
+entire debugging result back.
+
+#### 6.3 One logical step = one commit
+
+**Rule.** A commit should contain exactly one conceptual change.
+Two independent fixes = two commits, even if they were noticed in the
+same context.
+
+**Why.** Revert granularity (see 2.2). Easier code review.
+Clearer bisect.
+
+#### 6.3a Commit IMMEDIATELY per step, do not collect at the end
+
+**Rule.** In multi-step tasks (a plan with N phases, a bug round with
+several fixes, a refactor in tranches), **every completed
+individual step is committed directly** — not collected at the end of a day
+or a multi-phase plan.
+
+**Why.** Batch commits lose the phase granularity that 6.3
+and 2.2 are meant to protect. If three phases are implemented in one go and
+then committed together, bisect/revert no longer helps — and the
+push-per-phase from 1.5 (multi-phase autonomy) also becomes impossible.
+
+**Behavior.**
+1. Step N: implement → `tsc + tests + build` green.
+2. **Immediately** `git add <files> && git commit -m "..."`.
+3. Push (if non-trivial; see 1.4).
+4. Continue directly with step N+1.
+
+**Anti-pattern.** Working through seven steps, then one gigantic
+`feat: damping + count + tests + docs` commit at the end. Bisect finds nothing anymore.
+
+#### 6.4 Do not skip hooks, do not amend commits
+
+**Rule.** Pre-commit hooks exist to catch errors. If one
+fires, fix the error — not `--no-verify` or `--no-gpg-sign`.
+After a hook fail, make a NEW commit, do not amend (the
+faulty commit never existed).
+
+**Why.** Hooks are the last protection against broken things in the repo.
+Bypassing them undermines team trust. Amending already-pushed commits
+destroys the git history of other branches.
+
+#### 6.5 No `--force` pushes to shared branches
+
+**Rule.** `git push --force` to `main` or other shared branches
+is forbidden — even if your own branch would merely be "prettier".
+
+**Why.** Destroys other people's work. Done once, painful
+forever. OK for your own feature branches; never for shared branches.
+
+#### 6.6 A push carries ALL unpushed commits along
+
+**Rule.** Before every push, check `git log @{u}..HEAD --oneline`: the
+push-approval rule applies to the ENTIRE commit stack — a "harmless"
+docs push would otherwise carry along unapproved commits. Details in
+[docs/skills/57-push-carries-the-whole-stack.md](skills/57-push-carries-the-whole-stack.md).
+
+---
+
+#### 6.7 Branch workflow: dev / topic branches / main (since 2026-07-18, test phase)
+
+**Rule** (Owner msg 15495/15497). main deploys automatically to REAL
+testers — work never happens directly on main anymore:
+
+- **Every plan starts with its own topic branch on dev**
+  (`topic/<plan-slug>`); during the plan, commits go only there.
+  **Topic pushes are free** (no CI/deploy effect).
+- **Acceptance = `git merge --no-ff topic/<plan>` into dev** — the plan
+  stays in the history as a unit. **dev pushes only after approval**
+  (the earlier test/docs-free exception is superseded); small stuff
+  outside of plans is committed directly on dev, pushed after approval.
+- **Release = `merge dev → main` exclusively on explicit
+  owner instruction** (+ `release/<n>` tag) — the push deploys immediately. The
+  dev→main merge MUST be **`--ff-only`** (Owner msg 15904: keeps
+  `BUILD_COUNT` on main identical to dev — a merge commit produced
+  an off-by-one against release-notes names + tag; details Skill 64 rule 5).
+  Do not confuse: topic→dev remains `--no-ff`.
+- **Locally, dev is always checked out** (acceptances within a plan naturally
+  deploy the topic state, afterwards dev again). CI (ci.yml) runs on
+  main AND dev pushes.
+
+In full: `docs/skills/64-branch-workflow-dev-topic-main.md` (Chimera only).
 
 ---
 
 ### 7. Deployment
 
-#### 7.1 Reproduzierbarer Build-/Deploy-Ablauf
+#### 7.1 Reproducible build/deploy procedure
 
-**Regel.** Deploy ist eine dokumentierte Kette von Schritten —
-idealerweise ein einziges Skript oder eine explizite CLAUDE.md-
-Sektion. Keine Geheim-Handgriffe, keine manuelle Reihenfolge, die man
-sich merken muss.
+**Rule.** Deploy is a documented chain of steps —
+ideally a single script or an explicit CLAUDE.md
+section. No secret handshakes, no manual sequence you have to
+memorize.
 
-**Warum.** Damit ein anderer (Mensch oder Agent) es morgen genauso
-machen kann. Jedes „das muss man wissen"-Geheimnis ist ein
-Bus-Faktor-1.
+**Why.** So that someone else (human or agent) can do it exactly the
+same way tomorrow. Every "you just have to know that" secret is a
+bus factor of 1.
 
-**Chimera-Standard:** das 5-Schritt-Commit-Gate aus §4.3, danach Build +
-Restart als `&&`-Einheit:
+**Chimera standard:** the 5-step commit gate from §4.3, then build +
+restart as an `&&` unit:
 ```
 npx tsc --noEmit && npm run lint && npm test -- --run && npm run e2e \
   && npm run build && systemctl --user restart chimera
 ```
-Build und Restart gehoeren zusammen (nur build = neuer Code im Filesystem,
-alter im Service; nur restart = Service serviert den vorherigen Stand) —
-Details in Skill [35-reproducible-deploy.md](skills/35-reproducible-deploy.md)
-+ [36-build-vor-restart.md](skills/36-build-vor-restart.md).
+Build and restart belong together (build only = new code in the filesystem,
+old code in the service; restart only = the service serves the previous state) —
+details in Skill `35-reproducible-deploy.md` (Chimera only)
++ `36-build-vor-restart.md` (Chimera only).
 
-#### 7.2 Restart sichtbar verifizieren
+#### 7.2 Verify the restart visibly
 
-**Regel.** Nach einem Restart kurz `systemctl status` oder
-`curl localhost:<port>/health` aufrufen, um sicherzugehen, dass der
-neue Prozess laeuft. Kein „ich hab restart eingegeben" ohne
-Bestaetigung.
+**Rule.** After a restart, briefly call `systemctl status` or
+`curl localhost:<port>/health` to make sure the
+new process is running. No "I typed restart" without
+confirmation.
 
-**Warum.** Build-Fehler, die Runtime-Fehler wurden, koennen nur so
-entdeckt werden bevor der Nutzer sie sieht.
+**Why.** Build errors that became runtime errors can only be
+discovered this way before the user sees them.
 
-**Bei Remote-/Static-Deploys den INHALT verifizieren, nicht nur den Status
-(seit 2026-06-30).** HTTP 200 sagt nur „etwas wird ausgeliefert", nicht „der NEUE
-Build". Nach einem GitHub-Pages-Deploy den **tatsächlich ausgelieferten Artefakt-
-Inhalt** prüfen: den neuen Build-Hash, oder genau das geänderte Stück im Bundle
-(z. B. per `curl` den content-gehashten Chunk holen + auf den erwarteten String
-greppen). Beispiele diese Woche: bestätigt, dass die Datenschutz-„15+"-Fassung live
-ist, die Klartext-E-Mail NICHT im ausgelieferten Bundle steht und der OFL-Lizenztext
-im Chunk liegt. **Lazy-Chunks** sind nicht im `index.html` referenziert → über ihren
-content-Hash direkt anfetchen (Vite hasht inhaltsbasiert → lokaler Chunk-Name passt
-oft auf den Remote-Chunk). Erst „live + korrekt" melden, wenn das geprüft ist.
+**For remote/static deploys, verify the CONTENT, not just the status
+(since 2026-06-30).** HTTP 200 only says "something is being served", not "the NEW
+build". After a GitHub Pages deploy, check the **actually delivered artifact
+content**: the new build hash, or exactly the changed piece in the bundle
+(e.g. fetch the content-hashed chunk via `curl` + grep for the expected string).
+Examples this week: confirmed that the privacy-policy "15+" version is live,
+that the plain-text e-mail is NOT in the delivered bundle and that the OFL license
+text is in the chunk. **Lazy chunks** are not referenced in `index.html` → fetch
+them directly via their content hash (Vite hashes content-based → the local chunk
+name often matches the remote chunk). Only report "live + correct" once that has
+been checked.
 
-#### 7.3 Produktions-Deploy = Release-Merge mit Ansage (revidiert 2026-07-18)
+#### 7.3 Production deploy = release merge with announcement (revised 2026-07-18)
 
-**Regel.** Das oeffentliche Deployment (GitHub Pages, echte Tester) haengt
-am main-Branch. Seit dem Branch-Workflow (§6.7) gibt es dorthin nur noch
-den **Release-Merge dev→main auf explizite Owner-Ansage**; die fruehere
-Regel „Produktiv-Code-Push nach Rueckfrage" ist darin aufgegangen.
-Lokale Deploys (build + restart) servieren dev bzw. den Topic-Stand
-einer laufenden Abnahme.
+**Rule.** The public deployment (GitHub Pages, real testers) hangs
+off the main branch. Since the branch workflow (§6.7), the only path there
+is the **release merge dev→main on explicit owner instruction**; the
+earlier rule "production-code push after asking" has been absorbed into it.
+Local deploys (build + restart) serve dev, or the topic state
+of an ongoing acceptance.
 
-#### 7.4 Mehrere Deployment-Targets: lokaler Build ≠ ausgelieferter Build (seit 2026-06-29, 4-Target-Modell 2026-07-01)
+#### 7.4 Multiple deployment targets: local build ≠ delivered build (since 2026-06-29, 4-target model 2026-07-01)
 
-**Regel.** Wenn verschiedene Deployments unterschiedlich viel enthalten (gestrippter
-Content, ausgeblendete Dev-UI, anderer Base-Pfad), wird das über **ein einziges
-Target-Enum** (`VITE_BUILD_TARGET` → `getBuildTarget()`, Ziele `local|test|demo|full`)
-plus eine **pure SSOT** (`src/buildTargetConfig.ts`: Base-Pfad + Run-Sets pro Ziel)
-gelöst — NICHT über verstreute Ad-hoc-Flags. Zwei Reduktions-Wege: **UI-Prädikate**
-(`isPublicBuild()`/`isDemoBuild()`/`showBugReportButton()`) fürs Gating im Bundle und ein
-**Content-Strip NACH dem Build** (`scripts/strip-build.ts <target>`, zieht die Run-Liste
-aus der SSOT) für Daten/Assets. Der lokale `npm run build` enthält alles (`target=local`
-→ `"all"` → kein Strip); der Strip läuft nur im Deploy.
+**Rule.** When different deployments contain different amounts (stripped
+content, hidden dev UI, different base path), this is solved via **a single
+target enum** (`VITE_BUILD_TARGET` → `getBuildTarget()`, targets `local|test|demo|full`)
+plus a **pure SSOT** (`src/buildTargetConfig.ts`: base path + run sets per target)
+— NOT via scattered ad-hoc flags. Two reduction paths: **UI predicates**
+(`isPublicBuild()`/`isDemoBuild()`/`showBugReportButton()`) for gating in the bundle and a
+**content strip AFTER the build** (`scripts/strip-build.ts <target>`, pulls the run list
+from the SSOT) for data/assets. The local `npm run build` contains everything (`target=local`
+→ `"all"` → no strip); the strip runs only in the deploy.
 
-**Warum.** Unveröffentlichte Inhalte dürfen nicht per URL abrufbar sein, aber Dev
-braucht den vollen Umfang. Ein Target-Enum statt N Flags, weil sonst jeder neue
-Unterschied (Base-Pfad, CTA, Bug-Button) ein weiteres unabhängiges Flag bräuchte, die
-sich widersprechen können. **Folge-Fallen:** (a) was der Strip entfernt, darf die App
-nicht hart referenzieren → siehe 3.3c (Manifest-getrieben statt fester Liste); (b) der
-**Base-Pfad muss target-aware an EINER Stelle** hängen (SSOT `baseForTarget`), sonst
-driften `vite base`, `index.html`, Manifest, Service-Worker und Precache auseinander;
-(c) ein **Deploy-Gate** bricht ab, wenn Strip-Pflichtinhalte fehlen oder die Härtung
-(keine Source-Maps, CSP-`<meta>`) verletzt ist. Referenz: CLAUDE.md → „Build-Varianten",
+**Why.** Unreleased content must not be retrievable by URL, but dev
+needs the full scope. A target enum instead of N flags, because otherwise every new
+difference (base path, CTA, bug button) would need another independent flag, and
+they can contradict each other. **Follow-up traps:** (a) what the strip removes must
+not be hard-referenced by the app → see 3.3c (manifest-driven instead of a fixed
+list); (b) the **base path must hang target-aware at ONE place** (SSOT `baseForTarget`),
+otherwise `vite base`, `index.html`, manifest, service worker and precache drift apart;
+(c) a **deploy gate** aborts when strip-mandatory content is missing or the hardening
+(no source maps, CSP `<meta>`) is violated. Reference: CLAUDE.md → "Build-Varianten",
 `docs/plans/2026-07-01-vier-deployment-targets.md`, `docs/security.md`.
 
-#### 7.5 Öffentlicher/kommerzieller Launch: Pflicht-Seiten + Lizenzen (seit 2026-06-30)
+#### 7.5 Public/commercial launch: mandatory pages + licenses (since 2026-06-30)
 
-**Regel.** Sobald die App öffentlich (und erst recht kommerziell) erreichbar ist,
-gehören dazu: **Impressum + Datenschutz** (DE, § 5 DDG / DSGVO), die **vollständigen
-Open-Source-Lizenztexte** der ausgelieferten Komponenten (MIT-Permission-Notice je
-Paket, voller OFL-Text gebündelter Schriften, Apache-Text) und **altersgerechte/
-korrekte Claims** (Datenschutz-Alters­einordnung, Store-Beschreibung).
+**Rule.** As soon as the app is publicly reachable (and all the more so
+commercially), the following belong to it: **legal notice + privacy policy**
+(DE, § 5 DDG / GDPR), the **complete open-source license texts** of the shipped
+components (MIT permission notice per package, the full OFL text of bundled
+fonts, the Apache text) and **age-appropriate/correct claims** (privacy-policy age
+classification, store description).
 
-**Warum.** Rechtliche Pflicht, nicht Kür — und es rippelt: eine Zielgruppen-Änderung
-(~12 → 15+) musste durch Datenschutz, README und Docs gezogen werden. Was gebündelt
-ausgeliefert wird (Runtime-Libs, Fonts), braucht seinen Lizenztext mit; reine Dev-/
-Build-Tools nicht. Kein Rechtsrat — aber die *technische* Pflicht-Anzeige (Seiten +
-Lizenztexte) ist umsetzbar und gehört vor den Launch. Referenz: `docs/legal.md`.
+**Why.** A legal obligation, not a nicety — and it ripples: a target-audience change
+(~12 → 15+) had to be pulled through the privacy policy, README and docs. What is
+shipped bundled (runtime libs, fonts) needs its license text along; pure dev/build
+tools do not. Not legal advice — but the *technical* mandatory display (pages +
+license texts) is implementable and belongs before the launch. Reference: `docs/legal.md`.
 
-#### 7.6 Pilot-Deploy vor Massen-Rollout / bei kritischen + sichtbaren Änderungen (seit 2026-07-01)
+#### 7.6 Pilot deploy before mass rollout / for critical + visible changes (since 2026-07-01)
 
-**Regel.** Bei **kritischen** oder **sichtbaren UX-/Design-Änderungen** (neues
-Interaktionsmuster, Tooltip/Popover-Optik, Layout) — und besonders bei **Massen-
-Migrationen**, die dasselbe Muster über viele Stellen ziehen — wird zuerst ein **Pilot**
-an EINER Stelle **lokal deployt** (`npm run build && systemctl --user restart chimera`,
-HTTP 200 prüfen) und dem User zum Testen gezeigt. Erst nach seiner Freigabe zu Look &
-Feel folgt der Rest. **Deploy ≠ Push:** fürs Ansehen reicht der lokale Deploy, ein Push
-ist separat (Prod-Code → fragen, 7.3).
+**Rule.** For **critical** or **visible UX/design changes** (a new
+interaction pattern, tooltip/popover looks, layout) — and especially for **mass
+migrations** pulling the same pattern through many places — first a **pilot**
+at ONE place is **deployed locally** (`npm run build && systemctl --user restart chimera`,
+check HTTP 200) and shown to the user for testing. Only after their approval of look &
+feel does the rest follow. **Deploy ≠ push:** for viewing, the local deploy is enough; a push
+is separate (prod code → ask, 7.3).
 
-**Warum.** Hauptzielgerät ist mobil; wie sich etwas anfühlt (Antipp-Fläche, Blasen-
-Position, Unterstreichungs-Stärke) sieht man erst am laufenden Spiel, nicht im Code oder
-in Tests. 20 Stellen im falschen Stil zu bauen ist teures Rework — ein Pilot kostet einen
-Deploy-Zyklus und verhindert die Sackgasse. Skill
-[54](skills/54-kritische-changes-lokal-deployen-testen-lassen.md), Memory
+**Why.** The main target device is mobile; how something feels (tap area, bubble
+position, underline weight) is only visible in the running game, not in code or
+in tests. Building 20 places in the wrong style is expensive rework — a pilot costs one
+deploy cycle and prevents the dead end. Skill
+`54-kritische-changes-lokal-deployen-testen-lassen.md` (Chimera only), memory
 `feedback_local_deploy_test_before_rollout`.
 
 ---
 
-#### 7.7 Hintergrund-Prozesse sauber abbrechen: Prozessgruppe + Verifikation (seit 2026-07-17)
+#### 7.7 Abort background processes cleanly: process group + verification (since 2026-07-17)
 
-**Regel.** Laufende Hintergrund-Jobs (vitest, Sim, Playwright) ueber die
-Prozess-GRUPPE abbrechen (`kill -- -<pgid>`), nicht per `pkill` aufs
-Kommando-Muster — geforkte Worker matchen das Muster oft nicht, ueberleben
-als Waisen und rechnen weiter. Danach IMMER per
-`ps -eo pid,etime,%cpu,cmd --sort=-%cpu | head` verifizieren, dass nichts
-vom Lauf uebrig ist. Bei `pkill`/`pgrep -f` im Bash-Tool den Bracket-Trick
-nutzen (`"[m]uster"`), sonst matcht das Pattern den eigenen Wrapper und
-killt den Task selbst (exit 144).
+**Rule.** Abort running background jobs (vitest, sim, Playwright) via the
+process GROUP (`kill -- -<pgid>`), not via `pkill` on the
+command pattern — forked workers often do not match the pattern, survive
+as orphans and keep computing. Afterwards ALWAYS verify via
+`ps -eo pid,etime,%cpu,cmd --sort=-%cpu | head` that nothing
+from the run is left. With `pkill`/`pgrep -f` in the Bash tool, use the
+bracket trick (`"[p]attern"`), otherwise the pattern matches its own wrapper and
+kills the task itself (exit 144).
 
-**Warum.** Vorfall 2026-07-17 (msg 15351): ein verwaister vitest-Fork-Worker
-brannte 13,5 h einen Kern auf 100 %. Details in
-[docs/skills/61-hintergrund-prozesse-sauber-killen.md](skills/61-hintergrund-prozesse-sauber-killen.md).
-
----
-
-### 8. Speicher / Kontext
-
-#### 8.1 User-Praeferenzen dauerhaft ablegen
-
-**Regel.** Wenn ein User Korrekturen oder Vorlieben aeussert
-(„keine Emojis", „Commit-Messages auf Deutsch", „Tests nie stillschweigend
-aendern"), persistiere das in einem Memory-System oder einer
-Team-Guideline. Nicht jedes Mal neu nachfragen.
-
-**Warum.** Spart Zyklen. Zeigt, dass Feedback ernst genommen wird.
-
-#### 8.2 Lies den Kontext, bevor du fragst
-
-**Regel.** Vor Rueckfragen: CLAUDE.md, dokumentierte Repo-Konventionen,
-Memory-Dateien und relevante Dateien durchgehen. Frage nur, wenn die
-Antwort nicht abrufbar ist.
-
-**Warum.** Repetitive Klarstellungen sind teuer. Gut vorbereitete
-Fragen sind zielgerichtet und respektvoll.
-
-#### 8.3 Verifiziere, bevor du aus Memory handelst
-
-**Regel.** Erinnerungen koennen veralten — bevor auf „X existiert an
-Datei Y" gehandelt wird, kurz gegen den aktuellen Stand pruefen (`grep`,
-`ls`, Datei-Read). Ein Memory ist ein Snapshot, keine Quelle; „das war mal
-so" reicht nicht. Details: Skill
-[39-memory-verifizieren.md](skills/39-memory-verifizieren.md).
-
-#### 8.4 Verifiziere Analyse-/Audit-Berichte, bevor du sie umsetzt
-
-**Regel.** Auch Befunde von Sub-Agents / externen Analysen vor der
-Umsetzung gegen den aktuellen Code pruefen (gezielter `grep` oder
-30-Zeilen-Read auf die genannte Stelle). Stimmt der Befund nicht:
-Auftraggeber informieren oder das echte Potenzial neu identifizieren —
-nicht blind „nachreichen".
-
-**Warum.** Reports sind hilfreich, aber nicht autoritativ. Beispiel
-(2026-04-27): „pressureSolver hat keinen Early-Break" — der Break stand
-laengst drin, echter Hebel war die Epsilon-Kalibrierung (1e-6 → 1e-4).
-Vorgehens-Details: Skill
-[39-memory-verifizieren.md](skills/39-memory-verifizieren.md).
+**Why.** Incident 2026-07-17 (msg 15351): an orphaned vitest fork worker
+burned one core at 100 % for 13.5 h. Details in
+[docs/skills/61-kill-background-processes-cleanly.md](skills/61-kill-background-processes-cleanly.md).
 
 ---
 
-### 9. Sicherheit und Geheimnisse
+### 8. Memory / context
 
-#### 9.1 Keine Secrets ins Repo
+#### 8.1 Store user preferences permanently
 
-**Regel.** `.env`, `credentials.json`, API-Keys gehoeren nicht in
-Commits. Pre-commit-Hook oder `.gitignore` enforcen das; im Zweifel
-lieber einmal zuviel fragen als zuwenig.
+**Rule.** When a user expresses corrections or preferences
+("no emojis", "commit messages in German", "never silently change
+tests"), persist that in a memory system or a
+team guideline. Do not ask anew every time.
 
-**Warum.** Einmal gepushte Secrets sind kompromittiert, egal wie
-schnell man den Commit zurueckzieht. Rollen und Keys muessen dann
-rotiert werden.
+**Why.** Saves cycles. Shows that feedback is taken seriously.
 
-#### 9.2 Specific-files statt `git add -A`
+#### 8.2 Read the context before you ask
 
-**Regel.** `git add <explizite-datei>` statt `git add -A` oder
-`git add .`. Letzteres nimmt ungewollte temporaere Files, Builds,
-Secrets mit.
+**Rule.** Before asking back: go through CLAUDE.md, documented repo
+conventions, memory files and relevant files. Ask only when the
+answer is not retrievable.
 
-**Warum.** Kleiner Tippfehler, grosser Schaden. Explizites Staging ist
-ein zusaetzlicher Gedanken-Schritt, der Fehler faengt.
+**Why.** Repetitive clarifications are expensive. Well-prepared
+questions are targeted and respectful.
+
+#### 8.3 Verify before acting from memory
+
+**Rule.** Memories can go stale — before acting on "X exists in
+file Y", briefly check against the current state (`grep`,
+`ls`, file read). A memory is a snapshot, not a source; "it used to be
+that way" is not enough. Details: Skill
+[39-verify-memory.md](skills/39-verify-memory.md).
+
+#### 8.4 Verify analysis/audit reports before implementing them
+
+**Rule.** Findings from sub-agents / external analyses are also checked
+against the current code before implementation (a targeted `grep` or a
+30-line read of the named location). If the finding is wrong:
+inform the client or re-identify the real potential —
+do not blindly "deliver".
+
+**Why.** Reports are helpful, but not authoritative. Example
+(2026-04-27): "pressureSolver has no early break" — the break had long
+been there; the real lever was the epsilon calibration (1e-6 → 1e-4).
+Procedure details: Skill
+[39-verify-memory.md](skills/39-verify-memory.md).
 
 ---
 
-## Teil B — Workflow (End-to-End)
+### 9. Security and secrets
 
-Der typische Ablauf einer Einzel-Aufgabe, die die Prinzipien aus Teil A
-zur Anwendung bringt.
+#### 9.1 No secrets in the repo
 
-### Schritt 0 — Aufgabe verstehen
+**Rule.** `.env`, `credentials.json`, API keys do not belong in
+commits. A pre-commit hook or `.gitignore` enforces that; when in doubt,
+better to ask once too often than once too little.
 
-Lies die Aufgabe zweimal. Identifiziere:
-- Was ist das konkrete Ziel?
-- Gibt es unausgesprochene Annahmen?
-- Welche Teile des Codes sind betroffen?
-- Gibt es Mehrdeutigkeiten (Scope, Optionen)?
+**Why.** Secrets pushed once are compromised, no matter how
+quickly you retract the commit. Roles and keys must then be
+rotated.
 
-Bei Mehrdeutigkeit: Teil A.1.1 greift — frage mit benannten Optionen
-nach und **warte** auf die Antwort. Keine Spekulations-Implementierung.
+#### 9.2 Specific files instead of `git add -A`
 
-### Schritt 1 — Kontext sammeln
+**Rule.** `git add <explicit-file>` instead of `git add -A` or
+`git add .`. The latter picks up unwanted temporary files, builds,
+secrets.
 
-Lies bewusst:
-- Die relevanten Quelldateien (nicht raten)
-- Die Doku zum Subsystem (falls vorhanden)
-- Die letzten Commits in dem Bereich (fuer aktuelle Konventionen)
-- Memory / Team-Guidelines fuer User-Praeferenzen
+**Why.** Small typo, big damage. Explicit staging is
+an extra thinking step that catches mistakes.
 
-Notiere dir kurz den aktuellen State — mental oder in Tasks.
+---
 
-### Schritt 2 — Plan festhalten
+## Part B — Workflow (end-to-end)
 
-Fuer non-triviale Arbeit: kurzer Plan an den Auftraggeber
-kommunizieren (oder in Task-Liste). Hat drei Aufgaben:
-- Zeigt, dass du verstanden hast
-- Gibt dem Auftraggeber die Chance auf Korrektur bevor Zeit verbrannt
-  ist
-- Zerschneidet grosse Taetigkeiten in pruefbare Phasen
+The typical flow of a single task, applying the principles from Part A.
 
-**Plan-Lifecycle (verbindlich seit 2026-05-05):** Plans, die unter `docs/plans/` als eigenes Markdown-File abgelegt werden, folgen diesem Lifecycle:
+### Step 0 — Understand the task
 
-0. **Dateiname mit fuehrendem Datum (verbindlich).** `docs/plans/*.md` MUSS mit `YYYY-MM-DD-` beginnen — z.B. `2026-05-24-item-consolidation-audit.md`. Sortiert chronologisch + zeigt Alter auf einen Blick.
-1. **Status-Header pflichtig.** Erste oder zweite Zeile nach dem H1: `Status: Entwurf | In Arbeit | Umgesetzt | Deferred | Archiviert`. Bei "Umgesetzt" + "Archiviert" zusaetzlich Implementations-Commit-Hashes ("`commits abc123/def456`") oder ein Verweis "(commits siehe `git log --grep ...`)".
-2. **Plan-Ende-Ritual** sobald die Implementierung abgeschlossen ist:
-   - **(a) Substanz extrahieren.** Wenn der Plan dauerhaft nuetzliches Konzept-Material enthaelt (Tabellen, Begruendungen, API-Schemata), wandert dieses in den passenden `docs/`-Eintrag (z.B. `architecture.md`, `property-system.md`, `items.md`). Plan-Status auf "Umgesetzt + Substanz extrahiert nach `<file>`".
-   - **(b) Archivieren.** Wenn der Plan im Wesentlichen eine Schritt-fuer-Schritt-Anleitung war, deren Spuren im Code stehen, `git mv` nach `docs/plans/archive/` mit aktualisiertem Status-Header. **Nie** archivieren bevor (a) gegengeprueft ist — sonst entsteht eine zwei-Pass-Operation mit git-Luecke.
-   - **(c) Loeschen.** Nur wenn der Plan reine Implementierungs-To-Dos ohne dauerhaften Wert enthielt (selten — meistens ist das Plan-Dokument zu schwer fuer "ohne Wert").
-3. **Periodisches Audit alle 4 Wochen oder nach grossen Sprints.** Drei Fragen pro Plan: (i) ist der Status-Header noch korrekt? (ii) lebt eine umgesetzte Substanz noch im Plan, die nach `docs/` gehoeren wuerde? (iii) sollte der Plan archiviert werden?
+Read the task twice. Identify:
+- What is the concrete goal?
+- Are there unspoken assumptions?
+- Which parts of the code are affected?
+- Are there ambiguities (scope, options)?
 
-**4. Phase 0 — Coverage-Pre-Check (verbindlich seit 2026-05-29).** Sobald Scope und Phasen-Plan stehen und BEVOR die erste Code-Aenderung der Phase A erfolgt:
+On ambiguity: Part A.1.1 applies — ask with named options
+and **wait** for the answer. No speculative implementation.
 
-- Fuer jede Datei/Funktion, die der Plan modifiziert, die vorhandene Test-Coverage sichten und Luecken nach Teil A.4.5 (`coverage-luecken-triage`, Skill 27) einordnen (erreichbar / defensiv / dead).
-- Erreichbare Pfade ohne Tests bekommen **vor** Phase A Charakterisierungs-Tests, die das *aktuelle* Verhalten festschreiben. Stil: Verhaltens-Test, kein Struktur-Test. Diese Tests stuetzen sich auf die heutige Implementierung und werden zur Regressions-Grenze, an der die geplante Aenderung sich auf altes Verhalten messen muss.
-- Phase 0 wird als eigene Plan-Phase dokumentiert (Header `Phase 0 — Coverage-Pre-Check`); ihr Commit traegt `test(<area>): pre-impl characterization` und ist sauber vom Refactor-Commit getrennt.
-- Wann *nicht* noetig: reine Bug-Fix-Patches (der Regression-Test gemaess A.4 ersetzt den Pre-Check); Funktion ist schon stark abgedeckt (> 80 % Branch + sichtbare Verhaltens-Tests); reine Doku-/Style-Aenderung.
+### Step 1 — Gather context
 
-Begruendung: Tests, die NACH einer Aenderung geschrieben werden, sind unbewusst an der neuen Implementierung orientiert — sie pruefen was die Funktion *jetzt* tut, nicht was sie tun *sollte*. Charakterisierungs-Tests vor der Umsetzung verwandeln ein „Refactor mit Vertrauen" in ein „Refactor mit Netz" und decken stille Vertragsabweichungen sofort auf.
+Read deliberately:
+- The relevant source files (do not guess)
+- The docs for the subsystem (if any)
+- The recent commits in that area (for current conventions)
+- Memory / team guidelines for user preferences
 
-Operative Details in `docs/skills/43-coverage-vor-umsetzung.md`.
+Note the current state briefly — mentally or in tasks.
 
-Konvention fuer Cross-Refs: aktive Plaene als `docs/plans/...md`, archivierte als `docs/plans/archive/...md`. Wenn du einen Plan archivierst, gleichzeitig die Cross-Refs in Code/Doku auf den neuen Pfad umbiegen (sonst entstehen tote Links).
+### Step 2 — Record the plan
 
-### Schritt 3 — Implementierung
+For non-trivial work: communicate a short plan to the client
+(or in a task list). It has three jobs:
+- Shows that you understood
+- Gives the client the chance to correct before time is burned
+- Cuts large activities into verifiable phases
 
-Halte dich an Teil A.2.1 (Scope) und A.3 (Code-Qualitaet).
+**Plan lifecycle (binding since 2026-05-05):** plans that are stored as their own Markdown file under `docs/plans/` follow this lifecycle:
 
-Waehrend der Arbeit:
-- Editiere bestehende Dateien bevorzugt (A.3.1)
-- Halte Diff-Groesse ueberschaubar — wenn es waechst, sortiere in
-  Phasen (A.2.2)
-- Keine Emojis, keine Ueber-Doku-Strings, keine unrequested refactors
+0. **Filename with a leading date (binding).** `docs/plans/*.md` MUST begin with `YYYY-MM-DD-` — e.g. `2026-05-24-item-consolidation-audit.md`. Sorts chronologically + shows age at a glance.
+1. **Status header mandatory.** First or second line after the H1: `Status: Entwurf | In Arbeit | Umgesetzt | Deferred | Archiviert`. For "Umgesetzt" + "Archiviert" additionally the implementation commit hashes ("`commits abc123/def456`") or a reference "(commits see `git log --grep ...`)".
+2. **Plan-end ritual** as soon as the implementation is complete:
+   - **(a) Extract the substance.** If the plan contains durably useful conceptual material (tables, rationales, API schemas), it moves into the matching `docs/` entry (e.g. `architecture.md`, `property-system.md`, `items.md`). Plan status set to "Umgesetzt + substance extracted to `<file>`".
+   - **(b) Archive.** If the plan was essentially a step-by-step guide whose traces are in the code, `git mv` to `docs/plans/archive/` with an updated status header. **Never** archive before (a) has been cross-checked — otherwise a two-pass operation with a git gap arises.
+   - **(c) Delete.** Only if the plan contained pure implementation to-dos without lasting value (rare — usually the plan document is too weighty for "without value").
+3. **Periodic audit every 4 weeks or after big sprints.** Three questions per plan: (i) is the status header still correct? (ii) does implemented substance still live in the plan that would belong in `docs/`? (iii) should the plan be archived?
 
-### Schritt 4 — Tests ergaenzen
+**4. Phase 0 — coverage pre-check (binding since 2026-05-29).** As soon as the scope and phase plan are set and BEFORE the first code change of phase A happens:
 
-Fuer neue Logik: mindestens ein Unit-Test, der die zentrale Invariante
-pruefen wuerde. Fuer Fixes: ein Regression-Test, der ohne den Fix faellt.
+- For every file/function the plan modifies, review the existing test coverage and classify gaps per Part A.4.5 (`coverage-gap-triage`, Skill 27) (reachable / defensive / dead).
+- Reachable paths without tests get characterization tests **before** phase A that pin down the *current* behavior. Style: behavioral test, not structural test. These tests rest on today's implementation and become the regression boundary against which the planned change must measure itself with respect to old behavior.
+- Phase 0 is documented as its own plan phase (header `Phase 0 — Coverage-Pre-Check`); its commit carries `test(<area>): pre-impl characterization` and is cleanly separated from the refactor commit.
+- When *not* needed: pure bug-fix patches (the regression test per A.4 replaces the pre-check); the function is already strongly covered (> 80 % branch + visible behavioral tests); pure doc/style changes.
 
-Niemals bestehende Tests ohne Grund anpassen (A.4.2).
+Rationale: tests written AFTER a change are unconsciously oriented on the new implementation — they check what the function does *now*, not what it *should* do. Characterization tests before the implementation turn a "refactor with confidence" into a "refactor with a net" and immediately expose silent contract deviations.
 
-### Schritt 5 — Lokale Verifikation
+Operational details in `docs/skills/43-coverage-before-implementation.md`.
 
-Das 5-Schritt-Commit-Gate aus A.4.3:
+Convention for cross-refs: active plans as `docs/plans/...md`, archived ones as `docs/plans/archive/...md`. When you archive a plan, redirect the cross-refs in code/docs to the new path at the same time (otherwise dead links arise).
+
+### Step 3 — Implementation
+
+Stick to Part A.2.1 (scope) and A.3 (code quality).
+
+While working:
+- Prefer editing existing files (A.3.1)
+- Keep the diff size manageable — if it grows, sort it into
+  phases (A.2.2)
+- No emojis, no over-documented strings, no unrequested refactors
+
+### Step 4 — Add tests
+
+For new logic: at least one unit test that would check the central
+invariant. For fixes: a regression test that fails without the fix.
+
+Never adjust existing tests without reason (A.4.2).
+
+### Step 5 — Local verification
+
+The 5-step commit gate from A.4.3:
 
 ```
 npx tsc --noEmit && npm run lint && npm test -- --run && npm run e2e && npm run build
 ```
 
-Alle muessen gruen sein. Bei Rot: fixen, nicht committen. Bei reinen
-Doku-/Test-Datei-Commits ohne App-Code-Aenderung kann `npm run e2e`
-entfallen (A.4.3).
+All must be green. On red: fix, do not commit. For pure
+doc/test-file commits without app-code changes, `npm run e2e`
+may be skipped (A.4.3).
 
-### Schritt 6 — Doku aktualisieren
+### Step 6 — Update the docs
 
-Wenn die Aenderung die dokumentierte Realitaet aendert (Architektur,
-APIs, Konfiguration, Deploy), ziehe die betroffene Doku nach (A.5.1).
-Im selben Commit.
+If the change alters the documented reality (architecture,
+APIs, configuration, deploy), update the affected docs (A.5.1).
+In the same commit.
 
-### Schritt 7 — Commit
+### Step 7 — Commit
 
-Subject + Body im Conventional-Commit-Format (A.6.1, A.6.2). Explizites
-`git add <files>` statt `-A` (A.9.2). Commit-Body erklaert das Warum
-— insbesondere bei Bug-Fixes: was war der Fehler, was war die Ursache,
-wie wurde er behoben.
+Subject + body in conventional-commit format (A.6.1, A.6.2). Explicit
+`git add <files>` instead of `-A` (A.9.2). The commit body explains the why
+— especially for bug fixes: what was the error, what was the cause,
+how was it fixed.
 
-Beispiel:
+Example:
 
 ```
-fix(successCondition): sticky fulfilled + run-end fuer boss-lose Runs
+fix(successCondition): sticky fulfilled + run end for boss-less runs
 
-Zwei Regressionen im Sektor-Abschluss-Pfad:
+Two regressions in the sector-completion path:
 
-1) Der Condition-Evaluator war nicht sticky — sobald ein Task waehrend
-   eines Ticks currentlyMatched verlor, resettete heldMs auf 0 und der
-   Status flippte von "fulfilled" zurueck auf "ongoing". Das konnte
-   den 1.5 s-Debounce im Transition-Effekt canceln.
-   Fix: Clause bleibt fulfilled nach Erreichen der Haltezeit.
+1) The condition evaluator was not sticky — as soon as a task lost
+   currentlyMatched during a tick, heldMs reset to 0 and the
+   status flipped from "fulfilled" back to "ongoing". That could
+   cancel the 1.5 s debounce in the transition effect.
+   Fix: a clause stays fulfilled after reaching the hold time.
 
-2) Boss-lose Single-Section-Runs beendeten den Run nie.
-   Fix: zweiter Pfad fuer "letzte Sektion ohne Boss + fulfilled".
+2) Boss-less single-section runs never ended the run.
+   Fix: second path for "last section without a boss + fulfilled".
 
-Regressions-Tests in successCondition.test.ts (2 neue Faelle).
+Regression tests in successCondition.test.ts (2 new cases).
 ```
 
-### Schritt 8 — Deploy (falls relevant)
+### Step 8 — Deploy (if relevant)
 
-Bei Live-Services: den dokumentierten Deploy-Ablauf fahren (A.7.1),
-danach Status verifizieren (A.7.2).
+For live services: run the documented deploy procedure (A.7.1),
+then verify the status (A.7.2).
 
-### Schritt 9 — Push (nach Freigabe)
+### Step 9 — Push (after approval)
 
-`git push origin <branch>` — aber **nur** mit expliziter Freigabe des
-Auftraggebers, sofern nicht anders vereinbart (A.1.4). Ein „gepusht?"
-in 2 Minuten ist besser als ein ungewollter Push.
+`git push origin <branch>` — but **only** with the client's explicit
+approval, unless agreed otherwise (A.1.4). A "pushed?"
+in 2 minutes is better than an unwanted push.
 
-### Schritt 10 — Rueckmeldung
+### Step 10 — Report back
 
-Kurz + konkret (A.1.2):
-- Was wurde gemacht (1 Satz)
-- Commit-Hash / PR-Link
-- Was noch offen ist (falls etwas ist)
-- Falls auf Review / Test gewartet wird: klares „bitte testen"
+Short + concrete (A.1.2):
+- What was done (1 sentence)
+- Commit hash / PR link
+- What is still open (if anything)
+- If waiting on review / test: a clear "please test"
 
-### Sonder-Workflow: RL-Trainings-Iterationen — Analyse-Sim zuerst
+### Special workflow: RL training iterations — analysis sim first
 
-Fuer autonome Trainings-Verbesserungs-Schleifen (Retrains, Fortsetzungs-Zyklen,
-Manager-Training) gilt der Owner-Workflow (msg 16204/16209, 2026-07-26; Skill
-[66](skills/66-trainings-iteration-analyse-sim-zuerst.md)):
+For autonomous training-improvement loops (retrains, continuation cycles,
+manager training), the owner workflow applies (msg 16204/16209, 2026-07-26; Skill
+`66-trainings-iteration-analyse-sim-zuerst.md` (Chimera only)):
 
-1. **Eval-Messpunkt** am finalen Modell (deterministisch, 12 Seeds) — nie an
-   stochastischen Rollout-Logs urteilen.
-2. **Diagnose-SIM vor jeder Anpassung:** bei Fehlverhalten einen Simulations-
-   Lauf mit Analyse an der Problemstelle fahren (Spy-Bot/Trace/Recording) —
-   welche Aktionen waehlt der Bot real, was bietet die Maske, woran scheitert
-   der Schritt. Beleg statt Vermutung.
-3. **Anpassung auf Analyse-Basis entscheiden** (Reward-Anbindung, Faehigkeit,
-   Maske, Content — was die Analyse stuetzt), umsetzen, **committen**.
-4. Naechstes Training starten; Rechner darf kontinuierlich voll ausgelastet
-   werden. Stopp: Ziel-Gate erreicht (sofort melden) · Plateau (2 Fortsetzungen
-   ohne Eval-Fortschritt) · vereinbartes Nacht-Ende (Morgen-Summary).
+1. **Eval measurement point** on the final model (deterministic, 12 seeds) — never
+   judge from stochastic rollout logs.
+2. **Diagnostic SIM before every adjustment:** on misbehavior, run a simulation
+   with analysis at the problem spot (spy bot/trace/recording) —
+   which actions does the bot really choose, what does the mask offer, what does
+   the step fail on. Evidence instead of conjecture.
+3. **Decide the adjustment on the basis of the analysis** (reward wiring, capability,
+   mask, content — whatever the analysis supports), implement, **commit**.
+4. Start the next training; the machine may be kept fully loaded
+   continuously. Stop: target gate reached (report immediately) · plateau (2 continuations
+   without eval progress) · agreed end of night (morning summary).
 
-Begruendung: voreiliges Param-Tuning gegen Trainings-Varianz verbrennt
-Iterationen; Diagnose-Laeufe finden Grundlagen-Fehler (Beispiele: Zonen-
-Geometrie-Paritaet Bot↔Engine, Puffer-Quellen-Faehigkeit, Waffenketten-
-Curriculum — alle aus Analyse-Sims, keiner aus Tuning).
+Rationale: premature parameter tuning against training variance burns
+iterations; diagnostic runs find foundational errors (examples: zone
+geometry parity bot↔engine, buffer-source capability, weapon-chain
+curriculum — all from analysis sims, none from tuning).
 
 ---
 
-## Teil C — Vier-Phasen-Zyklus (praeskriptive Empfehlung)
+## Part C — Four-phase cycle (prescriptive recommendation)
 
-Teil A und B beschreiben, wie eine einzelne Aufgabe umgesetzt wird.
-Dieser Abschnitt schreibt den **Mehr-Tage-Rhythmus** vor: vier
-klar abgegrenzte Phasen, die zyklisch durchlaufen werden, mit
-Zeitrahmen, die sich an der tatsaechlichen Commit-Historie des
-Chimera-Projekts orientieren.
+Parts A and B describe how a single task is implemented.
+This section prescribes the **multi-day rhythm**: four
+clearly delineated phases run through cyclically, with
+time frames oriented on the actual commit history of the
+Chimera project.
 
-### C.1 Ueberblick
+### C.1 Overview
 
-Ein Zyklus ergibt ein schlankes, konsolidiertes Stueck Software:
-**Features sind gebaut, Tests abgedeckt, Doku konsistent, Code
-architektonisch sauber.** Danach startet der naechste Zyklus mit
-Phase 1.
+One cycle yields a lean, consolidated piece of software:
+**features are built, tests cover them, docs are consistent, the code is
+architecturally clean.** Afterwards the next cycle starts with
+phase 1.
 
-| Phase | Fokus | Empfohlene Dauer |
+| Phase | Focus | Recommended duration |
 |---:|---|---|
-| 1 | Feature-Addition | **1–3 Tage** |
-| 2 | Test-Coverage-Nachzug | **~½ Tag** |
-| 3 | Doku-Konsistenz-Pruefung | **~2 Stunden** |
-| 4 | Architektur- / Performance- / Redundanz-Analyse + Refactor | **1 Tag** (selten 2) |
+| 1 | Feature addition | **1–3 days** |
+| 2 | Test-coverage backfill | **~½ day** |
+| 3 | Doc consistency check | **~2 hours** |
+| 4 | Architecture / performance / redundancy analysis + refactor | **1 day** (rarely 2) |
 
-**Vollzyklus:** ungefaehr 3–5 Tage Arbeit verteilt auf ~1 Kalenderwoche.
-Das liegt im Bereich, in dem in Chimera zwischen zwei Hardening-Tagen
-~8–10 Tage lagen (11.04. → 19.04.).
+**Full cycle:** roughly 3–5 days of work spread over ~1 calendar week.
+That is in the range where in Chimera ~8–10 days lay between two
+hardening days (04-11 → 04-19).
 
-### C.2 Phase 1 — Feature-Addition
+### C.2 Phase 1 — Feature addition
 
-**Dauer:** 1–3 zusammenhaengende Arbeitstage.
-**Ziel:** thematisch zusammenhaengendes Feature-Paket implementieren.
-Tests und Doku fliessen **innerhalb jedes Commits** mit (Baseline aus
-Teil A.4.1 und A.5.1). Die weiteren Phasen sind Nachzug-Phasen, nicht
-Ersatz fuer die Per-Commit-Pflicht.
+**Duration:** 1–3 consecutive working days.
+**Goal:** implement a thematically coherent feature package.
+Tests and docs flow along **within each commit** (baseline from
+Parts A.4.1 and A.5.1). The further phases are backfill phases, not
+a substitute for the per-commit duty.
 
-**Typische Aktivitaeten:**
-- Neue Features, neue Modi, neue UI-Komponenten, neue Subsysteme
-- Bugfixes, die auf dem Weg entdeckt werden
-- Per-Commit-Tests fuer neue Logik (Baseline)
-- Per-Commit-Doku-Update wenn Architektur/APIs beruehrt werden
+**Typical activities:**
+- New features, new modes, new UI components, new subsystems
+- Bug fixes discovered along the way
+- Per-commit tests for new logic (baseline)
+- Per-commit doc updates when architecture/APIs are touched
 
-**Grenzsignal:** nach 3 Tagen in Folge mit feature-dominantem
-Profil (>40% der Commits sind `feat:`) wird zwingend zu Phase 2
-gewechselt. Chimera hat nie laenger als 3 Tage am Stueck rein auf
-Features gefahren — die Signale dafuer sind solide.
+**Boundary signal:** after 3 consecutive days with a feature-dominant
+profile (>40% of the commits are `feat:`), switching to phase 2 is
+mandatory. Chimera never ran purely on features for more than 3 days
+in a row — the signals for this are solid.
 
-**Chimera-Beleg:** Feature-Burst 14.–18.04. (3 intensive Tage
-mit 73 + 9 + 55 = ~137 Feature-Commits), ebenso 25.–26.03., 29.–30.03.,
-06.–07.04., 18.04. Alle innerhalb des 1–3-Tage-Fensters.
+**Chimera evidence:** feature burst 04-14 to 04-18 (3 intensive days
+with 73 + 9 + 55 = ~137 feature commits), likewise 03-25/26, 03-29/30,
+04-06/07, 04-18. All within the 1–3-day window.
 
-**Exit-Kriterium:** Phase 1 endet, wenn
-(a) das geplante Feature-Paket fachlich fertig ist, ODER
-(b) das 3-Tage-Limit erreicht ist, auch wenn noch mehr geplant war.
+**Exit criterion:** phase 1 ends when
+(a) the planned feature package is functionally complete, OR
+(b) the 3-day limit is reached, even if more was planned.
 
-### C.3 Phase 2 — Test-Coverage-Nachzug
+### C.3 Phase 2 — Test-coverage backfill
 
-**Dauer:** ~½ Arbeitstag (2–4 Stunden).
-**Ziel:** Luecken schliessen, die trotz Per-Commit-Tests in Phase 1
-aufgelaufen sind. Kein neuer Feature-Code.
+**Duration:** ~½ working day (2–4 hours).
+**Goal:** close gaps that accumulated in phase 1 despite per-commit
+tests. No new feature code.
 
-**Typische Aktivitaeten:**
-- Coverage-Report oder `npm test -- --coverage` pruefen
-- Edge-Cases fuer neue Modi identifizieren, die nicht im
-  Per-Commit-Test waren
-- Regressions-Tests fuer in Phase 1 entdeckte, aber nur flach
-  reparierte Bugs
-- Integration-Tests ueber mehrere neue Subsysteme hinweg
-- Test-Utilities bereinigen, redundante Test-Setups konsolidieren
+**Typical activities:**
+- Check the coverage report or `npm test -- --coverage`
+- Identify edge cases for new modes that were not in the
+  per-commit tests
+- Regression tests for bugs discovered in phase 1 but only
+  shallowly repaired
+- Integration tests across several new subsystems
+- Clean up test utilities, consolidate redundant test setups
 
-**Exit-Kriterium:** Coverage fuer die in Phase 1 eingefuehrten
-Pfade ist lueckenschluss-nah. Kein absoluter %-Wert — es zaehlt,
-dass die naechste Phase auf einer gruenen Suite aufsetzen kann.
+**Exit criterion:** coverage for the paths introduced in phase 1
+is close to gap-free. No absolute % value — what counts is
+that the next phase can build on a green suite.
 
-**Chimera-Beleg:** In der beobachteten Historie fanden Test-
-Nachzuege verzahnt mit Phase 4 statt (z.B. 5 Test-Commits am
-14.04., 6 am 16.04., 4 am 19.04.). Die hier empfohlene Trennung
-macht die Test-Arbeit sichtbarer und lueckenfrei.
+**Chimera evidence:** in the observed history, test backfills happened
+interleaved with phase 4 (e.g. 5 test commits on
+04-14, 6 on 04-16, 4 on 04-19). The separation recommended here
+makes the test work more visible and gap-free.
 
-### C.4 Phase 3 — Doku-Konsistenz-Pruefung
+### C.4 Phase 3 — Doc consistency check
 
-**Dauer:** ~2 Stunden.
-**Ziel:** sicherstellen, dass docs/ die neue Realitaet wiedergibt.
-Kein Code — nur Doku.
+**Duration:** ~2 hours.
+**Goal:** ensure that docs/ reflects the new reality.
+No code — docs only.
 
-**Typische Aktivitaeten:**
-- Alle in Phase 1 veraenderten Subsysteme gegen ihre docs/*.md-Datei
-  pruefen
-- Querverweise hinzufuegen, falls neue Konzepte andere Dokumente
-  beruehren
-- Veraltete Passagen loeschen oder markieren
-- CLAUDE.md / README / Architektur-Doku auf Aktualitaet pruefen
-- Falls die Phase lueckenhafte Doku aufdeckt, Mini-Fixes direkt dort
+**Typical activities:**
+- Check all subsystems changed in phase 1 against their docs/*.md
+  file
+- Add cross-references if new concepts touch other documents
+- Delete or mark stale passages
+- Check CLAUDE.md / README / architecture docs for currency
+- If the phase uncovers gappy docs, mini-fixes directly there
 
-**Exit-Kriterium:** Keine Diskrepanzen zwischen dokumentiertem und
-tatsaechlichem Verhalten. Doku-Beispiele stimmen mit aktuellem
-Code-Verhalten ueberein.
+**Exit criterion:** no discrepancies between documented and
+actual behavior. Doc examples match current
+code behavior.
 
-**Chimera-Beleg:** 40 `docs:`-Commits ueber den Gesamtzeitraum,
-oft in den Hardening-Tagen konzentriert (7 am 18.04., 5 am 19.04.).
-Die hier empfohlene Trennung macht aus zerstreutem Doku-Nachzug
-eine bewusste Konsistenz-Session.
+**Chimera evidence:** 40 `docs:` commits over the whole period,
+often concentrated in the hardening days (7 on 04-18, 5 on 04-19).
+The separation recommended here turns scattered doc backfill into
+a deliberate consistency session.
 
-### C.5 Phase 4 — Architektur / Performance / Redundanz + Refactor
+### C.5 Phase 4 — Architecture / performance / redundancy + refactor
 
-**Dauer:** 1 Arbeitstag (selten 2).
-**Ziel:** technische Schuld abbauen, die in Phase 1 aufgelaufen ist.
-Keine Funktionsaenderungen — nur Struktur/Perf.
+**Duration:** 1 working day (rarely 2).
+**Goal:** pay down technical debt accumulated in phase 1.
+No functional changes — structure/perf only.
 
-**Ablauf:**
-1. **Analyse-Schritt (vormittags):**
-   - Hotspot-Bericht einholen: `chimera-complexity-analysis.md`
-     oder aequivalent — Dateien > 500 LOC, ungesunde
-     Abhaengigkeits-Richtungen, doppelte Logik.
-   - Performance-Messungen an Hot-Paths (Browser-Profiler,
-     `console.time`, Render-Counts).
-   - Mentaler Architektur-Scan: Schicht-Sauberkeit (Reducer pure,
-     Hooks duenn), Dependency-Richtung, Zustandsfluss-Klarheit.
-   - **Ab ~10 k LOC oder beim ersten "richtigen" Architektur-Audit**:
-     statt mentalem Scan parallele Subagents — 4-6 Audit-Achsen,
-     jeder Agent 600-800 Worte zurueck, Synthese im Plan-Doc. Siehe
-     [Skill 47](skills/47-architektur-audit-mit-subagents.md). Hebt
-     ohne Token-Schmerz in Senior-Audit-Niveau (Madge-Cycles,
-     SOLID/DRY/Hexagonal-Checks, Quick-Win/Mid/Big-Roadmap).
-   - Findings auflisten (kurze Notiz pro Befund).
+**Procedure:**
+1. **Analysis step (morning):**
+   - Obtain a hotspot report: `chimera-complexity-analysis.md`
+     or equivalent — files > 500 LOC, unhealthy
+     dependency directions, duplicated logic.
+   - Performance measurements on hot paths (browser profiler,
+     `console.time`, render counts).
+   - Mental architecture scan: layer cleanliness (reducers pure,
+     hooks thin), dependency direction, clarity of state flow.
+   - **From ~10 k LOC or at the first "real" architecture audit**:
+     instead of a mental scan, parallel subagents — 4-6 audit axes,
+     each agent returning 600-800 words, synthesis in the plan doc. See
+     [Skill 47](skills/47-architecture-audit-with-subagents.md). Lifts
+     you to senior-audit level without token pain (madge cycles,
+     SOLID/DRY/hexagonal checks, quick-win/mid/big roadmap).
+   - List the findings (short note per finding).
 
-2. **Umsetzungs-Schritt (nachmittags):**
-   - Refactor-Commits im Conventional-Prefix `refactor:`
-   - Ein Befund pro Commit (Teil A.6.3)
-   - Nach jedem Commit `tsc + tests + build` gruen (A.4.3)
-   - Bei groesseren Umbauten in Phasen aufteilen (A.2.2)
+2. **Implementation step (afternoon):**
+   - Refactor commits with the conventional prefix `refactor:`
+   - One finding per commit (Part A.6.3)
+   - After every commit `tsc + tests + build` green (A.4.3)
+   - Split larger rebuilds into phases (A.2.2)
 
-**Exit-Kriterium:** Alle in der Analyse notierten Befunde sind
-entweder umgesetzt oder explizit auf „spaeter" zurueckgestellt
-(dann in `docs/future-improvements.md`). Tests gruen.
+**Exit criterion:** all findings noted in the analysis are
+either implemented or explicitly deferred to "later"
+(then in `docs/future-improvements.md`). Tests green.
 
-**Chimera-Beleg:**
-- 11.04.: 33 Commits, davon 23 `refactor:` — nach einer
-  10-tages-Mixed-Phase.
-- 19.04.: 67 Commits, davon 27 `refactor:` — direkt nach dem
-  Feature-Burst 14.–18.04.
-Beide zeigen, dass sich das Refactor-Volumen eines Hardening-Tages
-im Bereich 20–30 Commits bewegt und an einem Arbeitstag machbar ist.
+**Chimera evidence:**
+- 04-11: 33 commits, 23 of them `refactor:` — after a
+  10-day mixed phase.
+- 04-19: 67 commits, 27 of them `refactor:` — directly after the
+  feature burst 04-14 to 04-18.
+Both show that the refactor volume of a hardening day
+lands in the range of 20–30 commits and is doable in one working day.
 
-### C.6 Phasenuebergaenge (Gating)
+### C.6 Phase transitions (gating)
 
-Zwischen Phasen stehen klare Gates — nicht einfach „weitermachen":
+Between phases stand clear gates — not simply "carry on":
 
-| Uebergang | Gate |
+| Transition | Gate |
 |---|---|
-| Phase 1 → 2 | Per-Commit-Suite gruen. Feature-Paket funktional fertig oder 3-Tage-Limit erreicht. |
-| Phase 2 → 3 | `npm test` zeigt keine in Phase 1 eingefuehrten Coverage-Luecken mehr. |
-| Phase 3 → 4 | Ein schneller Doku-Spot-Check gegen ein zufaellig gewaehltes Subsystem ergibt keine Diskrepanz. |
-| Phase 4 → 1 | Alle Analyse-Findings umgesetzt oder in `future-improvements.md` verbucht. Build + Tests gruen. |
+| Phase 1 → 2 | Per-commit suite green. Feature package functionally complete or 3-day limit reached. |
+| Phase 2 → 3 | `npm test` shows no coverage gaps introduced in phase 1 anymore. |
+| Phase 3 → 4 | A quick doc spot-check against a randomly chosen subsystem yields no discrepancy. |
+| Phase 4 → 1 | All analysis findings implemented or booked into `future-improvements.md`. Build + tests green. |
 
-Wenn ein Gate nicht haltbar ist (Aenderungen zu gross, unklar, usw.),
-gilt die Regel aus Teil A.2.1: Scope zurueckziehen, nicht ueberdehnen.
+If a gate cannot be held (changes too big, unclear, etc.),
+the rule from Part A.2.1 applies: pull back the scope, do not overstretch it.
 
-### C.7 Zyklus-Frequenz
+### C.7 Cycle frequency
 
-Ein Vollzyklus dauert ungefaehr 3–5 Arbeitstage (~1 Kalenderwoche bei
-Teilzeit-Engagement). Damit ergibt sich eine **Hardening-Kadenz von
-~7–10 Tagen** — exakt das, was die Chimera-Historie gezeigt hat
-(11.04. → 19.04.: 8 Tage Abstand).
+A full cycle takes roughly 3–5 working days (~1 calendar week at
+part-time engagement). That yields a **hardening cadence of
+~7–10 days** — exactly what the Chimera history showed
+(04-11 → 04-19: 8 days apart).
 
-Laengere Zyklen (>2 Wochen ohne Phase 4) erzeugen technische Schuld,
-die sich schwerer abbaut. Kuerzere Zyklen (<4 Tage) werden vom
-Overhead der Phasen 2–4 unprofitabel.
+Longer cycles (>2 weeks without phase 4) create technical debt
+that is harder to pay down. Shorter cycles (<4 days) become
+unprofitable through the overhead of phases 2–4.
 
-### C.8 Was NICHT Teil des Zyklus ist
+### C.8 What is NOT part of the cycle
 
-- **Keine Bugfixes als Phase.** Bugs werden in der Phase behoben, in
-  der sie auftauchen — Phase 1 (Feature) oder Phase 4 (Refactor). Ein
-  isolierter Bugfix-Sprint ist kein Bestandteil des Zyklus.
-- **Keine Release-Phase.** Deploy laeuft durchgaengig (Teil A.7); es
-  gibt keinen Code-Freeze am Ende eines Zyklus.
-- **Keine Kickoff-/Retro-Meetings.** Der Zyklus ist Arbeitsrhythmus,
-  nicht Prozess-Zeremonie.
+- **No bug fixes as a phase.** Bugs are fixed in the phase in which
+  they show up — phase 1 (feature) or phase 4 (refactor). An
+  isolated bug-fix sprint is not a component of the cycle.
+- **No release phase.** Deploy runs continuously (Part A.7); there
+  is no code freeze at the end of a cycle.
+- **No kickoff/retro meetings.** The cycle is a working rhythm,
+  not process ceremony.
 
-### C.9 Naechtliches Housekeeping (Daily) — Coverage + Mutations-Probe + Doku- + Skills-Drift
+### C.9 Nightly housekeeping (daily) — coverage + mutation probe + doc + skills drift
 
-Der Vier-Phasen-Zyklus (C.1–C.7) ist die **Wochen-Kadenz** fuer das
-substantielle Hardening. Komplementaer dazu laeuft **taeglich, immer
-wenn die Task-Queue leer ist** (typischerweise nachts oder in
-Idle-Phasen) ein kleiner Four-Pass — autonom, ohne User-Entscheidung,
-weil keine Konflikt-Risiken bestehen und der Aufwand gering ist:
+The four-phase cycle (C.1–C.7) is the **weekly cadence** for the
+substantial hardening. Complementary to it, a small four-pass runs
+**daily, whenever the task queue is empty** (typically at night or in
+idle phases) — autonomously, without a user decision,
+because there are no conflict risks and the effort is small:
 
-1. **Test-Coverage-Pass.** Coverage-Report fahren, Luecken nach Skill 27
-   triagieren (erreichbar → Verhaltens-Test / defensiv → Marker /
-   dead → loeschen). **Zuerst pruefen, ob ueberhaupt ein Report entstanden
-   ist** (`coverage/coverage-summary.json`) — vitest schreibt ihn nur bei
-   gruenem Lauf, ein einziger Timeout laesst ihn ausfallen und der Pass sieht
-   dann wie „nichts zu tun" aus. Genau so lief er 2026-08 zwei Wochen ins
-   Leere (Housekeeping-Fund 2026-08-21).
-2. **Mutations-Pass** (seit 2026-07-14, User-Auftrag msg 15097; §4.5b
-   + Skill 59). Zentrale Zustands-Schreibungen je einmal abschalten,
-   volle Suite — bleibt sie gruen, fehlt ein Waechter → Test nachziehen.
-   Mutationen immer zurueckrollen (`git diff` = leer).
-3. **Doku-Drift-Pass.** Alle Dateien unter `docs/` (rekursiv) und alle
-   `CLAUDE.md`-Dateien gegen den aktuellen Code-Stand pruefen; dazu die
-   **generierten Doku-Bloecke regenerieren** (`npm run docs:items` +
-   `npm run docs:deployment`, Owner msg 15459 — veraenderte Ausgabe =
-   Drift, mitcommitten). Den Diff dabei LESEN: ein Generator, der ein
-   Verzeichnis ausliest, kann maschinen-lokale Artefakte aufsaugen und sie in
-   eine committete Doku schreiben (Skill 53, Folge-Falle 3). Ein Link-Walk
-   ueber alle `*.md` gehoert in denselben Pass — Doku-Umzuege brechen die
-   relativen Links IN der verschobenen Datei, nicht nur die auf sie. Fixes sofort committen (ein Commit pro Datei,
+1. **Test-coverage pass.** Run the coverage report, triage gaps per Skill 27
+   (reachable → behavioral test / defensive → marker /
+   dead → delete). **First check whether a report was produced at all**
+   (`coverage/coverage-summary.json`) — vitest only writes it on a
+   green run, a single timeout makes it drop out and the pass then looks
+   like "nothing to do". Exactly like that it ran into the void for two
+   weeks in 2026-08 (housekeeping finding 2026-08-21).
+2. **Mutation pass** (since 2026-07-14, user assignment msg 15097; §4.5b
+   + Skill 59). Switch off central state writes one at a time,
+   full suite — if it stays green, a guard is missing → add a test.
+   Always roll back the mutations (`git diff` = empty).
+3. **Doc-drift pass.** Check all files under `docs/` (recursively) and all
+   `CLAUDE.md` files against the current code state; also
+   **regenerate the generated doc blocks** (`npm run docs:items` +
+   `npm run docs:deployment`, Owner msg 15459 — changed output =
+   drift, commit it along). READ the diff while doing so: a generator that
+   reads a directory can suck up machine-local artifacts and write them into
+   a committed doc (Skill 53, follow-up trap 3). A link walk
+   over all `*.md` belongs in the same pass — doc moves break the
+   relative links IN the moved file, not only those pointing to it. Commit fixes immediately (one commit per file,
    Skill 32).
-4. **Skills-/Practices-Drift-Pass** (seit 2026-07-06, User-Spec
-   msg 14133). `docs/skills/` + dieses Dachdokument gegen die seit dem
-   letzten Pass angefallenen Learnings pruefen, inkl.
-   **Memory→Skills/GDP-Vollabgleich** (User-Auftrag msg 15430,
-   2026-07-17). Jede Aenderung dreifach synchron: Skill-File +
-   Skills-Index + Dachdokument.
+4. **Skills/practices drift pass** (since 2026-07-06, user spec
+   msg 14133). Check `docs/skills/` + this umbrella document against the
+   learnings accumulated since the last pass, incl. the
+   **memory→skills/GDP full reconciliation** (user assignment msg 15430,
+   2026-07-17). Every change synchronized threefold: skill file +
+   skills index + umbrella document.
 
-Operative Volldetails aller vier Paesse (Trigger, Schritt-Listen,
-Anti-Patterns): Skill
-[42-housekeeping-coverage-doku-drift.md](skills/42-housekeeping-coverage-doku-drift.md).
+Operational full details of all four passes (triggers, step lists,
+anti-patterns): Skill
+`42-housekeeping-coverage-doku-drift.md` (Chimera only).
 
-**Warum daily statt nur wochentlich.** Drift ist im Gegensatz zu
-Architektur-Schuld linear in der Zeit — Code aendert sich jeden Tag,
-Doku altert jeden Tag. Wenn die Korrektur am gleichen Tag passiert wie
-die Code-Aenderung, ist sie trivial; sammelt sie sich ueber 1–2
-Wochen, ist sie ein eigenes Hardening-Subprojekt. Daily-Housekeeping
-schiebt die Drift-Halbwertszeit von Wochen auf einen Tag und
-entlastet damit Phase 2 und Phase 3 des Vier-Phasen-Zyklus.
+**Why daily instead of only weekly.** Drift, unlike
+architecture debt, is linear in time — code changes every day,
+docs age every day. If the correction happens on the same day as
+the code change, it is trivial; if it accumulates over 1–2
+weeks, it becomes its own hardening subproject. Daily housekeeping
+pushes the drift half-life from weeks down to a day and
+thereby relieves phases 2 and 3 of the four-phase cycle.
 
-**Branch-Kontext (seit 2026-07-18):** Housekeeping-Commits sind Kleinkram
-→ direkt auf dev committen; der Push nach origin/dev braucht eine
-Freigabe (§6.7) — nachts lokal committen, Push-Buendel am Morgen melden.
+**Branch context (since 2026-07-18):** housekeeping commits are small stuff
+→ commit directly on dev; the push to origin/dev needs an
+approval (§6.7) — commit locally at night, report the push bundle in the morning.
 
-**Autonomie.** Vollautonom triggerbar, ohne User-Entscheidung. Sobald
-der User wieder Tasks anstoesst, wird der Pass an der naechsten
-Commit-Grenze sauber unterbrochen — daher ist die Pro-Schritt-Commit-
-Regel (`32-commit-pro-schritt.md`) hier doppelt wichtig.
+**Autonomy.** Fully autonomously triggerable, without a user decision. As soon as
+the user kicks off tasks again, the pass is cleanly interrupted at the next
+commit boundary — which is why the per-step commit
+rule (`32-commit-per-step.md`) is doubly important here.
 
 ---
 
-## Teil D — Beobachteter Arbeitsrhythmus aus der Commit-Historie
+## Part D — Observed working rhythm from the commit history
 
-Teil A und B beschreiben, wie eine einzelne Aufgabe umgesetzt wird;
-Teil C den praeskriptiven Vier-Phasen-Zyklus. Dieser Abschnitt
-beschreibt, wie sich Aufgaben ueber laengere Zeit **tatsaechlich
-aneinandergereiht** haben — gegruendet auf die echte Commit-Historie
-des Chimera-Projekts (18.03.–27.04., 1055 Commits ohne Merges). Kein
-Soll-Zustand, sondern empirische Baseline, an der sich der Vier-
-Phasen-Zyklus aus Teil C orientiert.
+Parts A and B describe how a single task is implemented;
+Part C the prescriptive four-phase cycle. This section
+describes how tasks have **actually strung together** over longer
+periods — grounded in the real commit history
+of the Chimera project (03-18 to 04-27, 1055 commits excluding merges). Not a
+target state, but an empirical baseline that the four-phase
+cycle from Part C is oriented on.
 
-### D.1 Mini-Zyklus — pro Aenderung (Stunden)
+### D.1 Mini cycle — per change (hours)
 
-Die kleinste Einheit. Pro Aenderung ein Commit, der bereits vollstaendig
-ist: Feature-Code + zugehoerige Tests + ggf. Doku-Nachzug. Das heisst:
-**Tests und Doku sind keine Phasen, sondern Bestandteil jedes einzelnen
-Commits**. Im Projekt sind pro Tag 5–30 solcher Mini-Zyklen ueblich,
-mit Ausreissern bis 70+ an intensiven Feature-Tagen (siehe D.3).
+The smallest unit. Per change, one commit that is already complete:
+feature code + accompanying tests + doc backfill if needed. That means:
+**tests and docs are not phases but a component of every single
+commit**. In the project, 5–30 such mini cycles per day are common,
+with outliers up to 70+ on intensive feature days (see D.3).
 
-Siehe auch Teil A.5.1 (Doku im selben Commit) und A.4.1 (Tests
-begleiten Features/Fixes).
+See also Part A.5.1 (docs in the same commit) and A.4.1 (tests
+accompany features/fixes).
 
-### D.2 Mikro-Rhythmus — Feature-Bursts (1–4 Tage)
+### D.2 Micro rhythm — feature bursts (1–4 days)
 
-Die zweitkleinste Einheit. Ein thematisch zusammenhaengendes
-Feature-Paket — typischerweise ein neues Subsystem, eine neue
-Condition-Grammar, eine neue UI-Komponente — zieht sich ueber
-1–4 zusammenhaengende Tage mit feature-dominantem Commit-Profil
-(mind. 35–40% der Commits dieses Tages sind `feat:`).
+The second-smallest unit. A thematically coherent
+feature package — typically a new subsystem, a new
+condition grammar, a new UI component — stretches over
+1–4 consecutive days with a feature-dominant commit profile
+(at least 35–40% of that day's commits are `feat:`).
 
-**Beobachtete Feature-Bursts in Chimera:**
+**Observed feature bursts in Chimera:**
 
-| Zeitraum | Dauer | Commits/Tag | Inhalt (Kurzfassung) |
+| Period | Duration | Commits/day | Content (in brief) |
 |---|---:|---:|---|
-| 25.–26.03. | 2d | 10, 10 | Erste Feature-Welle nach Bootstrap |
-| 29.–30.03. | 2d | 7, 15 | — |
-| 06.–07.04. | 2d | 11, 8 | — |
-| 14.–16.04. | 3d | 73, 9, 55 | Grosses Feature-Paket (~137 Commits) |
-| 18.04. | 1d | 48 | Feature-Nachlegen |
-| 22.–25.04. | 4d | 37, 53, 34, 61 | Zone-HP-System + RL-Bot-Gap-Closure + heatExtractor (~185 Commits) |
+| 03-25/26 | 2d | 10, 10 | First feature wave after bootstrap |
+| 03-29/30 | 2d | 7, 15 | — |
+| 04-06/07 | 2d | 11, 8 | — |
+| 04-14 to 04-16 | 3d | 73, 9, 55 | Big feature package (~137 commits) |
+| 04-18 | 1d | 48 | Feature follow-up |
+| 04-22 to 04-25 | 4d | 37, 53, 34, 61 | Zone-HP system + RL-bot gap closure + heatExtractor (~185 commits) |
 
-**Durchschnitt:** ~2 Tage pro Feature-Burst, max. 4 Tage zusammenhaengend
-(22.–25.04., der laengste bisher beobachtete Burst). Lange reine
-Feature-Sequenzen jenseits davon gibt es **nicht** — dazwischen mischen
-sich Fixes und Refactors.
+**Average:** ~2 days per feature burst, max. 4 consecutive days
+(04-22 to 04-25, the longest burst observed so far). Long pure
+feature sequences beyond that do **not** exist — fixes and refactors
+mix in between.
 
-### D.3 Makro-Rhythmus — Hardening-Tage (1–2 Tage)
+### D.3 Macro rhythm — hardening days (1–2 days)
 
-Nach einem groesseren Feature-Paket folgt typisch ein **Hardening-Tag**:
-ein konzentrierter Tag mit refactor-/perf-/test-dominantem Profil, der
-die in der Feature-Phase aufgelaufene technische Schuld abbaut.
-Typischerweise 15–30 refactor-Commits an einem einzigen Tag, oft
-ergaenzt durch einen Perf-Pass und einen Test-Coverage-Nachzug.
+After a larger feature package, a **hardening day** typically follows:
+a concentrated day with a refactor-/perf-/test-dominant profile that
+pays down the technical debt accumulated in the feature phase.
+Typically 15–30 refactor commits on a single day, often
+complemented by a perf pass and a test-coverage backfill.
 
-**Beobachtete Hardening-Tage in Chimera:**
+**Observed hardening days in Chimera:**
 
-| Datum | Refactor-Commits | Gesamt-Commits | Trigger |
+| Date | Refactor commits | Total commits | Trigger |
 |---|---:|---:|---|
-| 11.04. | 23 | 33 | Nach 10-Tages Feature-/Mixed-Phase |
-| 19.04. | 27 | 67 | Direkt nach 14.–18.04. Feature-Burst |
-| 26.04. | 16 | 50 | Architektur-Klaerung (types-Split, Handler-Maps, RNG-Injection) |
-| 27.04. | 8 | 46 | Perf-/Test-/Doku-Nachzug (Heat-Konstanten, ResolveCache, Coverage) |
+| 04-11 | 23 | 33 | After a 10-day feature/mixed phase |
+| 04-19 | 27 | 67 | Directly after the 04-14 to 04-18 feature burst |
+| 04-26 | 16 | 50 | Architecture clarification (types split, handler maps, RNG injection) |
+| 04-27 | 8 | 46 | Perf/test/doc backfill (heat constants, ResolveCache, coverage) |
 
-Typische Aktivitaeten an einem Hardening-Tag:
-- **Architektur-Review:** pruefen, ob neue Features ordentlich in
-  bestehende Subsysteme eingebettet sind (Schicht-Sauberkeit,
-  Abhaengigkeits-Richtung, Zustandsfluss). Beispiele aus 26.04.:
-  Handler-Map-Familien (NPC, Tasks, Effects), types-Monolith-Split,
-  RNG-Injection durch Boss-Event-Aktivierung.
-- **Performance-Pass:** Hot-Paths messen, unnoetige Re-Renders / Hooks
-  eliminieren, teure Operationen memoisieren. Beispiele aus 27.04.:
-  Per-Tick `ResolveCache` (WeakMap) fuer `resolveTree`, pressureSolver
-  Iterations- und Epsilon-Kalibrierung.
-- **Redundanz-Elimination:** doppelte Logik zusammenfuehren, Hilfsfunktionen
-  extrahieren, parallele Datenstrukturen verschmelzen. Beispiele aus
-  27.04.: Heat-Sim-Konstanten in `heatConstants.ts` zentralisieren,
-  7 inline-`apply*`-Funktionen aus `useHeatSimulation` in eigene
-  pure Module unter `src/run/` ausgelagert (982 → 637 LOC).
-- **Test-Coverage-Nachzug:** Luecken schliessen, die waehrend der
-  Feature-Phase nicht abgedeckt waren. Beispiele aus 27.04.:
-  zoneHealAll Defensive-Guards, propertyBag zeroDemand-Pfade per
-  ItemDef-Mock, heatPhysics Branch 91.78% → 97.26%.
-- **Doku-Konsistenz-Check:** docs/ durchgehen, ob neue Konzepte in den
-  relevanten Subsystem-Dateien beschrieben sind. In Chimera liegen
-  docs/ so, dass jedes Subsystem sein eigenes Markdown-File hat
-  (`tasks.md`, `game-flow.md`, `runs.md`, etc.). Zusaetzlich fliessen
-  neue Erkenntnisse in `good-development-practices.md` ein
-  (siehe Commit `0f3bc91` vom 27.04.).
+Typical activities on a hardening day:
+- **Architecture review:** check whether new features are properly
+  embedded in existing subsystems (layer cleanliness,
+  dependency direction, state flow). Examples from 04-26:
+  handler-map families (NPC, tasks, effects), types-monolith split,
+  RNG injection through boss-event activation.
+- **Performance pass:** measure hot paths, eliminate unnecessary
+  re-renders / hooks, memoize expensive operations. Examples from 04-27:
+  per-tick `ResolveCache` (WeakMap) for `resolveTree`, pressureSolver
+  iteration and epsilon calibration.
+- **Redundancy elimination:** merge duplicated logic, extract helper
+  functions, fuse parallel data structures. Examples from
+  04-27: centralize heat-sim constants in `heatConstants.ts`,
+  7 inline `apply*` functions moved out of `useHeatSimulation` into their own
+  pure modules under `src/run/` (982 → 637 LOC).
+- **Test-coverage backfill:** close gaps that were not covered during
+  the feature phase. Examples from 04-27:
+  zoneHealAll defensive guards, propertyBag zeroDemand paths via
+  ItemDef mock, heatPhysics branch 91.78% → 97.26%.
+- **Doc consistency check:** go through docs/ to see whether new concepts are
+  described in the relevant subsystem files. In Chimera, docs/ is laid
+  out so that every subsystem has its own Markdown file
+  (`tasks.md`, `game-flow.md`, `runs.md`, etc.). Additionally, new
+  insights flow into `good-development-practices.md`
+  (see commit `0f3bc91` of 04-27).
 
-**Faustregel:** ein Hardening-Tag pro 5–10 Feature-Tagen. Beobachtete
-Abstaende: 11.04. → 19.04. (8 Tage), 19.04. → 26.04. (7 Tage),
-26.04. → 27.04. (1 Tag — 27.04. ist tatsaechlich die zweite Halbzeit
-einer zweitaegigen Hardening-Sequenz). Das passt zum lockeren
-Wochen-Rhythmus, ist aber nicht erzwungen.
+**Rule of thumb:** one hardening day per 5–10 feature days. Observed
+intervals: 04-11 → 04-19 (8 days), 04-19 → 04-26 (7 days),
+04-26 → 04-27 (1 day — 04-27 is actually the second half
+of a two-day hardening sequence). That fits the loose
+weekly rhythm, but is not enforced.
 
-### D.4 Was NICHT gemacht wird (bewusst)
+### D.4 What is NOT done (deliberately)
 
-Der Chimera-Rhythmus verzichtet auf einige gaengige Strukturen:
+The Chimera rhythm forgoes some common structures:
 
-- **Keine dedizierten Test-Tage.** Tests entstehen im selben Commit
-  wie das zu pruefende Verhalten (Teil A.4.1). Der Test-Coverage-
-  Nachzug findet im Rahmen der Hardening-Tage statt, nicht als
-  separate Aktivitaet.
-- **Keine dedizierten Doku-Tage.** Doku ist Teil jedes Commits, der
-  sie beruehrt (A.5.1). Konsistenz-Reviews finden am Hardening-Tag
-  mit statt.
-- **Keine Sprint-Zyklen.** Es gibt keine 1- oder 2-Wochen-Sprints mit
-  Kickoff/Retro. Die Arbeit fliesst; der Rhythmus emergiert aus dem
-  Abwechseln zwischen Feature-Drang und dem Druck aufgelaufener
-  Schuld.
-- **Keine Pre-Release-Lockdown-Phasen.** Es gibt keinen dedizierten
-  „Code Freeze" vor einem Deploy — der Service wird jeden Tag
-  mehrfach neu gestartet (siehe A.7).
+- **No dedicated test days.** Tests arise in the same commit
+  as the behavior to be checked (Part A.4.1). The test-coverage
+  backfill happens within the hardening days, not as a
+  separate activity.
+- **No dedicated doc days.** Docs are part of every commit that
+  touches them (A.5.1). Consistency reviews happen along with the
+  hardening day.
+- **No sprint cycles.** There are no 1- or 2-week sprints with
+  kickoff/retro. The work flows; the rhythm emerges from the
+  alternation between the urge to build features and the pressure of
+  accumulated debt.
+- **No pre-release lockdown phases.** There is no dedicated
+  "code freeze" before a deploy — the service is restarted several
+  times every day (see A.7).
 
-### D.5 Trigger fuer einen Hardening-Tag
+### D.5 Triggers for a hardening day
 
-Woran erkennt man, dass der naechste Tag ein Hardening-Tag sein
-sollte? Beobachtete Signale aus Chimera:
+How do you recognize that the next day should be a hardening day?
+Observed signals from Chimera:
 
-1. **Mehrere Feature-Bursts hintereinander** ohne Refactor-Tag
-   dazwischen (>5 feature-dominante Tage in Folge). Konkretes Beispiel:
-   22.–25.04. — vier feature-dominante Tage am Stueck → 26.04.
-   Hardening-Tag, der die aufgelaufene Schuld systematisch abbaut.
-2. **Groessen-Signal:** eine Datei ist ueber ~500 LOC gewachsen oder
-   eine andere ist unklar geworden (die Hotspots aus
-   `docs/analysis/complexity-analysis.md` machen das sichtbar). Konkretes Beispiel:
-   `useHeatSimulation.ts` war auf 982 LOC angewachsen → am 27.04. in
-   7 pure Module zerlegt (637 LOC verbleibend).
-3. **Neu-Feature auf wackliger Basis:** wenn die naechste geplante
-   Erweiterung sich auf ein schwammiges Subsystem stuetzt, lohnt sich
-   der Refactor zuerst. Beispiel: types-Monolith mit 441 LOC wurde am
-   26.04. in 5 thematische Files gesplittet, bevor weitere Bot-Features
-   draufgesetzt wurden.
-4. **Doku driftet sichtbar:** wenn man beim Einarbeiten merkt, dass
-   die Doku mehrere Schritte zurueck liegt, oder dass neue
-   Praktiken/Erkenntnisse aus den letzten Tagen nicht in
-   `good-development-practices.md` reflektiert sind.
+1. **Several feature bursts in a row** without a refactor day
+   in between (>5 feature-dominant days in a row). Concrete example:
+   04-22 to 04-25 — four feature-dominant days in a row → 04-26
+   hardening day that systematically pays down the accumulated debt.
+2. **Size signal:** a file has grown beyond ~500 LOC or
+   another has become unclear (the hotspots from
+   `docs/analysis/complexity-analysis.md` make that visible). Concrete example:
+   `useHeatSimulation.ts` had grown to 982 LOC → on 04-27 decomposed into
+   7 pure modules (637 LOC remaining).
+3. **New feature on a shaky base:** if the next planned
+   extension rests on a mushy subsystem, the refactor is worth doing
+   first. Example: the types monolith with 441 LOC was split on
+   04-26 into 5 thematic files before further bot features
+   were put on top.
+4. **Docs drifting visibly:** when, while getting oriented, you notice
+   that the docs are several steps behind, or that new
+   practices/insights from the last days are not reflected in
+   `good-development-practices.md`.
 
-### D.6 Zusammenfassung der Kadenzen
+### D.6 Summary of the cadences
 
-| Kadenz | Dauer | Inhalt | Frequenz |
+| Cadence | Duration | Content | Frequency |
 |---|---|---|---|
-| **Mini** (pro Aenderung) | Minuten–Stunden | 1 Commit mit Code + Tests + Doku | 5–70/Tag |
-| **Mikro** (Feature-Burst) | 1–4 Tage | Thematisch zusammenhaengendes Feature-Paket | ~alle 3–7 Tage |
-| **Makro** (Hardening) | 1 Tag (gelegentlich 2) | Refactor + Perf + Redundanz + Test-Backfill + Doku-Pruefung | ~alle 7–10 Tage |
+| **Mini** (per change) | Minutes–hours | 1 commit with code + tests + docs | 5–70/day |
+| **Micro** (feature burst) | 1–4 days | Thematically coherent feature package | ~every 3–7 days |
+| **Macro** (hardening) | 1 day (occasionally 2) | Refactor + perf + redundancy + test backfill + doc check | ~every 7–10 days |
 
-Keine Phase ist scharf von der naechsten abgegrenzt — Commits einer
-Kadenz koennen in eine andere hineinreichen (z.B. ein Refactor-Commit
-mitten in einem Feature-Burst, wenn es den Fortschritt blockiert, oder
-ein Feature-Commit am Hardening-Tag, wenn das Refactor eine kleine
-Funktionserweiterung mitnimmt). Der Rhythmus ist das Muster ueber viele
-Commits hinweg, nicht eine strikte Rotation.
+No phase is sharply delineated from the next — commits of one
+cadence can reach into another (e.g. a refactor commit
+in the middle of a feature burst when it blocks progress, or
+a feature commit on a hardening day when the refactor takes a small
+functional extension along). The rhythm is the pattern across many
+commits, not a strict rotation.
 
-### D.7 Beobachtungen aus 41 Tagen (18.03.–27.04.)
+### D.7 Observations from 41 days (03-18 to 04-27)
 
-**Verteilung der Commit-Kategorien (1055 Commits ohne Merges):**
+**Distribution of the commit categories (1055 commits excluding merges):**
 
-| Kategorie | Commits | Anteil |
+| Category | Commits | Share |
 |---|---:|---:|
 | feature | 373 | 35.4% |
 | misc | 216 | 20.5% |
@@ -2090,91 +2088,91 @@ Commits hinweg, nicht eine strikte Rotation.
 | doc | 88 | 8.3% |
 | test | 47 | 4.5% |
 
-**Was das ueber den Rhythmus sagt:**
-- Feature dominiert (35%), aber kein einzelner Tag hat reines
-  Feature-Profil — selbst der staerkste Feature-Tag (14.04. mit
-  73 Commits) hat 14 Fix- und 14 Refactor-Commits eingestreut.
-- Refactor (14.5%) ist hoch genug, um die kontinuierliche
-  Schuld-Reduktion sichtbar zu machen — aber konzentriert sich
-  in den Hardening-Tagen (allein 11.04., 19.04., 26.04. tragen
-  ~66 der 153 Refactor-Commits, also ~43%).
-- Test (4.5%) wirkt niedrig — ist es aber nicht: die meisten Tests
-  reisen Huckepack mit `feat:`/`fix:`-Commits mit (siehe Teil A.4.1).
-  Reine `test:`-Commits sind Coverage-Nachzuege, also vorrangig
-  Hardening-Aktivitaet.
-- Doc (8.3%) liegt im erwarteten Rahmen, da pro Feature i.d.R. ein
-  oder zwei reine Doku-Commits anfallen (zusaetzlich zu der Doku, die
-  in Feature-Commits eingebettet ist).
+**What that says about the rhythm:**
+- Feature dominates (35%), but no single day has a pure
+  feature profile — even the strongest feature day (04-14 with
+  73 commits) has 14 fix and 14 refactor commits interspersed.
+- Refactor (14.5%) is high enough to make the continuous
+  debt reduction visible — but concentrates in
+  the hardening days (04-11, 04-19, 04-26 alone carry
+  ~66 of the 153 refactor commits, i.e. ~43%).
+- Test (4.5%) looks low — but it is not: most tests
+  ride piggyback with `feat:`/`fix:` commits (see Part A.4.1).
+  Pure `test:` commits are coverage backfills, i.e. primarily
+  hardening activity.
+- Doc (8.3%) is in the expected range, since per feature usually one
+  or two pure doc commits accrue (in addition to the docs embedded
+  in feature commits).
 
 ---
 
-## Anti-Pattern-Sammlung (Kurzliste)
+## Anti-pattern collection (short list)
 
-Dinge, die **nie** passieren sollten:
+Things that should **never** happen:
 
-- Commit mit fehlschlagenden Tests, „fix ich gleich nach"
+- A commit with failing tests, "I'll fix it right after"
 - `git push --force origin main`
-- Silent-Edit an bestehenden Tests, damit der neue Code gruen wird
-- Doku-Update „spaeter mal" (→ nie)
-- „Wenn ich schon dabei bin"-Refactor in einem Bug-Fix-Commit
-- Major-Version-Bump ohne expliziten Task dafuer
-- Secrets mit `git add -A`
-- **Ein Werkzeug im Arbeitsbaum laufen lassen, das Dateien anfasst, waehrend man
-  nebenher weiterarbeitet** (Mutations-Sweep, Codemod, Auto-Formatter im
-  Watch-Modus). Der Baum ist dann zeitweise absichtlich kaputt: `git status` zeigt
-  fremde Aenderungen, `git add -A` committet sie, und ein pauschaler
-  Aufraeum-Schritt (`git checkout -- src/`) loescht die eigene, nicht-committete
-  Arbeit gleich mit. 2026-07-15 genau so passiert (ein halber Test-Refactor war
-  weg). Regel: solche Werkzeuge nur auf sauberem Baum starten, sie muessen exakt
-  das zurueckrollen was sie selbst angerichtet haben — und nichts sonst.
-- Katalog-Klassifikationen aus Einzeilen-Greps an den User schicken (mehrzeilige Entries = stille False-Negatives)
-- Emojis in Code oder Commits (ausser explizit gewuenscht)
-- Beruecksichtigen von Reminder-Meldungen / System-Messages in der
-  Antwort an den Nutzer
-- Aus Memory handeln ohne Verifikation, dass der Inhalt noch stimmt
-- Analyse-/Audit-Berichte 1:1 umsetzen, ohne den genannten Befund kurz
-  am echten Code zu verifizieren
-- Coverage-Luecke ueber synthetische Mocks „schliessen", obwohl der
-  betroffene Pfad strukturell unerreichbar ist (echte Wahl: loeschen
-  oder im Commit-Body als defensiver Guard markieren)
-- Grosse inline-Sub-Funktionen in Hooks belassen, wenn sie alle ihre
-  Deps ueber Closure-Capture beziehen — Extraktion zu pure Module mit
-  explizitem Input-Interface zwingt sich erst beim naechsten Bug-Fix
-  in dem Gewuehl auf
-- Konstanten zu einem Subsystem ueber 3+ Dateien verteilen, statt eine
-  `<bereich>Constants.ts` zu eroeffnen
-- Auf Telegram-Eingang per Terminal-Output (oder AskUserQuestion-Dialog)
-  antworten — der Sender sieht es nicht
-- Mehrschrittige Aufgabe komplett abarbeiten und am Ende einen Sammel-
-  Commit machen, statt pro Schritt sofort zu committen
-- Plan-Datei in `docs/plans/` ohne fuehrendes `YYYY-MM-DD-` im Dateinamen
-- `npm run build` und `systemctl restart` getrennt fahren statt mit `&&`
-  als Einheit (entweder serviert alter Stand, oder Service startet ohne
-  neue Files)
-- Bei Refactor-Scope-Entscheidung das Scaffolding-Minimum waehlen
-  („quick-and-dirty, sauber spaeter") statt der substantiell richtigen
-  Variante
-- Eine Kern-Engine-Semantik (Aggregations-Reihenfolge, Owner-Scope,
-  Gate-Propagation, Event-Lifetime) auf einen einzelnen Bug-Report/Screenshot
-  hin „geradebiegen", ohne zu pruefen ob das Verhalten eine bewusste
-  Design-Invariante ist (z.B. Modifier Child→Parent nie Sibling; Boss-Event
-  ohne Dauer = permanent → akkumulierendes Hazard ist eine vergessene
-  `durationMs` im JSON, kein Engine-Bug — 2026-06-13 revertiert)
-- User-Daten (Save/Export) beim Übernehmen umlayouten/clampen statt 1:1 zu
-  übernehmen; oder Werte aus einem Screenshot zurückrechnen, obwohl die
-  Quell-Datei vorliegt
-- Einen Plan auf „Umgesetzt" setzen, sobald das letzte Feature laeuft —
-  ohne die abschliessende Refaktorierungs-Audit-Phase (Architektur/Redundanz
-  ueber die Gesamt-Implementierung) tatsaechlich durchzufuehren
+- Silent edits to existing tests so that the new code goes green
+- Doc update "later at some point" (→ never)
+- A "while I'm at it" refactor in a bug-fix commit
+- A major-version bump without an explicit task for it
+- Secrets via `git add -A`
+- **Running a tool in the working tree that touches files while you keep
+  working alongside** (mutation sweep, codemod, auto-formatter in
+  watch mode). The tree is then deliberately broken for a while: `git status` shows
+  foreign changes, `git add -A` commits them, and a blanket
+  cleanup step (`git checkout -- src/`) deletes your own uncommitted
+  work along with it. Happened exactly like that 2026-07-15 (half a test refactor was
+  gone). Rule: start such tools only on a clean tree; they must roll back exactly
+  what they themselves wrought — and nothing else.
+- Sending catalog classifications from single-line greps to the user (multi-line entries = silent false negatives)
+- Emojis in code or commits (unless explicitly wanted)
+- Taking reminder messages / system messages into account in the
+  reply to the user
+- Acting from memory without verifying that the content is still true
+- Implementing analysis/audit reports 1:1 without briefly verifying the
+  named finding against the real code
+- "Closing" a coverage gap via synthetic mocks even though the
+  affected path is structurally unreachable (the real choice: delete,
+  or mark it in the commit body as a defensive guard)
+- Leaving large inline sub-functions in hooks when they obtain all their
+  deps via closure capture — the extraction to pure modules with an
+  explicit input interface only forces itself on you at the next bug fix
+  in that tangle
+- Spreading constants for one subsystem across 3+ files instead of
+  opening a `<area>Constants.ts`
+- Replying to Telegram inbound with terminal output (or an AskUserQuestion
+  dialog) — the sender does not see it
+- Working through a multi-step task completely and making one batch
+  commit at the end, instead of committing immediately per step
+- A plan file in `docs/plans/` without a leading `YYYY-MM-DD-` in the filename
+- Running `npm run build` and `systemctl restart` separately instead of as
+  one `&&` unit (either the old state gets served, or the service starts
+  without the new files)
+- Choosing the scaffolding minimum in a refactor scope decision
+  ("quick-and-dirty, clean later") instead of the substantially right
+  variant
+- "Straightening out" a core engine semantic (aggregation order, owner scope,
+  gate propagation, event lifetime) based on a single bug report/screenshot
+  without checking whether the behavior is a deliberate
+  design invariant (e.g. modifiers child→parent never sibling; boss event
+  without a duration = permanent → an accumulating hazard is a forgotten
+  `durationMs` in the JSON, not an engine bug — reverted 2026-06-13)
+- Re-layouting/clamping user data (save/export) when adopting it instead of
+  taking it 1:1; or back-calculating values from a screenshot even though the
+  source file is available
+- Setting a plan to "Umgesetzt" as soon as the last feature runs —
+  without actually performing the concluding refactoring-audit phase
+  (architecture/redundancy over the whole implementation)
 
 ---
 
 ## Revision
 
-Wenn eine Regel in der Praxis Probleme macht, stelle sie in Frage
-statt sie stumm zu umgehen. Praktiken sollten dem Ziel dienen —
-funktionierende, wartbare Software schnell und mit niedriger
-Fehlerrate auszuliefern — nicht umgekehrt.
+If a rule causes problems in practice, question it
+instead of silently working around it. Practices should serve the goal —
+shipping working, maintainable software fast and with a low
+error rate — not the other way around.
 
-Aenderungen an diesem Dokument: per PR, kurze Begruendung, Zustimmung
-mindestens eines weiteren Teammitglieds.
+Changes to this document: via PR, short rationale, approval of
+at least one other team member.

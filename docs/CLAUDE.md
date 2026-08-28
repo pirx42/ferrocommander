@@ -2,26 +2,30 @@
 
 ← Parent: [../CLAUDE.md](../CLAUDE.md)
 
-Projekt-Dokumentation fuer den Total-Commander-Clone. Eine Datei pro
-Thema, Querverweise statt Doppelungen.
+Project documentation for the Total Commander clone. One file per topic,
+cross-references instead of duplication.
 
-## Inhalt
+## Contents
 
-- [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) — v1-Design:
-  Scope, Architektur (tc-core + tc-app), Datenfluss, Meilensteine.
 - [good-development-practices.md](good-development-practices.md) —
-  Arbeitsregeln, Workflow und Vier-Phasen-Zyklus (uebernommen aus Chimera);
-  vor nicht-trivialer Arbeit lesen.
+  working rules, workflow, and the four-phase cycle (adopted from the
+  Chimera project); read before starting non-trivial work.
 
 ## Subdirectories
 
-- [skills/CLAUDE.md](skills/CLAUDE.md) — fokussierte Arbeitsregel-Dateien
-  (Trigger-Tabelle im Root-CLAUDE.md).
+- [plans/](plans/2026-08-28-tc-clone-design.md) — active plan documents;
+  finished plans move to `plans/archive/`. Currently active:
+  [2026-08-28-tc-clone-design.md](plans/2026-08-28-tc-clone-design.md)
+  (v1 design: scope, architecture tc-core + tc-app, data flow, phases).
+- [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
+  (trigger table in the root CLAUDE.md).
 
-## Konventionen
+## Conventions
 
-- Plan-Dokumente kommen nach `docs/plans/` mit Praefix `YYYY-MM-DD-` und
-  wandern nach Abschluss nach `docs/plans/archive/` (Skill
+- Everything in this repository is written in English — docs, code,
+  comments, commit messages.
+- Plan documents go to `docs/plans/` with a `YYYY-MM-DD-` prefix and a
+  Status header, and move to `docs/plans/archive/` when done (skill
   [10](skills/10-plan-lifecycle.md)).
-- Neue Doku-Datei: ein Topic pro Datei, hier im Index eintragen (Skill
-  [29](skills/29-ein-topic-pro-doku.md)).
+- New doc file: one topic per file, add it to this index (skill
+  [29](skills/29-one-topic-per-doc.md)).

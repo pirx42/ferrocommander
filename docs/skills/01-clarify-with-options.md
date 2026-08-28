@@ -1,36 +1,36 @@
-# Skill: Mehrdeutige Aufgaben mit benannten Optionen klaeren
+# Skill: Clarify ambiguous tasks with named options
 
-**Wann.** Vor der ersten Codezeile eines Tasks, der unausgesprochene Annahmen
-oder mehrere plausible Umsetzungen hat (Skip-Penalty: 1 / alle / keine?
-Confirm-Dialog ja/nein? Welche Sektoren betroffen?).
+**When.** Before the first line of code of a task that has unspoken assumptions
+or several plausible implementations (skip penalty: 1 / all / none?
+Confirm dialog yes/no? Which sectors affected?).
 
-**Regel.** Stelle die Frage **mit benannten Optionen (A/B/C)** und kurzen
-Tradeoffs — nicht als offene Frage. Warte auf die Antwort, beginne nicht
-spekulativ.
+**Rule.** Ask the question **with named options (A/B/C)** and short
+tradeoffs — not as an open-ended question. Wait for the answer, do not start
+speculatively.
 
-**Warum.** Jede Sekunde Klarstellung vor der Arbeit spart Stunden Rueckbau.
-Optionen sind leichter zu beantworten als "wie soll das genau sein?".
+**Why.** Every second of clarification before the work saves hours of rework.
+Options are easier to answer than "how exactly should this be?".
 
 **How.**
-- Identifiziere 2–4 plausible Varianten.
-- Pro Variante: ein Satz „was passiert" + ein Satz „Tradeoff".
-- Markiere ggf. eine als Empfehlung („(Recommended)").
-- Stoppe nach der Frage. Keine vorgeschlagene Implementierung waehrend du
-  wartest.
+- Identify 2–4 plausible variants.
+- Per variant: one sentence "what happens" + one sentence "tradeoff".
+- Optionally mark one as the recommendation ("(Recommended)").
+- Stop after the question. No proposed implementation while you
+  are waiting.
 
-**Beispiel.**
+**Example.**
 ```
-Skip-Button — drei Optionen:
-  A) Skip ohne Penalty (frei). Verlockt zum durchklicken.
-  B) Skip mit 1 zufaelliger Penalty. Konsistent mit Fail-Modell.   (Recommended)
-  C) Skip mit allen Penalties. Hart, koennte frustrierend sein.
-Bitte waehlen.
+Skip button — three options:
+  A) Skip without penalty (free). Tempts click-through.
+  B) Skip with 1 random penalty. Consistent with the fail model.   (Recommended)
+  C) Skip with all penalties. Harsh, could be frustrating.
+Please choose.
 ```
 
-**Anti-Pattern.**
-- "Soll ich Skip einbauen? Wie genau?" — offene Frage ohne Optionen.
-- Direkt Option B implementieren und dann fragen „passt das so?".
+**Anti-patterns.**
+- "Should I add Skip? How exactly?" — open-ended question without options.
+- Implementing option B right away and then asking "is this okay?".
 
-**Verwandt.**
-- [02-meta-fragen-direkt.md](02-meta-fragen-direkt.md)
-- [09-scope-vor-impl.md](09-scope-vor-impl.md)
+**Related.**
+- [02-answer-meta-questions-directly.md](02-answer-meta-questions-directly.md)
+- [09-scope-before-implementation.md](09-scope-before-implementation.md)

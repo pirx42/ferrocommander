@@ -1,55 +1,55 @@
-# Skill: Conventional-Commit-Format
+# Skill: Conventional Commit Format
 
-**Wann.** Du formulierst eine Commit-Subject-Line.
+**When.** You are writing a commit subject line.
 
-**Regel.** Subject-Line beginnt mit `feat|fix|refactor|docs|test|chore|perf`
-gefolgt von optionalem Scope und Doppelpunkt. Konsistent im gesamten Repo.
+**Rule.** The subject line starts with `feat|fix|refactor|docs|test|chore|perf`
+followed by an optional scope and a colon. Consistent across the whole repo.
 
 **Format.**
 ```
-<type>(<scope>): <kurze beschreibung>
+<type>(<scope>): <short description>
 
 <optional body>
 
 <optional footer>
 ```
 
-**Typen.**
-- `feat` — neues Feature / neuer User-sichtbarer Code-Pfad.
-- `fix` — Bug-Fix.
-- `refactor` — interne Umstrukturierung ohne Verhaltensaenderung.
-- `docs` — nur Dokumentation.
-- `test` — nur Tests (Nachzug / Coverage-Schliessung).
-- `chore` — Build/CI/Deps/Tooling.
-- `perf` — Performance-Optimierung (Verhalten gleich, schneller).
+**Types.**
+- `feat` — new feature / new user-visible code path.
+- `fix` — bug fix.
+- `refactor` — internal restructuring without behavior change.
+- `docs` — documentation only.
+- `test` — tests only (catch-up / coverage closing).
+- `chore` — build/CI/deps/tooling.
+- `perf` — performance optimization (same behavior, faster).
 
-**Scope.** Subsystem / Modul / Datei (`tasks`, `runs/pruefstand`, `hud`,
-`heatPhysics`). Optional, aber empfohlen.
+**Scope.** Subsystem / module / file (`tasks`, `runs/pruefstand`, `hud`,
+`heatPhysics`). Optional, but recommended.
 
-**Body.** Optional bei trivialen Commits, **empfohlen ab 10+ Zeilen Diff**.
+**Body.** Optional for trivial commits, **recommended from 10+ lines of diff**.
 
 **Footer.** `Co-Authored-By: ...`, `Closes #...`, etc.
 
-**Warum.** Macht Changelogs, Filter und bisect trivial. Tools wie
-semantic-release hebeln darauf. `git log --grep="^feat:"` zeigt alle
-Features einer Periode.
+**Why.** Makes changelogs, filters, and bisect trivial. Tools like
+semantic-release build on it. `git log --grep="^feat:"` shows all
+features of a period.
 
-**Beispiele.**
+**Examples.**
 ```
-feat(tasks): Section-SuccessCondition ersetzt per-Task holdMs
-fix(runs/pruefstand): kein Start-Clause mehr bei t=0 erfuellt
-refactor(hud): Schaltplan-Darstellung fuer Sektor-Condition
-docs: dev-analysis.md — Vorgehen fuer Commit-Statistik
-perf(propertyBag): ResolveCache via WeakMap, ~40% schneller
-test(heatPhysics): Coverage 91.78% → 97.26% (paintZone, heater, cable)
+feat(tasks): section SuccessCondition replaces per-task holdMs
+fix(runs/pruefstand): no start clause satisfied at t=0 anymore
+refactor(hud): circuit-diagram rendering for sector condition
+docs: dev-analysis.md — approach for commit statistics
+perf(propertyBag): ResolveCache via WeakMap, ~40% faster
+test(heatPhysics): coverage 91.78% → 97.26% (paintZone, heater, cable)
 chore: bump vite 4.5 → 4.5.1 (security advisory)
 ```
 
-**Anti-Pattern.**
-- „WIP", „update", „fix stuff" — gibt keinen Hinweis.
-- `feat` fuer Bug-Fix, `fix` fuer neues Feature — vergiftet die Filter.
-- Subject-Line > 72 Zeichen — bricht in vielen Tools.
+**Anti-patterns.**
+- "WIP", "update", "fix stuff" — gives no hint.
+- `feat` for a bug fix, `fix` for a new feature — poisons the filters.
+- Subject line > 72 characters — breaks in many tools.
 
-**Verwandt.**
-- [32-commit-pro-schritt.md](32-commit-pro-schritt.md)
-- [33-hooks-nicht-skip.md](33-hooks-nicht-skip.md)
+**Related.**
+- [32-commit-per-step.md](32-commit-per-step.md)
+- [33-never-skip-hooks.md](33-never-skip-hooks.md)

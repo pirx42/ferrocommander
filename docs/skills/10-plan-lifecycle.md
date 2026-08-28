@@ -1,92 +1,92 @@
-# Skill: Plan-Dateinamen + Lifecycle (Entwurf → Archiviert)
+# Skill: Plan file names + lifecycle (Draft → Archived)
 
-**Wann.** Sobald eine Aufgabe Mehr-Phasen-Charakter hat und ein
-Plan-Dokument in `docs/plans/` Sinn ergibt.
+**When.** As soon as a task has multi-phase character and a
+plan document in `docs/plans/` makes sense.
 
-**Regel — Dateiname.** Plan-Datei MUSS mit `YYYY-MM-DD-` beginnen
-(Memory `feedback_plan_filenames`). Beispiel: `2026-05-24-item-consolidation-audit.md`.
+**Rule — file name.** The plan file MUST start with `YYYY-MM-DD-`
+(memory `feedback_plan_filenames`). Example: `2026-05-24-item-consolidation-audit.md`.
 
-**Regel — Topic-Branch (seit 2026-07-18, Owner msg 15495).** Jeder Plan
-startet mit einem eigenen Topic-Branch AUF dev
-(`git checkout dev && git checkout -b topic/<plan-slug>`); waehrend des
-Plans wird nur dorthin committet (Topic-Pushes frei). Nach Abnahme/Freigabe:
-`git checkout dev && git merge --no-ff topic/<plan-slug>` — der Merge ist
-Teil des Plan-Abschlusses. Details: Skill
-`64-branch-workflow-dev-topic-main.md` (nur Chimera).
+**Rule — topic branch (since 2026-07-18, owner msg 15495).** Every plan
+starts with its own topic branch ON dev
+(`git checkout dev && git checkout -b topic/<plan-slug>`); during the
+plan, commits go only there (topic pushes are free). After acceptance/approval:
+`git checkout dev && git merge --no-ff topic/<plan-slug>` — the merge is
+part of completing the plan. Details: skill
+`64-branch-workflow-dev-topic-main.md` (Chimera only).
 
-**Regel — Status-Header.** Erste oder zweite Zeile nach H1:
+**Rule — status header.** First or second line after the H1:
 ```
-Status: Entwurf | In Arbeit | Umgesetzt | Deferred | Archiviert
+Status: Draft | In Progress | Implemented | Deferred | Archived
 ```
-Bei „Umgesetzt" + „Archiviert" zusaetzlich Implementations-Commit-Hashes
-(`commits abc123/def456`) oder Hinweis `(commits siehe git log --grep ...)`.
+For "Implemented" + "Archived", additionally the implementation commit hashes
+(`commits abc123/def456`) or a note `(commits see git log --grep ...)`.
 
-**Regel — Aufwand-Schaetzung kalibrieren.** Wenn der Plan eine Aufwand-
-Schaetzung enthaelt (`~2 Tage`, `Aufwand: M`, `~4 Stunden`): vor dem Schreiben
-in den Plan-Doc den Faktor aus [45-aufwand-schaetzung-kalibrieren.md](45-aufwand-schaetzung-kalibrieren.md)
-anwenden. Empirisch: Refactor-Plaene werden um Faktor 10x ueberschaetzt,
-Feature-Plaene um 4x. Default ×0.15.
+**Rule — calibrate effort estimates.** If the plan contains an effort
+estimate (`~2 days`, `effort: M`, `~4 hours`): before writing it
+into the plan doc, apply the factor from [45-calibrate-effort-estimates.md](45-calibrate-effort-estimates.md).
+Empirically: refactor plans are overestimated by a factor of 10x,
+feature plans by 4x. Default ×0.15.
 
-**Regel — Phase 0 Coverage-Pre-Check.** Nach der Scope-/Phasen-Planung
-und VOR Phase A:
-1. Pro Datei/Funktion, die der Plan modifiziert: Vorhandene Test-Coverage
-   sichten, Luecken via [27-coverage-luecken-triage.md](27-coverage-luecken-triage.md)
-   einordnen (erreichbar / defensiv / dead).
-2. Erreichbare Pfade ohne Tests bekommen **vor** Phase A Charakterisierungs-
-   Tests, die das *aktuelle* Verhalten festschreiben — Stil:
-   [26-verhaltens-tests.md](26-verhaltens-tests.md).
-3. Phase 0 wird als eigene Plan-Phase dokumentiert; ihr Commit traegt
-   `test(<area>): pre-impl characterization` und ist sauber vom
-   Refactor-Commit getrennt.
+**Rule — phase 0 coverage pre-check.** After scope/phase planning
+and BEFORE phase A:
+1. For each file/function the plan modifies: review existing test
+   coverage, classify gaps via [27-coverage-gap-triage.md](27-coverage-gap-triage.md)
+   (reachable / defensive / dead).
+2. Reachable paths without tests get characterization tests **before**
+   phase A that pin down the *current* behavior — style:
+   [26-behavioral-tests.md](26-behavioral-tests.md).
+3. Phase 0 is documented as its own plan phase; its commit carries
+   `test(<area>): pre-impl characterization` and is cleanly separated from
+   the refactor commit.
 
-Details + Begruendung in [43-coverage-vor-umsetzung.md](43-coverage-vor-umsetzung.md).
+Details + rationale in [43-coverage-before-implementation.md](43-coverage-before-implementation.md).
 
-**Regel — Letzte Phase = Refaktorierungs-Audit.** Die abschliessende Phase
-jedes Plans ist ein Refaktorierungs-Audit + Korrektur über die gesamte
-Plan-Implementierung (Architektur/Redundanz). Wird beim Planschreiben als
-letzte Phase mitgeplant und tatsaechlich umgesetzt, bevor der Plan als
-„Umgesetzt" gilt. Details: [49-plan-abschluss-refaktorierungs-audit.md](49-plan-abschluss-refaktorierungs-audit.md).
+**Rule — final phase = refactoring audit.** The concluding phase
+of every plan is a refactoring audit + correction across the entire
+plan implementation (architecture/redundancy). It is planned in as the
+last phase when writing the plan and actually carried out before the plan
+counts as "Implemented". Details: [49-final-phase-refactoring-audit.md](49-final-phase-refactoring-audit.md).
 
-**Regel — Plan-Ende-Ritual.** Sobald die Implementierung (inkl. Audit-Phase)
-abgeschlossen ist:
+**Rule — end-of-plan ritual.** As soon as the implementation (incl. audit phase)
+is complete:
 
-1. **(a) Substanz extrahieren.** Enthaelt der Plan dauerhaft nuetzliches
-   Konzept-Material (Tabellen, Begruendungen, API-Schemata)? → in den
-   passenden `docs/`-Eintrag wandern (`architecture.md`, `property-system.md`,
-   `items.md`, ...). Plan-Status auf
-   „Umgesetzt + Substanz extrahiert nach `<file>`".
+1. **(a) Extract substance.** Does the plan contain permanently useful
+   conceptual material (tables, rationales, API schemas)? → move it into the
+   appropriate `docs/` entry (`architecture.md`, `property-system.md`,
+   `items.md`, ...). Plan status becomes
+   "Implemented + substance extracted to `<file>`".
 
-2. **(b) Archivieren.** Wenn der Plan im Wesentlichen eine
-   Schritt-fuer-Schritt-Anleitung war, deren Spuren im Code stehen:
+2. **(b) Archive.** If the plan was essentially a
+   step-by-step guide whose traces live in the code:
    `git mv docs/plans/<file>.md docs/plans/archive/<file>.md`
-   mit aktualisiertem Status-Header.
-   **Nie** archivieren bevor (a) gegengeprueft ist — sonst entsteht eine
-   zwei-Pass-Operation mit git-Luecke.
+   with an updated status header.
+   **Never** archive before (a) has been cross-checked — otherwise you
+   get a two-pass operation with a git gap.
 
-3. **(c) Loeschen.** Nur wenn der Plan reine Implementierungs-To-Dos
-   ohne dauerhaften Wert enthielt (selten).
+3. **(c) Delete.** Only if the plan contained pure implementation to-dos
+   with no lasting value (rare).
 
-**Regel — Cross-Refs.** Aktive Plaene als `docs/plans/...md`, archivierte als
-`docs/plans/archive/...md`. Beim Archivieren gleichzeitig Cross-Refs in
-Code/Doku auf den neuen Pfad umbiegen.
+**Rule — cross-refs.** Active plans as `docs/plans/...md`, archived ones as
+`docs/plans/archive/...md`. When archiving, simultaneously repoint cross-refs
+in code/docs to the new path.
 
-**Regel — Audit.** Alle 4 Wochen oder nach grossen Sprints drei Fragen pro
-Plan: (i) Status-Header noch korrekt? (ii) lebt Substanz im Plan, die nach
-`docs/` gehoeren wuerde? (iii) sollte der Plan archiviert werden?
+**Rule — audit.** Every 4 weeks or after big sprints, three questions per
+plan: (i) is the status header still correct? (ii) does substance live in the
+plan that would belong in `docs/`? (iii) should the plan be archived?
 
-**Warum.** Plan-Dokumente driften sonst zwischen „aktiv" und „lange tot".
-Datum im Namen sortiert chronologisch + zeigt Alter auf einen Blick.
-Status-Header + Archivierung trennen aktiven Plan-Backlog von historischem
-Material.
+**Why.** Plan documents otherwise drift between "active" and "long dead".
+The date in the name sorts chronologically + shows age at a glance.
+Status header + archiving separate the active plan backlog from historical
+material.
 
-**Anti-Pattern.**
-- `plans/item-audit.md` ohne Datum → in 6 Monaten unklar, ob aktuell.
-- Plan „Umgesetzt" markieren, Substanz aber im Plan-File belassen → Doku
-  driftet, weil Reader sie nicht dort sucht.
-- Archivieren bevor Substanz nach `docs/` extrahiert ist.
+**Anti-patterns.**
+- `plans/item-audit.md` without a date → in 6 months it is unclear whether it is current.
+- Marking a plan "Implemented" but leaving the substance in the plan file → docs
+  drift, because readers do not look for it there.
+- Archiving before the substance has been extracted to `docs/`.
 
-**Verwandt.**
-- [09-scope-vor-impl.md](09-scope-vor-impl.md)
-- [28-doku-im-selben-commit.md](28-doku-im-selben-commit.md)
-- [43-coverage-vor-umsetzung.md](43-coverage-vor-umsetzung.md) — Phase-0-Operation.
-- [49-plan-abschluss-refaktorierungs-audit.md](49-plan-abschluss-refaktorierungs-audit.md) — Letzte-Phase-Operation.
+**Related.**
+- [09-scope-before-implementation.md](09-scope-before-implementation.md)
+- [28-docs-in-same-commit.md](28-docs-in-same-commit.md)
+- [43-coverage-before-implementation.md](43-coverage-before-implementation.md) — the phase-0 operation.
+- [49-final-phase-refactoring-audit.md](49-final-phase-refactoring-audit.md) — the final-phase operation.
