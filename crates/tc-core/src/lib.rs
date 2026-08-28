@@ -7,21 +7,3 @@
 
 pub mod listing;
 pub mod vfs;
-
-/// Version of the engine, taken from the crate manifest.
-///
-/// The UI reports this rather than carrying its own version string, so the two
-/// crates cannot disagree about which build is running.
-pub fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn version_is_reported_from_the_manifest() {
-        assert_eq!(version(), env!("CARGO_PKG_VERSION"));
-    }
-}

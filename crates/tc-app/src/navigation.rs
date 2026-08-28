@@ -27,7 +27,7 @@ pub fn parent_target(listing: &Listing) -> Option<VfsPath> {
 mod tests {
     use std::fs;
 
-    use tc_core::vfs::{Entry, EntryKind, LocalFs, VfsPath, VirtualFs};
+    use tc_core::vfs::{Entry, EntryKind, LocalFs, VfsPath};
 
     use super::*;
 
@@ -114,12 +114,5 @@ mod tests {
         let up = parent_target(&down).unwrap();
 
         assert_eq!(up, start);
-    }
-
-    #[test]
-    fn a_pane_can_navigate_through_a_trait_object_backend() {
-        let fs: Box<dyn VirtualFs> = Box::new(LocalFs);
-        let listing = Listing::load(fs.as_ref(), VfsPath::root()).unwrap();
-        assert!(parent_target(&listing).is_none());
     }
 }

@@ -17,7 +17,7 @@ use crate::vfs::{Entry, EntryKind, VfsError, VfsPath, VirtualFs};
 
 use constants::{DEFAULT_SHOW_HIDDEN, DEFAULT_SORT_KEY, DEFAULT_SORT_ORDER, PARENT_MODIFIED};
 
-pub use name::{extension, split_name};
+pub use name::split_name;
 pub use sort::{Sort, SortKey, SortOrder};
 
 /// One directory as the UI sees it.
@@ -143,7 +143,7 @@ impl Listing {
         self.refocus();
     }
 
-    pub fn set_show_hidden(&mut self, show_hidden: bool) {
+    fn set_show_hidden(&mut self, show_hidden: bool) {
         self.show_hidden = show_hidden;
         self.refocus();
     }

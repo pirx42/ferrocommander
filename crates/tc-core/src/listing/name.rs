@@ -14,7 +14,7 @@ pub fn split_name(name: &str) -> (&str, &str) {
 }
 
 /// The extension alone, or `""` when there is none.
-pub fn extension(name: &str) -> &str {
+pub(super) fn extension(name: &str) -> &str {
     split_name(name).1
 }
 

@@ -13,6 +13,28 @@ pub const WINDOW_HEIGHT: i32 = 700;
 /// Both panes start equally wide — neither side is the "main" one.
 pub const PANE_SPLIT_RATIO: f32 = 0.5;
 
+/// Panes in the window. Switching cycles through them, so a third pane
+/// later would need no new switching logic.
+pub const PANE_COUNT: usize = 2;
+
+/// Column headers.
+pub const COLUMN_TITLE_NAME: &str = "Name";
+pub const COLUMN_TITLE_EXT: &str = "Ext";
+pub const COLUMN_TITLE_SIZE: &str = "Size";
+pub const COLUMN_TITLE_DATE: &str = "Date";
+
+/// Column widths. The name column expands into leftover space; the others
+/// stay fixed so the two panes line up with each other.
+pub const COLUMN_WIDTH_NAME: i32 = 260;
+pub const COLUMN_WIDTH_EXT: i32 = 70;
+pub const COLUMN_WIDTH_SIZE: i32 = 120;
+pub const COLUMN_WIDTH_DATE: i32 = 140;
+
+/// Cell alignment: sizes right-aligned so digits line up by magnitude,
+/// everything else left.
+pub const XALIGN_LEFT: f32 = 0.0;
+pub const XALIGN_RIGHT: f32 = 1.0;
+
 /// Shown in the size column for directories, whose byte size is meaningless.
 pub const DIR_SIZE_LABEL: &str = "<DIR>";
 

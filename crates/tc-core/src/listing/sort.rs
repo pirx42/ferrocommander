@@ -20,16 +20,6 @@ pub enum SortOrder {
     Descending,
 }
 
-impl SortOrder {
-    /// The other direction — what clicking the same column header again does.
-    pub fn flipped(self) -> Self {
-        match self {
-            SortOrder::Ascending => SortOrder::Descending,
-            SortOrder::Descending => SortOrder::Ascending,
-        }
-    }
-}
-
 /// A column plus a direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sort {
@@ -108,12 +98,5 @@ mod tests {
         // Same letters, different case: never Equal, or the sort is unstable.
         assert_ne!(compare_names("a.txt", "A.txt"), Ordering::Equal);
         assert_eq!(compare_names("same", "same"), Ordering::Equal);
-    }
-
-    #[test]
-    fn flipping_an_order_twice_returns_the_original() {
-        for order in [SortOrder::Ascending, SortOrder::Descending] {
-            assert_eq!(order.flipped().flipped(), order);
-        }
     }
 }

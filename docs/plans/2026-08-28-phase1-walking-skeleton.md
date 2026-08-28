@@ -329,23 +329,51 @@ keyboard.
 
 ### E — Refactoring audit + correction (skill [49](../skills/49-final-phase-refactoring-audit.md))
 
-*Commit(s):* `refactor(<area>): ...`
+*Commit:* `refactor(core,app): audit corrections for the walking skeleton`
 
-Audit over everything phases 0–D added, with corrections implemented in this
-phase, not deferred:
+**Done.** Audit over everything sub-phases 0–D added, corrections implemented
+in the same phase. 71 tests green (74 minus three deleted alongside the code
+they covered); behavior unchanged, verified by re-running the binary.
 
-- **Redundancy:** formatting helpers, path handling, and test fixture setup
-  duplicated between `vfs` and `listing` tests → shared test helper module.
-- **Architecture:** does `Listing` still own only model state, with zero GTK
-  types leaking into `tc-core`? Is `PaneView` free of `std::fs`?
-- **Constants:** every literal introduced in C/D actually lives in a
-  `constants` module.
-- **Consistency:** naming and module placement uniform across the crates;
-  error types not re-wrapped ad hoc.
-- **Dead remains:** scaffolding from phase 0 that no longer has a caller.
+**Dead scaffolding.** `tc_core::version()` lost its only caller when
+sub-phase C replaced the phase-0 banner with the real window. Removed, with
+its test. This is precisely the failure mode skill 49 names: nothing is
+visible per phase, only in the overall view.
 
-Exit: the plan's own implementation is consistent, the gate is green, and the
-design doc's phase 1 line can be marked done.
+**API ahead of its caller.** Four items were reachable from outside without
+anything outside calling them, and each was narrowed to what actually uses
+it:
+
+| Item | Only caller | Correction |
+|---|---|---|
+| `SortOrder::flipped` | its own test | removed — phase 3's column headers will add it back with a real caller |
+| `Listing::set_show_hidden` | `toggle_hidden` | made private |
+| `PaneView::sync_cursor` | `PaneView` itself | made private |
+| `listing::extension` | `listing::sort` | un-exported, `pub(super)` |
+
+The same rule that kept the mutating half off `VirtualFs` in sub-phase A and
+removed `PaneView::listing()`/`fs()` in C, applied in hindsight.
+
+**Magic values.** Column titles, widths and cell alignment were inline
+literals in `pane.rs`, and the pane switch was a hardcoded `1 - active`.
+Titles, widths and alignment moved into `constants.rs` alongside
+`WINDOW_WIDTH`; switching now cycles modulo `PANE_COUNT`, so a third pane
+would need no new switching logic. The `Column` enum keeps the *mapping*, so
+adding a column is still one variant.
+
+**Redundancy.** A third copy of "a backend works through a trait object" in
+`navigation.rs` — `tc-core` already asserts it twice. Removed.
+
+**Architecture: clean.** No `gtk`/`glib`/`gdk` reference exists anywhere in
+`tc-core`, and no `std::fs` or `std::path` in `tc-app` production code. The
+one `std::fs` in `tc-app` is inside test fixtures, which need it because
+`tc-core` has no write API until phase 2.
+
+**Accepted without change.** Entry-building helpers are duplicated across four
+test modules in two crates. Sharing them needs a `test-support` feature on
+`tc-core`, and the fixtures are small and shaped to each test's needs — the
+cure costs more than the disease today. Revisit when phase 2's operation
+tests need the same shapes.
 
 ## 5. Effort
 

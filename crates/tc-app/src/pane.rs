@@ -9,7 +9,9 @@ use tc_core::listing::Listing;
 use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
-    CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
+    CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT,
+    COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
+    COLUMN_WIDTH_SIZE, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_target, parent_target};
 use crate::row::Row;
@@ -32,19 +34,19 @@ impl Column {
 
     fn title(self) -> &'static str {
         match self {
-            Column::Name => "Name",
-            Column::Ext => "Ext",
-            Column::Size => "Size",
-            Column::Modified => "Date",
+            Column::Name => COLUMN_TITLE_NAME,
+            Column::Ext => COLUMN_TITLE_EXT,
+            Column::Size => COLUMN_TITLE_SIZE,
+            Column::Modified => COLUMN_TITLE_DATE,
         }
     }
 
     fn width(self) -> i32 {
         match self {
-            Column::Name => 260,
-            Column::Ext => 70,
-            Column::Size => 120,
-            Column::Modified => 140,
+            Column::Name => COLUMN_WIDTH_NAME,
+            Column::Ext => COLUMN_WIDTH_EXT,
+            Column::Size => COLUMN_WIDTH_SIZE,
+            Column::Modified => COLUMN_WIDTH_DATE,
         }
     }
 
@@ -57,8 +59,8 @@ impl Column {
     /// Sizes are right-aligned so digits line up by magnitude.
     fn xalign(self) -> f32 {
         match self {
-            Column::Size => 1.0,
-            _ => 0.0,
+            Column::Size => XALIGN_RIGHT,
+            _ => XALIGN_LEFT,
         }
     }
 
@@ -208,7 +210,7 @@ impl PaneView {
     }
 
     /// Moves the visible selection onto the listing's cursor.
-    pub fn sync_cursor(&self) {
+    fn sync_cursor(&self) {
         if self.listing.is_empty() {
             return;
         }

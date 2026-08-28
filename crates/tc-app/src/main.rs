@@ -19,18 +19,20 @@ use gtk::prelude::*;
 
 use tc_core::vfs::{LocalFs, VfsPath};
 
-use constants::{APP_ID, APP_NAME, PANE_SPLIT_RATIO, STYLESHEET, WINDOW_HEIGHT, WINDOW_WIDTH};
+use constants::{
+    APP_ID, APP_NAME, PANE_COUNT, PANE_SPLIT_RATIO, STYLESHEET, WINDOW_HEIGHT, WINDOW_WIDTH,
+};
 use keymap::Action;
 use pane::PaneView;
 
 /// The two panes and which of them keystrokes go to.
 struct Shell {
-    panes: [PaneView; 2],
+    panes: [PaneView; PANE_COUNT],
     active: usize,
 }
 
 impl Shell {
-    fn new(panes: [PaneView; 2]) -> Self {
+    fn new(panes: [PaneView; PANE_COUNT]) -> Self {
         let mut shell = Shell { panes, active: 0 };
         shell.update_active();
         shell
@@ -45,7 +47,7 @@ impl Shell {
     fn dispatch(&mut self, action: Action) {
         match action {
             Action::SwitchPane => {
-                self.active = 1 - self.active;
+                self.active = (self.active + 1) % PANE_COUNT;
                 self.update_active();
             }
             Action::CursorUp => self.active_pane().move_cursor_by(-1),
