@@ -83,6 +83,15 @@ impl Entry {
     }
 }
 
+/// A place the drive bar can send a pane.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mount {
+    pub path: crate::vfs::VfsPath,
+    /// What the button says: a drive letter on Windows, the last path
+    /// component on Unix.
+    pub label: String,
+}
+
 /// Why a VFS operation failed.
 ///
 /// Carries no `io::Error`: the variants must stay comparable so tests can

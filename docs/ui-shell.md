@@ -23,6 +23,19 @@ A `PaneView` owns a `Listing` and a `gio::ListStore` of `PaneEntry` objects.
 because `ColumnView` requires its items to be one, not because the row needs
 object semantics.
 
+## The drive bar
+
+A row of buttons above the panes, one per mounted filesystem, each sending
+the **active** pane there — the active one, because that is where the keyboard
+is and what the user is looking at.
+
+What counts as a mount worth offering is a judgement call, so it is made in
+one place and tested against a fixture rather than against whatever the
+running machine happens to have mounted: pseudo-filesystems are excluded by
+type, and anything under `/proc`, `/sys`, `/dev` or `/run` by path. On Windows
+the same function returns the drive list, which `root_entries` already knew
+how to find.
+
 ## Dialogs
 
 Every dialog is built from one shell in `dialogs.rs`, so three dialogs do not

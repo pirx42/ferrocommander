@@ -20,6 +20,7 @@
 //!   or attribute bits, which are entirely different things on the two
 //!   platforms.
 //! - [`set_attributes`] puts them back onto a copy.
+//! - [`mount_points`] lists the places the drive bar offers.
 //! - [`trash_error`] maps a `trash` failure onto [`VfsError`]. It lives here
 //!   because the crate's error *shape* differs by target: the freedesktop
 //!   backend wraps the underlying `io::Error`, the Windows one does not.
@@ -27,7 +28,7 @@
 use std::path::{Path, PathBuf};
 
 use super::path::VfsPath;
-use super::types::{Attributes, Entry, VfsError};
+use super::types::{Attributes, Entry, Mount, VfsError};
 
 #[cfg(unix)]
 mod imp {
@@ -94,6 +95,88 @@ mod imp {
 
     pub fn home_dir() -> Option<PathBuf> {
         std::env::var_os("HOME").map(PathBuf::from)
+    }
+
+    /// Where the kernel lists what is mounted.
+    const MOUNT_TABLE: &str = "/proc/self/mounts";
+
+    /// The root, which is always worth a button whatever else is mounted.
+    const ROOT_LABEL: &str = "/";
+
+    /// Filesystem types that are the kernel talking to itself. None of them
+    /// is a place a person navigates to, and a machine has dozens.
+    const PSEUDO_FILESYSTEMS: [&str; 21] = [
+        "autofs",
+        "binfmt_misc",
+        "bpf",
+        "cgroup",
+        "cgroup2",
+        "configfs",
+        "debugfs",
+        "devpts",
+        "devtmpfs",
+        "efivarfs",
+        "fusectl",
+        "hugetlbfs",
+        "mqueue",
+        "nsfs",
+        "overlay",
+        "proc",
+        "pstore",
+        "ramfs",
+        "securityfs",
+        "sysfs",
+        "tracefs",
+    ];
+
+    /// Mount points below these are the same story: kernel plumbing with a
+    /// path, and `/run` in particular is full of them.
+    const PSEUDO_PREFIXES: [&str; 4] = ["/proc/", "/sys/", "/dev/", "/run/"];
+
+    /// Reads the mount table.
+    pub fn mount_points() -> Vec<Mount> {
+        let table = std::fs::read_to_string(MOUNT_TABLE).unwrap_or_default();
+        parse_mount_table(&table)
+    }
+
+    /// Turns the mount table into the buttons worth offering.
+    ///
+    /// Separated from reading it so the filter can be tested against a
+    /// fixture: what a real machine happens to have mounted is not something
+    /// a test should depend on, and the judgement about what counts as
+    /// "somewhere a person goes" is the part worth reviewing.
+    pub(super) fn parse_mount_table(table: &str) -> Vec<Mount> {
+        let mut mounts = Vec::new();
+        for line in table.lines() {
+            let mut fields = line.split_whitespace();
+            let (Some(_device), Some(point), Some(kind)) =
+                (fields.next(), fields.next(), fields.next())
+            else {
+                continue;
+            };
+            if PSEUDO_FILESYSTEMS.contains(&kind) {
+                continue;
+            }
+            if PSEUDO_PREFIXES
+                .iter()
+                .any(|prefix| point.starts_with(prefix))
+            {
+                continue;
+            }
+            // The table escapes spaces as octal, which is the only escape
+            // that turns up in practice.
+            let point = point.replace("\\040", " ");
+            let path = VfsPath::new(&point);
+            let label = match path.file_name() {
+                Some(name) => name.to_string(),
+                None => ROOT_LABEL.to_string(),
+            };
+            if mounts.iter().any(|mount: &Mount| mount.path == path) {
+                continue;
+            }
+            mounts.push(Mount { path, label });
+        }
+        mounts
     }
 
     /// `$XDG_CONFIG_HOME`, or `~/.config` when it is unset — the freedesktop
@@ -231,6 +314,18 @@ mod imp {
         std::env::var_os("USERPROFILE").map(PathBuf::from)
     }
 
+    /// The drives, which is exactly what `root_entries` already finds.
+    pub fn mount_points() -> Vec<Mount> {
+        root_entries()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|entry| Mount {
+                path: VfsPath::root().child(&entry.name),
+                label: entry.name,
+            })
+            .collect()
+    }
+
     /// `%APPDATA%`, where per-user settings belong on Windows.
     pub fn config_dir() -> Option<PathBuf> {
         std::env::var_os("APPDATA")
@@ -247,8 +342,8 @@ mod imp {
 }
 
 pub use imp::{
-    attributes, config_dir, from_std_path, home_dir, is_hidden, render_attributes, root_entries,
-    set_attributes, to_std_path, trash_error,
+    attributes, config_dir, from_std_path, home_dir, is_hidden, mount_points, render_attributes,
+    root_entries, set_attributes, to_std_path, trash_error,
 };
 
 #[cfg(test)]
@@ -272,6 +367,36 @@ mod tests {
         // somewhere other than where it was told to.
         let native = home_dir().expect("a home directory");
         assert_eq!(to_std_path(&from_std_path(&native)), native);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_mount_table_keeps_the_places_a_person_navigates_to() {
+        // A fixture, not the running machine: what happens to be mounted
+        // here is not something a test should depend on.
+        let table = "\
+/dev/vda1 / ext4 rw,relatime 0 0
+proc /proc proc rw,nosuid 0 0
+sysfs /sys sysfs rw,nosuid 0 0
+tmpfs /run/user/1000 tmpfs rw,nosuid 0 0
+/dev/vdb1 /mnt/backup ext4 rw,relatime 0 0
+/dev/sdc1 /media/My\\040Stick vfat rw 0 0
+cgroup2 /sys/fs/cgroup cgroup2 rw 0 0
+/dev/vda1 / ext4 rw,relatime 0 0
+";
+        let mounts = imp::parse_mount_table(table);
+
+        let points: Vec<&str> = mounts.iter().map(|m| m.path.as_str()).collect();
+        assert_eq!(points, ["/", "/mnt/backup", "/media/My Stick"]);
+        assert_eq!(mounts[0].label, "/", "the root labels itself");
+        assert_eq!(mounts[2].label, "My Stick", "and an escaped space is one");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_mount_table_that_makes_no_sense_yields_no_buttons() {
+        assert!(imp::parse_mount_table("").is_empty());
+        assert!(imp::parse_mount_table("garbage\nalso garbage\n").is_empty());
     }
 
     #[cfg(unix)]

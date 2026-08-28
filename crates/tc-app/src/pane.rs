@@ -500,6 +500,11 @@ impl PaneView {
         self.sync_cursor();
     }
 
+    /// Sends this pane somewhere, which is what the drive bar does.
+    pub fn go_to(&mut self, dir: VfsPath) {
+        self.navigate_to(dir);
+    }
+
     /// Enters the directory under the cursor. Does nothing on a file — F3/F4
     /// arrive in phase 4.
     pub fn activate(&mut self) {

@@ -16,7 +16,13 @@ use std::time::SystemTime;
 
 pub use local::LocalFs;
 pub use path::VfsPath;
-pub use types::{Attributes, Entry, EntryKind, SymlinkTarget, VfsError};
+pub use types::{Attributes, Entry, EntryKind, Mount, SymlinkTarget, VfsError};
+
+/// The places the drive bar offers: mounted filesystems on Unix, drives on
+/// Windows.
+pub fn mount_points() -> Vec<Mount> {
+    platform::mount_points()
+}
 
 /// The attributes of an entry, written the way the platform writes them:
 /// `rwxr-xr-x` on Unix, `RHSA` on Windows.

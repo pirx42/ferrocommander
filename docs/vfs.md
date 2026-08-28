@@ -143,6 +143,7 @@ file.
 | VFS root `/` | the real root directory | synthetic: the list of drives |
 | Attributes | Unix mode bits, shown as `rwxr-xr-x` | Win32 file attributes, shown as `RHSA` |
 | Setting them | the full permission bits | the read-only flag only — `std` sets nothing else |
+| Mount points | `/proc/self/mounts`, minus the kernel's own | the drive list |
 | Trash errors | the crate wraps the real `io::Error`, so `NotFound` survives | Win32 status codes, kept as `Io` |
 
 **Why trash errors are a platform function.** The `trash` crate's error

@@ -1,6 +1,6 @@
 # Phase 3 Implementation Plan — Polish Browsing
 
-Status: In Progress — sub-phases 0, A, B, C, D, E, F done
+Status: In Progress — sub-phases 0, A, B, C, D, E, F, G done
 
 *2026-08-28 — implements phase 3 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*

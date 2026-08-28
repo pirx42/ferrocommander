@@ -61,6 +61,9 @@ pub const DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
 /// Separates the directory path from an error notice in the path bar.
 pub const PATH_BAR_ERROR_SEPARATOR: &str = "   ⚠ ";
 
+/// Gap between the drive buttons.
+pub const DRIVE_BAR_SPACING: i32 = 2;
+
 /// Spacing and padding of the pane's own widgets.
 pub const PANE_SPACING: i32 = 0;
 
@@ -90,6 +93,13 @@ pub const STYLESHEET: &str = "
        of its fixed-width column so a marked row read `2026-0... 8 17:20`.
        Total Commander marks in red alone for the same reason. */
     color: #c01c28;
+}
+.drive-bar {
+    padding: 2px 4px;
+}
+.drive-bar button {
+    padding: 1px 8px;
+    min-height: 0;
 }
 .filter-bar {
     margin: 2px 4px;
@@ -132,6 +142,7 @@ pub const SELECTION_STATUS: &str =
 pub const CLASS_MARKED: &str = "marked";
 pub const CLASS_STATUS_LINE: &str = "status-line";
 pub const CLASS_FILTER_BAR: &str = "filter-bar";
+pub const CLASS_DRIVE_BAR: &str = "drive-bar";
 
 /// What the quick-filter field says when it is empty.
 pub const FILTER_PLACEHOLDER: &str = "Filter\u{2026}  (Esc to clear)";

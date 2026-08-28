@@ -26,10 +26,11 @@ use tc_core::ops::{DeleteMode, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
-    APP_ID, APP_NAME, CONFLICT_PROMPT, PANE_COUNT, PANE_SPLIT_RATIO, PATTERN_DEFAULT,
-    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN,
-    SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
-    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_UNMARK_PATTERN,
+    APP_ID, APP_NAME, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, PANE_COUNT,
+    PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
+    PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE,
+    STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN,
+    TITLE_MOVE, TITLE_UNMARK_PATTERN,
 };
 use keymap::Action;
 use pane::PaneView;
@@ -404,6 +405,8 @@ fn build_window(app: &gtk::Application) {
         pane.restore(remembered.sort(), remembered.show_hidden);
     }
 
+    let drives = drive_bar();
+
     let panes = gtk::Paned::builder()
         .orientation(gtk::Orientation::Horizontal)
         .start_child(left.widget())
@@ -414,12 +417,16 @@ fn build_window(app: &gtk::Application) {
         .resize_end_child(true)
         .build();
 
+    let layout = gtk::Box::new(gtk::Orientation::Vertical, PANE_SPACING);
+    layout.append(&drives);
+    layout.append(&panes);
+
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title(APP_NAME)
         .default_width(settings.window.width)
         .default_height(settings.window.height)
-        .child(&panes)
+        .child(&layout)
         .build();
 
     let shell = Rc::new(RefCell::new(Shell::new([left, right], &window)));
@@ -428,9 +435,34 @@ fn build_window(app: &gtk::Application) {
     for index in 0..PANE_COUNT {
         wire_filter_bar(&shell, index);
     }
+    fill_drive_bar(&drives, &shell);
     remember_on_close(&window, &shell, config_root);
     window.add_controller(key_controller(&window, shell));
     window.present();
+}
+
+/// One button per mounted filesystem, sending the *active* pane there.
+///
+/// The active one, because that is the pane the keyboard is in and the one
+/// the user is looking at — sending the other would be a surprise.
+fn drive_bar() -> gtk::Box {
+    let bar = gtk::Box::new(gtk::Orientation::Horizontal, DRIVE_BAR_SPACING);
+    bar.add_css_class(CLASS_DRIVE_BAR);
+    bar
+}
+
+/// Fills the drive bar, once there is a shell for its buttons to talk to.
+fn fill_drive_bar(bar: &gtk::Box, shell: &Rc<RefCell<Shell>>) {
+    for mount in tc_core::vfs::mount_points() {
+        let button = gtk::Button::with_label(&mount.label);
+        button.set_tooltip_text(Some(mount.path.as_str()));
+        let shell = shell.clone();
+        let path = mount.path.clone();
+        button.connect_clicked(move |_| {
+            shell.borrow_mut().active_pane().go_to(path.clone());
+        });
+        bar.append(&button);
+    }
 }
 
 /// Writes the settings out when the window closes.
