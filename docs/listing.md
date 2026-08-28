@@ -65,5 +65,9 @@ follows its entry by name** when that entry is still visible. A file being
 re-sorted or a directory being refreshed must not slip out from under the
 user. When the entry is gone, the cursor clamps back into range.
 
+`focus_entry(name)` puts the cursor on a named row — how a pane returns the
+cursor to the directory it just stepped out of. It does nothing when that
+name is not visible, since the cursor cannot sit on a row that is not there.
+
 An empty listing has no current row: `current()` and `current_path()` return
 `None` rather than a placeholder.

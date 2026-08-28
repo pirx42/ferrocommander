@@ -48,6 +48,17 @@ decisions are testable without a window:
   a file. The `..` row needs no special case: it is a directory like any
   other, and `VfsPath` normalization makes its target the parent.
 - `parent_target` — where `Backspace` leads, `None` at the root.
+- `focus_after_move` — which entry the cursor lands on afterwards.
+
+**Stepping up lands on the directory you just left**, not on `..`. Someone
+who pressed Backspace is looking for where they were; dropping them at the
+top of the list makes them hunt for it again, and makes walking a tree
+several levels deep genuinely tedious. Every other move — descending, or
+jumping somewhere unrelated — starts at the top, because there is no previous
+position to restore.
+
+If the directory just left is hidden and hidden entries are not shown, the
+cursor stays at the top: the cursor cannot sit on a row that is not there.
 
 ## When a directory cannot be entered
 
@@ -72,5 +83,5 @@ binding.
 The wiring *between* a physical keypress and those functions — the GTK
 controller, its capture phase, the focus handling — is not covered by an
 automated test. It was verified by hand on 2026-08-28: `Tab`, `Enter`,
-`Backspace` and the arrow cursors behave as specified. Keep that in mind when
+`Backspace`, `Home`/`End` and the arrow cursors behave as specified. Keep that in mind when
 touching the controller — nothing will fail the gate if it breaks.

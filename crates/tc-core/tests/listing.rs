@@ -270,6 +270,31 @@ fn the_cursor_follows_its_entry_when_the_sort_changes() {
 }
 
 #[test]
+fn focusing_an_entry_by_name_moves_the_cursor_to_it() {
+    let mut listing = listing();
+    assert_eq!(listing.cursor(), 0);
+
+    listing.focus_entry("c.zip");
+
+    assert_eq!(listing.current().unwrap().name, "c.zip");
+}
+
+#[test]
+fn focusing_an_entry_that_is_not_visible_leaves_the_cursor_alone() {
+    let mut entries = fixture();
+    entries.push(file_entry(".secret", 5, 9));
+    let mut listing = Listing::new(VfsPath::new("/home/pirx"), entries);
+    listing.set_cursor(2);
+    let before = listing.cursor();
+
+    // Hidden while `show_hidden` is off, and a name that does not exist.
+    listing.focus_entry(".secret");
+    listing.focus_entry("nothing_here");
+
+    assert_eq!(listing.cursor(), before);
+}
+
+#[test]
 fn the_cursor_never_leaves_the_row_range() {
     let mut listing = listing();
 

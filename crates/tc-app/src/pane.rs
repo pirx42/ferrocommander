@@ -13,7 +13,7 @@ use crate::constants::{
     COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
     COLUMN_WIDTH_SIZE, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, XALIGN_LEFT, XALIGN_RIGHT,
 };
-use crate::navigation::{activation_target, parent_target};
+use crate::navigation::{activation_target, focus_after_move, parent_target};
 use crate::row::Row;
 
 /// The columns a pane shows.
@@ -254,8 +254,12 @@ impl PaneView {
     /// empty: leaving the user where they were, with the reason next to the
     /// path, keeps the pane in a state they can navigate out of.
     fn navigate_to(&mut self, dir: VfsPath) {
+        let focus = focus_after_move(self.listing.dir(), &dir);
         match Listing::load(self.fs.as_ref(), dir.clone()) {
-            Ok(listing) => {
+            Ok(mut listing) => {
+                if let Some(name) = focus {
+                    listing.focus_entry(&name);
+                }
                 self.listing = listing;
                 self.error = None;
             }

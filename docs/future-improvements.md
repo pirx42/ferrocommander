@@ -35,8 +35,10 @@ between a physical keypress and those functions — the GTK controller, its
 capture phase, the focus handling — has no test behind it.
 
 Manually confirmed working by the owner on 2026-08-28: `Tab`, `Enter`,
-`Backspace` and the arrow cursors. `Home`/`End` and `Ctrl+Q` have not been
-exercised. So the wiring is known good today; what is missing is a regression
+`Backspace`, `Home`/`End` and the arrow cursors. `Ctrl+Q` has not been
+exercised. That same session found a real bug the unit tests could not see —
+stepping up left the cursor on `..` instead of the directory just left —
+which is the argument for this gap mattering. So the wiring is known good today; what is missing is a regression
 net, and a future refactor could break it silently.
 *Home:* would need a way to synthesize keystrokes in the session, or
 `gtk::test` smoke tests as the design doc's testing section anticipates.

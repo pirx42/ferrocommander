@@ -138,6 +138,16 @@ impl Listing {
         self.path_at(self.cursor)
     }
 
+    /// Puts the cursor on the entry called `name`.
+    ///
+    /// Does nothing when that entry is not visible — a hidden directory is
+    /// not somewhere the cursor can go while it is hidden.
+    pub fn focus_entry(&mut self, name: &str) {
+        if let Some(index) = self.index_of(name) {
+            self.cursor = index;
+        }
+    }
+
     pub fn set_sort(&mut self, sort: Sort) {
         self.sort = sort;
         self.refocus();
@@ -177,6 +187,11 @@ impl Listing {
         usize::from(self.parent.is_some())
     }
 
+    /// The visible row holding `name`, if it is visible at all.
+    fn index_of(&self, name: &str) -> Option<usize> {
+        (0..self.len()).find(|&index| self.get(index).is_some_and(|entry| entry.name == name))
+    }
+
     /// Rebuilds the view after a sort or filter change, keeping the cursor on
     /// the entry it was on.
     fn refocus(&mut self) {
@@ -198,12 +213,9 @@ impl Listing {
         self.view
             .sort_by(|&left, &right| sort.compare(&entries[left], &entries[right]));
 
-        self.cursor = match focused {
-            Some(name) => (0..self.len())
-                .find(|&index| self.get(index).is_some_and(|entry| entry.name == name))
-                .unwrap_or(self.cursor),
-            None => self.cursor,
-        };
+        if let Some(name) = focused {
+            self.cursor = self.index_of(&name).unwrap_or(self.cursor);
+        }
         self.set_cursor(self.cursor);
     }
 }

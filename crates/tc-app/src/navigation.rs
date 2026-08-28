@@ -23,6 +23,19 @@ pub fn parent_target(listing: &Listing) -> Option<VfsPath> {
     listing.dir().parent()
 }
 
+/// Which entry the cursor should land on after moving from `from` to `to`.
+///
+/// Stepping **up** lands on the directory just left: someone who pressed
+/// Backspace is looking for where they were, not for the top of the list.
+/// Every other move — descending, or jumping somewhere unrelated — starts at
+/// the top, since there is no previous position to restore.
+pub fn focus_after_move(from: &VfsPath, to: &VfsPath) -> Option<String> {
+    if from.parent().as_ref() != Some(to) {
+        return None;
+    }
+    from.file_name().map(str::to_string)
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -81,6 +94,40 @@ mod tests {
     }
 
     #[test]
+    fn stepping_up_lands_on_the_directory_just_left() {
+        let from = VfsPath::new("/home/pirx/projects");
+        assert_eq!(
+            focus_after_move(&from, &VfsPath::new("/home/pirx")),
+            Some("projects".to_string())
+        );
+    }
+
+    #[test]
+    fn stepping_down_starts_at_the_top() {
+        let from = VfsPath::new("/home/pirx");
+        assert_eq!(
+            focus_after_move(&from, &VfsPath::new("/home/pirx/projects")),
+            None
+        );
+    }
+
+    #[test]
+    fn an_unrelated_jump_starts_at_the_top() {
+        let from = VfsPath::new("/home/pirx/projects");
+        // A sibling, and a grandparent: neither is the directory we left.
+        assert_eq!(
+            focus_after_move(&from, &VfsPath::new("/home/pirx/music")),
+            None
+        );
+        assert_eq!(focus_after_move(&from, &VfsPath::new("/home")), None);
+    }
+
+    #[test]
+    fn there_is_nothing_to_focus_when_leaving_the_root() {
+        assert_eq!(focus_after_move(&VfsPath::root(), &VfsPath::root()), None);
+    }
+
+    #[test]
     fn the_root_has_nowhere_further_up() {
         let listing = Listing::new(VfsPath::root(), Vec::new());
         assert_eq!(parent_target(&listing), None);
@@ -100,6 +147,47 @@ mod tests {
 
         assert_eq!(entered.current().unwrap().name, "..");
         assert!(entered.iter().any(|entry| entry.name == "inner.txt"));
+    }
+
+    /// Walks down and back up exactly the way `PaneView::navigate_to` does.
+    fn step(listing: &Listing, target: VfsPath) -> Listing {
+        let focus = focus_after_move(listing.dir(), &target);
+        let mut moved = Listing::load(&LocalFs, target).unwrap();
+        if let Some(name) = focus {
+            moved.focus_entry(&name);
+        }
+        moved
+    }
+
+    #[test]
+    fn stepping_back_up_puts_the_cursor_on_the_directory_just_left() {
+        let dir = tempfile::TempDir::new().unwrap();
+        for name in ["alpha", "beta", "gamma"] {
+            fs::create_dir(dir.path().join(name)).unwrap();
+        }
+        let mut listing = Listing::load(&LocalFs, LocalFs::vfs_path(dir.path())).unwrap();
+        // Descend from a row that is neither the first nor the last.
+        listing.focus_entry("beta");
+
+        let inside = step(&listing, activation_target(&listing).unwrap());
+        let back = step(&inside, parent_target(&inside).unwrap());
+
+        assert_eq!(back.current().unwrap().name, "beta");
+    }
+
+    #[test]
+    fn without_the_focus_step_going_up_would_land_on_the_parent_row() {
+        // Pins the bug this exists to prevent: a plain reload of the parent
+        // starts its cursor at the top, which is `..`, not where the user was.
+        let dir = tempfile::TempDir::new().unwrap();
+        fs::create_dir(dir.path().join("alpha")).unwrap();
+        let mut listing = Listing::load(&LocalFs, LocalFs::vfs_path(dir.path())).unwrap();
+        listing.focus_entry("alpha");
+        let inside = step(&listing, activation_target(&listing).unwrap());
+
+        let plain = Listing::load(&LocalFs, parent_target(&inside).unwrap()).unwrap();
+
+        assert_eq!(plain.current().unwrap().name, "..");
     }
 
     #[test]
