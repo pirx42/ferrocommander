@@ -121,3 +121,22 @@ be.
 Window construction is verified by running the binary — per the design doc,
 the shell is kept thin enough that manual testing plus the pure-logic tests
 suffice for v1.
+
+**Running it while another instance is open.** `gtk::Application` is
+single-instance: launching the binary again hands off to the running process,
+which opens a second window *there* and exits 0 here. A smoke run that exits
+0 immediately has not tested anything. To start an isolated instance
+alongside one that is already running:
+
+```bash
+DBUS_SESSION_BUS_ADDRESS="unix:path=/nope" ./target/release/tc-app
+```
+
+Registration fails, the app falls back to a private instance, and the only
+output is one harmless "Unable to acquire session bus" warning.
+
+**A quiet run is not a passing run.** Where the code ignores a `Result` —
+`activate_action` and friends — a failure prints nothing at all. A first
+attempt at scroll-to-cursor was a silent no-op for exactly this reason, and
+the clean smoke run said nothing. When verifying a GTK call that returns a
+`Result` the code discards, print the result once and look at it.
