@@ -18,6 +18,16 @@ pub use local::LocalFs;
 pub use path::VfsPath;
 pub use types::{Attributes, Entry, EntryKind, Mount, SymlinkTarget, VfsError};
 
+/// A [`VfsPath`] as the operating system spells it.
+///
+/// The one place a path leaves this layer, and it exists for the command
+/// line: spawning a process needs a working directory the OS understands, and
+/// `platform` stays private so that conversion cannot be reinvented per call
+/// site with its own idea of what a separator is.
+pub fn to_std_path(path: &VfsPath) -> std::path::PathBuf {
+    platform::to_std_path(path)
+}
+
 /// The places the drive bar offers: mounted filesystems on Unix, drives on
 /// Windows.
 pub fn mount_points() -> Vec<Mount> {
