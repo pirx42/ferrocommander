@@ -118,3 +118,20 @@ are gone fall out, names that are new arrive unmarked.
 Pattern selection uses `tc-core::glob` — `*` and `?`, case-insensitive, which
 is what Total Commander accepts and what a person types. It lives outside
 `listing` because phase 5's search needs the same matcher.
+
+## The quick filter
+
+`set_filter` narrows the visible rows to names containing a string, ignoring
+case. It is applied in `rebuild` beside the hidden-file rule, so narrowing
+costs one pass over the loaded entries and never re-reads the directory — and
+it composes with sorting, hidden files and the cursor rule because it is the
+same code that already handled those.
+
+The match has an ASCII fast path like the sort comparison, for the same
+reason: at 50 000 entries it runs 50 000 times between one keystroke and the
+next ([performance.md](performance.md)).
+
+The cursor follows its entry while that entry is still visible and clamps when
+it is not. Marks are untouched — narrowing the view is not a change of intent
+— but `select_all` afterwards takes only what is left, which is what makes the
+two safe together.

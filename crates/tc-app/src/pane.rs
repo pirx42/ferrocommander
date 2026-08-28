@@ -11,10 +11,10 @@ use tc_core::listing::Listing;
 use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
-    CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR, CLASS_STATUS_LINE,
-    COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_DATE,
-    COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
-    XALIGN_LEFT, XALIGN_RIGHT,
+    CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
+    CLASS_STATUS_LINE, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE,
+    COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER,
+    PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_target, adopted_cursor, focus_after_move, parent_target};
 use crate::row::Row;
@@ -130,6 +130,7 @@ impl PaneEntry {
 pub struct PaneView {
     root: gtk::Box,
     path_bar: gtk::Label,
+    filter_bar: gtk::Entry,
     status: gtk::Label,
     store: gio::ListStore,
     selection: gtk::SingleSelection,
@@ -180,15 +181,25 @@ impl PaneView {
         let status = gtk::Label::builder().xalign(0.0).build();
         status.add_css_class(CLASS_STATUS_LINE);
 
+        // Hidden until Ctrl+S asks for it, so a pane that is not being
+        // filtered looks exactly as it did.
+        let filter_bar = gtk::Entry::builder()
+            .placeholder_text(FILTER_PLACEHOLDER)
+            .visible(false)
+            .build();
+        filter_bar.add_css_class(CLASS_FILTER_BAR);
+
         let root = gtk::Box::new(gtk::Orientation::Vertical, PANE_SPACING);
         root.add_css_class(CLASS_PANE);
         root.append(&path_bar);
+        root.append(&filter_bar);
         root.append(&scroller);
         root.append(&status);
 
         let mut pane = PaneView {
             root,
             path_bar,
+            filter_bar,
             status,
             store,
             selection,
@@ -266,6 +277,41 @@ impl PaneView {
         self.status
             .set_text(&crate::jobs::selection_status(&self.listing));
         self.sync_cursor();
+    }
+
+    /// The field the quick filter is typed into, so the shell can wire its
+    /// own key handling to it.
+    pub fn filter_bar(&self) -> &gtk::Entry {
+        &self.filter_bar
+    }
+
+    /// Shows the filter field and puts the cursor in it.
+    pub fn begin_filter(&self) {
+        self.filter_bar.set_visible(true);
+        self.filter_bar.grab_focus();
+    }
+
+    /// Applies whatever is in the field.
+    pub fn apply_filter(&mut self) {
+        let text = self.filter_bar.text().to_string();
+        self.listing.set_filter(&text);
+        self.refresh();
+    }
+
+    /// Stops filtering, hides the field and hands the keyboard back to the
+    /// rows.
+    pub fn reset_filter(&mut self) {
+        self.filter_bar.set_text("");
+        self.filter_bar.set_visible(false);
+        self.listing.set_filter("");
+        self.refresh();
+        self.grab_focus();
+    }
+
+    /// Leaves the narrowed view in place but hands the keyboard back to the
+    /// rows, which is what Enter in the filter field means.
+    pub fn leave_filter(&self) {
+        self.grab_focus();
     }
 
     /// Flips the mark on the cursor row; `advance` steps down afterwards, so
@@ -370,6 +416,10 @@ impl PaneView {
     /// empty: leaving the user where they were, with the reason next to the
     /// path, keeps the pane in a state they can navigate out of.
     fn navigate_to(&mut self, dir: VfsPath) {
+        // A filter belongs to the directory it was typed in. Carrying it into
+        // the next one would show an empty pane and no reason why.
+        self.filter_bar.set_text("");
+        self.filter_bar.set_visible(false);
         let focus = focus_after_move(self.listing.dir(), &dir);
         match Listing::load(self.fs.as_ref(), dir.clone()) {
             Ok(mut listing) => {

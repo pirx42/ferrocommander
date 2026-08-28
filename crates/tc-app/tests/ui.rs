@@ -421,3 +421,65 @@ fn a_wildcard_marks_only_what_it_matches() {
         "the pattern marked a file it should not have"
     );
 }
+
+#[test]
+fn ctrl_s_narrows_the_pane_as_you_type() {
+    // The filter has to reach the pane, and the letters have to reach the
+    // filter: the shell's key controller sits ahead of the entry, so every
+    // one of them would otherwise be swallowed as a command.
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+s");
+    app.type_text("notes");
+    // Only notes.txt matches, so it is the first row after `..`.
+    app.key("Return");
+    app.keys(&["Home", "Down"]);
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "the filtered-out file was still reachable by the cursor"
+    );
+}
+
+#[test]
+fn escape_stops_filtering_and_brings_the_rows_back() {
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+s");
+    app.type_text("notes");
+    app.key("Escape");
+
+    // Everything is back, so the second row down is data.bin again.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+}
+
+#[test]
+fn a_filter_that_matches_nothing_still_leaves_a_way_out() {
+    // Filtering must never strand a pane: `..` survives any filter, and
+    // pressing Enter on it goes up.
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+s");
+    app.type_text("no-such-name");
+    app.key("Return");
+    app.keys(&["Home", "Return"]);
+
+    // Back in the home directory, where `dst` exists as a sibling of `src`.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("escaped");
+    app.key("Return");
+
+    app.await_exists("escaped");
+}

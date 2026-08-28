@@ -55,6 +55,11 @@ pub struct Listing {
     cursor: usize,
     sort: Sort,
     show_hidden: bool,
+    /// The quick filter. Empty means everything is shown.
+    ///
+    /// Applied in `rebuild` beside the hidden-file rule, so narrowing costs
+    /// one pass over the loaded entries and never re-reads the directory.
+    filter: String,
 }
 
 impl Listing {
@@ -104,6 +109,7 @@ impl Listing {
             cursor: 0,
             sort: Sort::new(DEFAULT_SORT_KEY, DEFAULT_SORT_ORDER),
             show_hidden: DEFAULT_SHOW_HIDDEN,
+            filter: String::new(),
         };
         listing.rebuild(None);
         listing
@@ -144,6 +150,23 @@ impl Listing {
 
     pub fn show_hidden(&self) -> bool {
         self.show_hidden
+    }
+
+    pub fn filter(&self) -> &str {
+        &self.filter
+    }
+
+    /// Narrows the visible rows to the names containing `filter`.
+    ///
+    /// The cursor follows its entry while that entry is still visible and
+    /// clamps when it is not — the same rule as the hidden-file toggle,
+    /// because it is the same code.
+    pub fn set_filter(&mut self, filter: &str) {
+        if self.filter == filter {
+            return;
+        }
+        self.filter = filter.to_string();
+        self.refocus();
     }
 
     pub fn cursor(&self) -> usize {
@@ -362,7 +385,11 @@ impl Listing {
     /// from under the user — and otherwise clamps to the row range.
     fn rebuild(&mut self, focused: Option<String>) {
         self.view = (0..self.entries.len())
-            .filter(|&position| self.show_hidden || !self.entries[position].hidden)
+            .filter(|&position| {
+                let entry = &self.entries[position];
+                (self.show_hidden || !entry.hidden)
+                    && name::contains_ignoring_case(&entry.name, &self.filter)
+            })
             .collect();
         let sort = self.sort;
         let entries = &self.entries;

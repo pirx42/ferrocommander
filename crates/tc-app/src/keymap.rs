@@ -42,6 +42,10 @@ pub enum Action {
     InvertMarks,
     /// Ctrl+A — mark everything visible.
     MarkAll,
+    /// Ctrl+S — narrow the pane as you type.
+    QuickFilter,
+    /// Escape — stop narrowing.
+    ClearFilter,
     Quit,
 }
 
@@ -186,6 +190,16 @@ static BINDINGS: &[Binding] = &[
         action: Action::MarkAll,
     },
     Binding {
+        key: Key::s,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::QuickFilter,
+    },
+    Binding {
+        key: Key::Escape,
+        modifiers: PLAIN,
+        action: Action::ClearFilter,
+    },
+    Binding {
         key: Key::q,
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::Quit,
@@ -235,6 +249,8 @@ mod tests {
             (Key::minus, PLAIN, Action::UnmarkByPattern),
             (Key::KP_Multiply, PLAIN, Action::InvertMarks),
             (Key::a, ModifierType::CONTROL_MASK, Action::MarkAll),
+            (Key::s, ModifierType::CONTROL_MASK, Action::QuickFilter),
+            (Key::Escape, PLAIN, Action::ClearFilter),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
         ];
         for (key, modifiers, action) in expected {
@@ -244,10 +260,11 @@ mod tests {
 
     #[test]
     fn an_unbound_key_triggers_nothing() {
-        // F5 and Delete left this list in phase 2 and Insert in phase 3,
-        // each when it was bound. The contract is unchanged; only the
-        // witnesses are. Plain `a` is still unbound — only Ctrl+A is.
-        for key in [Key::Escape, Key::a, Key::F9, Key::F12] {
+        // F5 and Delete left this list in phase 2, and Insert and Escape in
+        // phase 3, each when it was bound. The contract is unchanged; only
+        // the witnesses are. Plain `a` and `s` are still unbound — only their
+        // Ctrl forms mean anything.
+        for key in [Key::a, Key::s, Key::F9, Key::F12] {
             assert_eq!(action_for(key, PLAIN), None, "{key:?}");
         }
     }

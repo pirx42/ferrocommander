@@ -81,6 +81,9 @@ pub const STYLESHEET: &str = "
        Total Commander marks in red alone for the same reason. */
     color: #c01c28;
 }
+.filter-bar {
+    margin: 2px 4px;
+}
 .status-line {
     padding: 2px 8px;
     font-size: 90%;
@@ -118,6 +121,10 @@ pub const SELECTION_STATUS: &str =
 /// Style class marking a row the user has selected.
 pub const CLASS_MARKED: &str = "marked";
 pub const CLASS_STATUS_LINE: &str = "status-line";
+pub const CLASS_FILTER_BAR: &str = "filter-bar";
+
+/// What the quick-filter field says when it is empty.
+pub const FILTER_PLACEHOLDER: &str = "Filter\u{2026}  (Esc to clear)";
 
 /// Prompt of the dialog that asks for a select-by-pattern wildcard.
 pub const TITLE_MARK_PATTERN: &str = "Select by pattern";

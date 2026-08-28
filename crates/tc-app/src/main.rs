@@ -112,6 +112,11 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::UnmarkByPattern => start_pattern_marking(shell, false),
         Action::InvertMarks => shell.borrow_mut().active_pane().invert_marks(),
         Action::MarkAll => shell.borrow_mut().active_pane().mark_all(),
+        Action::QuickFilter => {
+            let state = shell.borrow();
+            state.panes[state.active].begin_filter();
+        }
+        Action::ClearFilter => shell.borrow_mut().active_pane().reset_filter(),
         Action::Copy => start_transfer(shell, true),
         Action::Move => start_transfer(shell, false),
         Action::CreateDir => start_create_dir(shell),
@@ -395,8 +400,62 @@ fn build_window(app: &gtk::Application) {
         .build();
 
     let shell = Rc::new(RefCell::new(Shell::new([left, right], &window)));
+    for index in 0..PANE_COUNT {
+        wire_filter_bar(&shell, index);
+    }
     window.add_controller(key_controller(&window, shell));
     window.present();
+}
+
+/// Connects one pane's quick-filter field: typing narrows, Escape stops,
+/// Enter keeps the narrowed view and hands the keyboard back to the rows.
+fn wire_filter_bar(shell: &Rc<RefCell<Shell>>, index: usize) {
+    let entry = shell.borrow().panes[index].filter_bar().clone();
+
+    let typing = shell.clone();
+    entry.connect_changed(move |_| {
+        // Reentrancy is real here: hiding the field or navigating away sets
+        // the text from inside a `borrow_mut`, and that emits `changed`. The
+        // borrow failing means a pane is already applying this very change
+        // itself, so skipping is not a lost update — it is the same update,
+        // once.
+        if let Ok(mut state) = typing.try_borrow_mut() {
+            state.panes[index].apply_filter();
+        }
+    });
+
+    let controller = gtk::EventControllerKey::new();
+    // Capture phase, unlike the dialogs': `GtkText` inside the entry consumes
+    // Return to emit its own activate signal, so in the bubble phase this
+    // handler never sees it and the keyboard stays trapped in the field.
+    // Escape does arrive either way, which is why only half of it looked
+    // wired up.
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let keys = shell.clone();
+    controller.connect_key_pressed(move |_, key, _, _| match key {
+        gdk::Key::Escape => {
+            keys.borrow_mut().panes[index].reset_filter();
+            glib::Propagation::Stop
+        }
+        gdk::Key::Return | gdk::Key::KP_Enter => {
+            keys.borrow().panes[index].leave_filter();
+            glib::Propagation::Stop
+        }
+        _ => glib::Propagation::Proceed,
+    });
+    entry.add_controller(controller);
+}
+
+/// Whether the keyboard focus is inside a text field.
+///
+/// `gtk::Text` is the widget inside a `gtk::Entry` that actually holds the
+/// focus, so that is what this looks for rather than the entry itself.
+fn typing(controller: &gtk::EventControllerKey) -> bool {
+    controller
+        .widget()
+        .and_downcast::<gtk::Window>()
+        .and_then(|window| gtk::prelude::GtkWindowExt::focus(&window))
+        .is_some_and(|focused| focused.is::<gtk::Text>())
 }
 
 /// Routes keystrokes through the keymap.
@@ -412,7 +471,15 @@ fn key_controller(
 
     // Weak, or the window would own a controller that owns the window.
     let window = window.downgrade();
-    controller.connect_key_pressed(move |_, key, _code, modifiers| {
+    controller.connect_key_pressed(move |controller, key, _code, modifiers| {
+        // The controller sits in the capture phase so the column view cannot
+        // swallow Tab and the arrows. That also puts it ahead of the quick
+        // filter's entry, where every letter would become a shell command and
+        // Enter would open a directory instead of accepting the filter — so
+        // while a text field has the focus, the shell keeps its hands off.
+        if typing(controller) {
+            return glib::Propagation::Proceed;
+        }
         let Some(action) = keymap::action_for(key, modifiers) else {
             return glib::Propagation::Proceed;
         };

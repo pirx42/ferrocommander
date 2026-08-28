@@ -728,3 +728,150 @@ mod selection {
         );
     }
 }
+
+/// The quick filter, which shares `rebuild` with sorting, hidden files and
+/// the cursor rule — so every test here asserts the composition, not the
+/// filter on its own.
+mod quick_filter {
+    use super::*;
+
+    fn listing() -> Listing {
+        Listing::new(
+            VfsPath::new("/home/pirx"),
+            vec![
+                dir_entry("reports", 10),
+                file_entry("report.txt", 100, 20),
+                file_entry("REPORT.bak", 200, 30),
+                file_entry("notes.md", 400, 40),
+                file_entry(".report-hidden", 800, 50),
+            ],
+        )
+    }
+
+    fn names(listing: &Listing) -> Vec<String> {
+        listing.iter().map(|entry| entry.name.clone()).collect()
+    }
+
+    #[test]
+    fn nothing_is_filtered_to_begin_with() {
+        assert_eq!(listing().filter(), "");
+        assert_eq!(listing().len(), 5, "four entries and the parent row");
+    }
+
+    #[test]
+    fn what_is_shown_plus_what_is_excluded_is_everything() {
+        let mut listing = listing();
+        let before = listing.visible_summary().count;
+
+        listing.set_filter("report");
+
+        let shown = listing.visible_summary().count;
+        // `.report-hidden` also matches but is hidden, so it is in neither.
+        assert_eq!(shown, 3, "reports, report.txt, REPORT.bak");
+        assert!(shown < before);
+    }
+
+    #[test]
+    fn clearing_the_filter_restores_exactly_the_previous_view() {
+        let mut listing = listing();
+        let before = names(&listing);
+
+        listing.set_filter("report");
+        listing.set_filter("");
+
+        assert_eq!(names(&listing), before);
+    }
+
+    #[test]
+    fn the_parent_row_survives_any_filter() {
+        // Filtering must never strand a pane: `..` is how you leave.
+        let mut listing = listing();
+        listing.set_filter("nothing matches this");
+
+        assert_eq!(listing.len(), 1);
+        assert!(listing.is_parent(0));
+    }
+
+    #[test]
+    fn the_filter_composes_with_hidden_files() {
+        let mut listing = listing();
+        listing.set_filter("report");
+        let visible = listing.visible_summary().count;
+
+        listing.toggle_hidden();
+
+        assert_eq!(
+            listing.visible_summary().count,
+            visible + 1,
+            "the hidden entry matches the filter and appears when unhidden"
+        );
+    }
+
+    #[test]
+    fn the_filter_composes_with_the_sort_order() {
+        let mut listing = listing();
+        listing.set_filter("report");
+        let ascending = names(&listing);
+
+        listing.set_sort(Sort::new(SortKey::Name, SortOrder::Descending));
+
+        let mut descending = names(&listing);
+        assert_ne!(descending, ascending, "the order changed");
+        descending.reverse();
+        // The parent row sorts first either way, so it moves; the set does not.
+        assert_eq!(descending.len(), ascending.len());
+    }
+
+    #[test]
+    fn the_cursor_never_lands_on_a_row_the_filter_hid() {
+        let mut listing = listing();
+        listing.focus_entry("notes.md");
+        assert_eq!(listing.current().unwrap().name, "notes.md");
+
+        listing.set_filter("report");
+
+        assert!(listing.cursor() < listing.len());
+        let landed = listing.current().unwrap().name.clone();
+        assert_ne!(landed, "notes.md", "it cannot stay on a hidden row");
+        assert!(
+            listing.iter().any(|entry| entry.name == landed),
+            "and wherever it went is visible"
+        );
+    }
+
+    #[test]
+    fn the_cursor_stays_on_its_entry_when_the_filter_keeps_it() {
+        let mut listing = listing();
+        listing.focus_entry("REPORT.bak");
+
+        listing.set_filter("report");
+
+        assert_eq!(listing.current().unwrap().name, "REPORT.bak");
+    }
+
+    #[test]
+    fn filtering_never_changes_what_is_marked() {
+        // The marks live beside the entries, so narrowing the view is not a
+        // change of intent — but `select_all` afterwards only takes what is
+        // left, which is the rule that makes the two safe together.
+        let mut listing = listing();
+        listing.select_all();
+        let before = listing.selection_summary();
+
+        listing.set_filter("report");
+        assert_eq!(listing.selection_summary().count, 3, "of the four marked");
+
+        listing.set_filter("");
+        assert_eq!(listing.selection_summary(), before);
+    }
+
+    #[test]
+    fn a_filter_matching_nothing_leaves_nothing_to_operate_on() {
+        let mut listing = listing();
+        listing.select_all();
+        listing.set_filter("no such name");
+
+        assert!(listing.selected_paths().is_empty());
+        assert_eq!(listing.selection_summary().count, 0);
+    }
+}

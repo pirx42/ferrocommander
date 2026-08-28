@@ -22,6 +22,8 @@
 | `Num −`, `−` | Unmark everything matching a wildcard |
 | `Num *` | Swap what is marked for what is not |
 | `Ctrl+A` | Mark everything visible |
+| `Ctrl+S` | Narrow the pane as you type |
+| `Esc` | Stop narrowing |
 | `Ctrl+Q` | Quit |
 
 Activating a *file* still does nothing — F3/F4 arrive in phase 4.
@@ -105,6 +107,32 @@ Shift and Alt take part in a binding.
 **A bound key with the wrong modifier does nothing.** `Ctrl+↓` does not fall
 through to plain `↓` — in phase 3 it will mean something else entirely, and a
 binding that silently ignores its modifiers would make that impossible.
+
+## The quick filter takes the keyboard back
+
+`Ctrl+S` opens a field above the rows; typing narrows the pane live; `Esc`
+clears it and hides the field; `Enter` keeps the narrowed view and hands the
+keyboard back to the rows.
+
+While that field has the focus the shell **does not dispatch anything**. Its
+controller sits in the capture phase so the column view cannot swallow Tab and
+the arrows, and that puts it ahead of the field too — every letter would
+become a command and `Enter` would open a directory instead of accepting the
+filter. So the controller checks whether the focus is inside a text widget and
+stands down if it is.
+
+The field's own handler is *also* in the capture phase, and for a different
+reason: `GtkText` consumes `Return` to emit its own activate signal, so a
+bubble-phase handler never sees it and the keyboard stays trapped in the
+field. `Esc` arrives either way, which is why only half of it looked wired up
+until a test pressed `Enter`.
+
+**A filter belongs to the directory it was typed in** and is dropped on
+navigation. Carrying it into the next directory would show an empty pane and
+no reason why.
+
+**`..` survives every filter**, so a filter that matches nothing can still be
+left.
 
 ## Capture phase
 
