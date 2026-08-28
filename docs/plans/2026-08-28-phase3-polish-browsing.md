@@ -1,6 +1,6 @@
 # Phase 3 Implementation Plan — Polish Browsing
 
-Status: Draft
+Status: In Progress — sub-phase 0 done
 
 *2026-08-28 — implements phase 3 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*

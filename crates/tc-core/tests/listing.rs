@@ -477,3 +477,37 @@ mod a_directory_that_disappeared {
         assert_eq!(current, LocalFs::vfs_path(parent.path()));
     }
 }
+
+/// Characterization, written before phase 3 puts two more behaviours into the
+/// same function.
+///
+/// `rebuild` restores the cursor onto the entry it was on, by name, whatever
+/// caused the rebuild. Three tests above each check one trigger; selection
+/// remapping and the quick filter are about to run in the same place, so this
+/// pins all three together — a change that breaks the composition rather than
+/// one rule is the kind that slips past per-rule tests.
+#[test]
+fn the_cursor_keeps_its_entry_through_every_kind_of_rebuild() {
+    let dir = tempfile::TempDir::new().unwrap();
+    for name in ["a.txt", "m.txt", "z.txt"] {
+        fs::write(dir.path().join(name), "x").unwrap();
+    }
+    fs::write(dir.path().join(".hidden"), "x").unwrap();
+    let path = LocalFs::vfs_path(dir.path());
+    let mut listing = Listing::load(&LocalFs, path).unwrap();
+    listing.focus_entry("m.txt");
+    assert_eq!(listing.current().unwrap().name, "m.txt");
+
+    // Sorting moves it to the other end of the list.
+    listing.set_sort(Sort::new(SortKey::Name, SortOrder::Descending));
+    assert_eq!(listing.current().unwrap().name, "m.txt", "after a sort");
+
+    // Showing hidden files shifts every index below the dot-file.
+    listing.toggle_hidden();
+    assert_eq!(listing.current().unwrap().name, "m.txt", "after unhiding");
+
+    // A reload that adds an entry ahead of it shifts the indices again.
+    fs::write(dir.path().join("b.txt"), "x").unwrap();
+    listing.reload(&LocalFs).unwrap();
+    assert_eq!(listing.current().unwrap().name, "m.txt", "after a reload");
+}
