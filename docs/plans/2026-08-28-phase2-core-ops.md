@@ -1,6 +1,6 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: Draft
+Status: In Progress — sub-phase 0 done
 
 *2026-08-28 — implements phase 2 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -142,12 +142,22 @@ sub-phase D is provable rather than asserted.
 - Characterize `Listing::load` against a directory that was removed after the
   path was taken: it returns `Err(NotFound)` and there is no fallback of any
   kind. That is the current contract, and the test says so.
-- Characterize the same for a directory that becomes unreadable
-  (`#[cfg(unix)]`, mode `0o000`), so the two failure modes are told apart
-  before code starts branching on them.
+- Characterize the second way a job can invalidate a pane's directory — the
+  name survives but is no longer a directory — as `Err(NotADirectory)`, so
+  the failure modes are told apart before code starts branching on them.
+- Characterize the half sub-phase D will lean on: walking up from a destroyed
+  path reaches something loadable, the root at the very latest.
 
-*Exit criterion:* both tests green on unmodified phase-1 code. Nothing else
+*Exit criterion:* the tests are green on unmodified phase-1 code. Nothing else
 in this sub-phase — no production change.
+
+**Deviation from this sketch, implemented deliberately.** The second test was
+sketched as an *unreadable* directory (`#[cfg(unix)]`, mode `0o000`). The
+implementation environment runs as root, and root bypasses mode bits — the
+test would assert `PermissionDenied` and get a successful listing. Replacing
+it with the directory-replaced-by-a-file case keeps the point (two distinct
+failure modes, told apart before the code branches) and covers something a
+file operation can actually *do*, which a permission change is not.
 
 ### A — `tc-core::vfs`: the mutating surface
 

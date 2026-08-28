@@ -8,7 +8,7 @@ use std::fs;
 use std::time::{Duration, SystemTime};
 
 use tc_core::listing::{Listing, Sort, SortKey, SortOrder};
-use tc_core::vfs::{Entry, EntryKind, LocalFs, VfsPath, VirtualFs};
+use tc_core::vfs::{Entry, EntryKind, LocalFs, VfsError, VfsPath, VirtualFs};
 
 const ALL_KEYS: [SortKey; 4] = [
     SortKey::Name,
@@ -375,4 +375,77 @@ fn reloading_clamps_the_cursor_when_the_focused_entry_is_gone() {
 fn a_listing_can_be_built_from_a_trait_object_backend() {
     let fs: Box<dyn VirtualFs> = Box::new(LocalFs);
     assert!(Listing::load(fs.as_ref(), VfsPath::root()).is_ok());
+}
+
+/// Characterization, written before phase 2 gives the job engine the power to
+/// make this happen routinely: a pane standing in a directory that a copy,
+/// move or delete removed underneath it.
+///
+/// Today there is no fallback of any kind — `load` fails and the caller is on
+/// its own. `PaneView` turns that into an empty pane with the reason beside
+/// the path, which is the right answer for a directory the *user* asked for
+/// and the wrong one for a directory that vanished while they were standing
+/// in it. Phase 2 sub-phase D supersedes this with `Listing::load_nearest`;
+/// pinning the old contract first is what makes that change provable.
+mod a_directory_that_disappeared {
+    use super::*;
+
+    #[test]
+    fn loading_a_removed_directory_fails_with_no_fallback() {
+        let parent = tempfile::TempDir::new().unwrap();
+        let gone = parent.path().join("gone");
+        fs::create_dir(&gone).unwrap();
+        let path = LocalFs::vfs_path(&gone);
+        // The pane is standing in it, so it loaded once.
+        assert!(Listing::load(&LocalFs, path.clone()).is_ok());
+
+        fs::remove_dir(&gone).unwrap();
+
+        assert_eq!(
+            Listing::load(&LocalFs, path).err(),
+            Some(VfsError::NotFound)
+        );
+    }
+
+    #[test]
+    fn loading_a_directory_replaced_by_a_file_fails_with_no_fallback() {
+        // The other way a job can invalidate a pane's directory: the name
+        // survives, the directory does not.
+        let parent = tempfile::TempDir::new().unwrap();
+        let swapped = parent.path().join("swapped");
+        fs::create_dir(&swapped).unwrap();
+        let path = LocalFs::vfs_path(&swapped);
+        assert!(Listing::load(&LocalFs, path.clone()).is_ok());
+
+        fs::remove_dir(&swapped).unwrap();
+        fs::write(&swapped, "now a file").unwrap();
+
+        assert_eq!(
+            Listing::load(&LocalFs, path).err(),
+            Some(VfsError::NotADirectory)
+        );
+    }
+
+    #[test]
+    fn the_surviving_ancestors_are_still_loadable() {
+        // The half phase 2 will lean on: whatever a job destroys, walking up
+        // reaches something that loads — the root at the very latest.
+        let parent = tempfile::TempDir::new().unwrap();
+        let deep = parent.path().join("a/b/c");
+        fs::create_dir_all(&deep).unwrap();
+        let path = LocalFs::vfs_path(&deep);
+
+        fs::remove_dir_all(parent.path().join("a")).unwrap();
+
+        let mut current = path;
+        let mut steps = 0;
+        while Listing::load(&LocalFs, current.clone()).is_err() {
+            current = current.parent().expect("the root always loads");
+            steps += 1;
+        }
+
+        // Three levels of `a/b/c` are gone; the tempdir itself survives.
+        assert_eq!(steps, 3);
+        assert_eq!(current, LocalFs::vfs_path(parent.path()));
+    }
 }
