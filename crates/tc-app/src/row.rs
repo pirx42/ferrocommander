@@ -17,12 +17,21 @@ use crate::constants::{DATE_FORMAT, DIR_SIZE_LABEL, THOUSANDS_GROUP, THOUSANDS_S
 pub struct Row {
     pub name: String,
     pub ext: String,
+    /// The name as the filesystem spells it, undivided.
+    ///
+    /// The name and ext columns are a presentation split; a rename needs the
+    /// whole thing back, and reassembling it from the two halves would have to
+    /// know when to put the dot back and when not to.
+    pub full_name: String,
     pub size: String,
     pub modified: String,
     pub attributes: String,
     pub is_dir: bool,
     /// Whether the user has marked this row. Rendered, not decided, here.
     pub selected: bool,
+    /// Whether this row is the one being renamed in place, so its name cell
+    /// shows an editable field instead of a label.
+    pub renaming: bool,
 }
 
 impl Row {
@@ -39,6 +48,7 @@ impl Row {
         Row {
             name: name.to_string(),
             ext: ext.to_string(),
+            full_name: entry.name.clone(),
             size: if entry.is_dir() {
                 DIR_SIZE_LABEL.to_string()
             } else {
@@ -57,6 +67,7 @@ impl Row {
             } else {
                 tc_core::vfs::render_attributes(entry.attributes)
             },
+            renaming: false,
             is_dir: entry.is_dir(),
             selected,
         }

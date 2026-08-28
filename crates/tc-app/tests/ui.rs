@@ -360,6 +360,113 @@ fn f5_with_both_panes_in_one_directory_will_not_copy_a_file_onto_itself() {
 }
 
 #[test]
+fn shift_f6_renames_in_the_list_itself() {
+    // Total Commander's Shift+F6: the name turns into a field in the list
+    // rather than a dialog covering the thing being renamed.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — the cursor on notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("shift+F6");
+    // The editor opens with the stem selected, so typing replaces `notes` and
+    // leaves `.txt` — the ordinary case, and the one that saves the typing.
+    app.type_text("renamed");
+    app.key("Return");
+
+    app.await_exists("src/renamed.txt");
+    app.await_gone("src/notes.txt");
+    app.await_contents("src/renamed.txt", SOURCE_TEXT);
+}
+
+#[test]
+fn an_inline_rename_can_change_the_extension_too() {
+    // The editor carries the whole filename, not just the name column: the
+    // split into name and ext is presentation, and a rename that silently
+    // kept an extension the user had selected over would be a wrong answer.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("shift+F6");
+    app.key("ctrl+a");
+    app.type_text("all-new.md");
+    app.key("Return");
+
+    app.await_exists("src/all-new.md");
+    app.await_gone("src/notes.txt");
+}
+
+#[test]
+fn escape_abandons_an_inline_rename() {
+    // A field with no way out but the mouse is a trap, and here the trap
+    // would be holding a half-typed filename.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("shift+F6");
+    app.type_text("never");
+    app.key("Escape");
+
+    app.settle();
+    assert!(app.path("src/notes.txt").exists(), "the file was renamed");
+    assert!(!app.path("src/never.txt").exists(), "and to that");
+
+    // The keyboard is back on the rows rather than stuck in the field.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("after-escape");
+    app.key("Return");
+    app.await_exists("src/after-escape");
+}
+
+#[test]
+fn an_unchanged_inline_rename_does_nothing_at_all() {
+    // Pressing Enter straight away is somebody deciding not to rename, not a
+    // job to run and certainly not a conflict to ask about.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("shift+F6");
+    app.key("Return");
+
+    app.settle();
+    assert!(!app.has_dialog(DIALOG_CONFLICT), "it asked about itself");
+    // And no failure report either. Submitting the job anyway would not lose
+    // the file — the engine refuses a move onto itself — but it would put a
+    // window in front of somebody who only pressed Enter, which is why
+    // checking the file survived was not enough on its own.
+    assert!(
+        !app.has_dialog(DIALOG_FAILURES),
+        "a job was submitted and refused"
+    );
+    assert!(app.path("src/notes.txt").exists(), "the file survived");
+}
+
+#[test]
+fn the_parent_row_cannot_be_renamed() {
+    // `..` is a navigation control, not a file. Opening an editor on it would
+    // offer to rename the directory you are standing in from inside it.
+    let app = in_src_and_dst(arrange);
+    app.key("Home");
+
+    app.key("shift+F6");
+    app.type_text("definitely-not-a-command");
+    app.key("Return");
+
+    // Proof by where the typing went: with no editor open it falls to the
+    // command line and Return runs it, so a command-output window appears for
+    // a command that does not exist.
+    //
+    // This pins the behaviour, not the guard that implements it — removing
+    // the guard leaves it green, because nothing else today opens an editor on
+    // `..` either. Said plainly rather than left to look like coverage it is
+    // not; the guard's own note in `pane.rs` says the same.
+    app.focus_dialog(DIALOG_OUTPUT);
+
+    assert!(app.path("src/nested").exists());
+    assert!(app.path("src/notes.txt").exists());
+}
+
+#[test]
 fn insert_marks_a_file_and_f5_copies_what_is_marked() {
     // The whole point of marks: press F5 once, move several files. The cursor
     // is deliberately left somewhere else afterwards, so a copy of the cursor

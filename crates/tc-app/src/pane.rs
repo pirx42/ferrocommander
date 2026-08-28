@@ -1,5 +1,7 @@
 //! One pane: a path bar above a column view of a directory.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gtk::gio;
@@ -7,7 +9,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use tc_core::listing::{Listing, Sort, SortKey, SortOrder};
+use tc_core::listing::{split_name, Listing, Sort, SortKey, SortOrder};
 use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
@@ -133,6 +135,23 @@ impl PaneEntry {
         entry
     }
 
+    fn full_name(&self) -> String {
+        self.imp()
+            .row
+            .borrow()
+            .as_ref()
+            .map(|row| row.full_name.clone())
+            .unwrap_or_default()
+    }
+
+    fn is_renaming(&self) -> bool {
+        self.imp()
+            .row
+            .borrow()
+            .as_ref()
+            .is_some_and(|row| row.renaming)
+    }
+
     fn is_marked(&self) -> bool {
         self.imp()
             .row
@@ -151,6 +170,22 @@ impl PaneEntry {
     }
 }
 
+/// What an inline rename ended with.
+pub enum Renamed {
+    /// A name was typed and accepted.
+    To(String),
+    /// Escape. The row goes back to being a label and nothing is renamed.
+    Abandoned,
+}
+
+/// Where the pane sends the end of an inline rename, once the shell has said
+/// what to do with it.
+///
+/// A slot filled after construction rather than a constructor argument,
+/// because the shell that has to turn a typed name into a job does not exist
+/// until both panes do.
+type RenameHook = Rc<RefCell<Option<Box<dyn Fn(Renamed)>>>>;
+
 /// A pane and the directory model behind it.
 pub struct PaneView {
     root: gtk::Box,
@@ -161,6 +196,17 @@ pub struct PaneView {
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
     listing: Listing,
+    /// The full name of the row being renamed in place, if any.
+    ///
+    /// By name rather than by index, like everything else that has to survive
+    /// a listing being rebuilt.
+    renaming: Option<String>,
+    /// What to do when an inline rename is accepted or abandoned.
+    ///
+    /// Installed by the shell after construction, the way the filter bar is
+    /// wired: the pane knows when a name was typed, and the shell is the only
+    /// thing that can turn that into a job.
+    rename_hook: RenameHook,
     /// Kept so the two page keys that mark can measure a page; the model has
     /// no idea how tall the viewport is.
     scroller: gtk::ScrolledWindow,
@@ -204,8 +250,11 @@ impl PaneView {
         let selection = gtk::SingleSelection::new(Some(store.clone()));
         let column_view = gtk::ColumnView::new(Some(selection.clone()));
 
+        let rename_hook: RenameHook = Rc::new(RefCell::new(None));
         for column in Column::ALL {
-            column_view.append_column(&build_column(column));
+            // Only the name column is editable, so only it is handed the hook.
+            let hook = (column == Column::Name).then(|| rename_hook.clone());
+            column_view.append_column(&build_column(column, hook));
         }
 
         let scroller = gtk::ScrolledWindow::builder()
@@ -250,6 +299,8 @@ impl PaneView {
             column_view,
             listing,
             scroller,
+            renaming: None,
+            rename_hook,
             remembered_marks: Vec::new(),
             fs,
             error,
@@ -313,11 +364,12 @@ impl PaneView {
                 .listing
                 .get(index)
                 .expect("indices below len() always resolve");
-            let row = Row::from_entry(
+            let mut row = Row::from_entry(
                 entry,
                 self.listing.is_parent(index),
                 self.listing.is_selected(index),
             );
+            row.renaming = self.renaming.as_deref() == Some(row.full_name.as_str());
             self.store.append(&PaneEntry::new(row));
         }
 
@@ -488,6 +540,46 @@ impl PaneView {
         self.filter_bar.set_visible(!filter.is_empty());
     }
 
+    /// Starts an inline rename of the row under the cursor.
+    ///
+    /// Total Commander's `Shift+F6`: the name turns into a field in the list
+    /// itself, rather than a dialog that covers the thing being renamed.
+    ///
+    /// `..` is not a file and cannot be renamed, so it does nothing there.
+    ///
+    /// That guard is belt-and-braces and is recorded as such: a probe removing
+    /// it could not get an editor to open on `..` either, so nothing today
+    /// reaches it. It stays because of what is on the other side — `..`
+    /// resolves to the *parent directory*, and a rename accepted there would
+    /// be a move of the directory you are standing in. Three lines against
+    /// that is a trade worth making even when the case is unreachable.
+    pub fn begin_rename(&mut self) {
+        self.adopt_selection();
+        if self.listing.is_parent(self.listing.cursor()) {
+            return;
+        }
+        self.renaming = self.current_name();
+        self.refresh();
+    }
+
+    /// Puts the row back to being a label. The rename itself is the shell's.
+    pub fn end_rename(&mut self) {
+        if self.renaming.take().is_some() {
+            self.refresh();
+            self.grab_focus();
+        }
+    }
+
+    /// Whether a rename is in progress, and of what.
+    pub fn renaming(&self) -> Option<&str> {
+        self.renaming.as_deref()
+    }
+
+    /// Installs what happens when an inline rename ends.
+    pub fn on_rename(&self, hook: impl Fn(Renamed) + 'static) {
+        *self.rename_hook.borrow_mut() = Some(Box::new(hook));
+    }
+
     /// The name of the row under the cursor.
     pub fn current_name(&self) -> Option<String> {
         self.listing.current().map(|entry| entry.name.clone())
@@ -589,13 +681,19 @@ impl PaneView {
         if self.listing.is_empty() {
             return;
         }
+        // While a row is being renamed the focus belongs to its editor, and
+        // asking the column view for it back would take it away. That the
+        // rename worked at all before this was ordering luck: the cell happens
+        // to bind and grab the focus *after* the scroll for a row further
+        // down, and did not for the first row — which is how a probe on the
+        // `..` guard came to pass with the guard removed.
+        let focus = match self.renaming {
+            Some(_) => gtk::ListScrollFlags::empty(),
+            None => gtk::ListScrollFlags::FOCUS,
+        };
         let row = self.listing.cursor() as u32;
-        self.column_view.scroll_to(
-            row,
-            None,
-            gtk::ListScrollFlags::FOCUS | gtk::ListScrollFlags::SELECT,
-            None,
-        );
+        self.column_view
+            .scroll_to(row, None, focus | gtk::ListScrollFlags::SELECT, None);
     }
 
     /// Takes over a selection the widget moved on its own.
@@ -695,16 +793,96 @@ impl PaneView {
 }
 
 /// Builds one column with a label-per-cell factory.
-fn build_column(column: Column) -> gtk::ColumnViewColumn {
+/// Names of the two pages in a name cell's stack.
+const STACK_LABEL: &str = "label";
+const STACK_EDITOR: &str = "editor";
+
+/// Shows the label or the editor, and hands back the label either way.
+///
+/// The editor carries the **whole** filename, extension included: the name and
+/// ext columns are a presentation split, and renaming `notes` to `todo` while
+/// silently keeping `.txt` in another column is not something the user can see
+/// to have agreed to.
+fn bind_name_cell(stack: &gtk::Stack, entry: &PaneEntry) -> gtk::Label {
+    let label = stack
+        .child_by_name(STACK_LABEL)
+        .and_downcast::<gtk::Label>()
+        .expect("setup named the label");
+    let editor = stack
+        .child_by_name(STACK_EDITOR)
+        .and_downcast::<gtk::Entry>()
+        .expect("setup named the editor");
+
+    if !entry.is_renaming() {
+        stack.set_visible_child_name(STACK_LABEL);
+        return label;
+    }
+
+    let full_name = entry.full_name();
+    editor.set_text(&full_name);
+    stack.set_visible_child_name(STACK_EDITOR);
+    // Only when it is not already ours: a cell rebinds when the list scrolls,
+    // and grabbing the focus again would fight whoever is typing.
+    if !editor.has_focus() {
+        editor.grab_focus();
+        // The stem, not the whole name — changing `notes.txt` to `todo.txt`
+        // is the ordinary case, and retyping the extension every time is the
+        // annoying one.
+        let stem = split_name(&full_name).0.chars().count() as i32;
+        editor.select_region(0, stem);
+    }
+    label
+}
+
+/// Builds one column. `rename` is `Some` only for the name column, which is
+/// the one that can turn into an editable field.
+///
+/// The editor is a `Stack` per *recycled cell*, not per entry: a `ColumnView`
+/// keeps widgets only for the rows on screen, so this is some forty entries
+/// deep rather than fifty thousand (`docs/performance.md`).
+fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewColumn {
     let factory = gtk::SignalListItemFactory::new();
 
+    let setup_rename = rename.clone();
     factory.connect_setup(move |_, item| {
         let item = list_item(item);
         let label = gtk::Label::builder()
             .xalign(column.xalign())
             .ellipsize(gtk::pango::EllipsizeMode::Middle)
             .build();
-        item.set_child(Some(&label));
+        let Some(hook) = setup_rename.clone() else {
+            item.set_child(Some(&label));
+            return;
+        };
+
+        let editor = gtk::Entry::builder().has_frame(false).build();
+        let accepting = hook.clone();
+        editor.connect_activate(move |editor| {
+            if let Some(hook) = accepting.borrow().as_ref() {
+                hook(Renamed::To(editor.text().to_string()));
+            }
+        });
+        // Capture phase, for the reason the command line's handler is:
+        // `GtkText` consumes Escape itself, so a bubble-phase handler never
+        // sees it and there is no way out of the field but the mouse.
+        let controller = gtk::EventControllerKey::new();
+        controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let abandoning = hook.clone();
+        controller.connect_key_pressed(move |_, key, _, _| {
+            if key != gtk::gdk::Key::Escape {
+                return glib::Propagation::Proceed;
+            }
+            if let Some(hook) = abandoning.borrow().as_ref() {
+                hook(Renamed::Abandoned);
+            }
+            glib::Propagation::Stop
+        });
+        editor.add_controller(controller);
+
+        let stack = gtk::Stack::new();
+        stack.add_named(&label, Some(STACK_LABEL));
+        stack.add_named(&editor, Some(STACK_EDITOR));
+        item.set_child(Some(&stack));
     });
 
     factory.connect_bind(move |_, item| {
@@ -713,10 +891,14 @@ fn build_column(column: Column) -> gtk::ColumnViewColumn {
             .item()
             .and_downcast::<PaneEntry>()
             .expect("the store holds PaneEntry values");
-        let label = item
-            .child()
-            .and_downcast::<gtk::Label>()
-            .expect("setup installed a Label");
+        let child = item.child().expect("setup installed a child");
+
+        let label = match child.downcast_ref::<gtk::Stack>() {
+            Some(stack) => bind_name_cell(stack, &entry),
+            None => child
+                .downcast::<gtk::Label>()
+                .expect("setup installed a Label"),
+        };
         label.set_text(&entry.text(column));
         // Marked rows are coloured, which is how Total Commander shows them
         // and the only cue that survives the row also being the cursor.

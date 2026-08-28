@@ -23,7 +23,7 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use tc_core::config;
-use tc_core::ops::{DeleteMode, Job, JobHandle, JobQueue};
+use tc_core::ops::{DeleteMode, Destination, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
@@ -266,6 +266,7 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::ToggleHidden => shell.borrow_mut().active_pane().toggle_hidden(),
         Action::Copy => start_transfer(shell, true),
         Action::Move => start_transfer(shell, false),
+        Action::RenameInline => shell.borrow_mut().active_pane().begin_rename(),
         Action::CreateDir => start_create_dir(shell),
         Action::Delete => start_delete(shell, DeleteMode::Trash),
         Action::DeletePermanently => start_delete(shell, DeleteMode::Permanent),
@@ -801,6 +802,9 @@ fn build_window(app: &gtk::Application) {
     }
     fill_drive_bar(&drives, &shell);
     wire_command_line(&shell);
+    for index in 0..PANE_COUNT {
+        wire_inline_rename(&shell, index);
+    }
     remember_on_close(&window, &shell);
     remember_window_size(&window, &shell);
     window.add_controller(key_controller(&window, shell));
@@ -907,6 +911,50 @@ fn typed_into_command_line(
     };
     shell.borrow().command_line.accept(character);
     glib::Propagation::Stop
+}
+
+/// Connects one pane's inline rename to the job that carries it out.
+///
+/// A rename **is** a move whose destination is exact — the same rule F6's
+/// dialog follows — so it goes through the same queue and gets the same
+/// conflict question when something is already called that.
+fn wire_inline_rename(shell: &Rc<RefCell<Shell>>, index: usize) {
+    let hooked = shell.clone();
+    let accept = move |outcome| {
+        let renamed = match outcome {
+            pane::Renamed::To(name) => name,
+            pane::Renamed::Abandoned => {
+                hooked.borrow_mut().panes[index].end_rename();
+                return;
+            }
+        };
+
+        let source = {
+            let mut state = hooked.borrow_mut();
+            let pane = &mut state.panes[index];
+            let from = pane.renaming().map(str::to_string);
+            pane.end_rename();
+            from.map(|from| pane.listing().dir().child(&from))
+        };
+        let Some(source) = source else {
+            return;
+        };
+        // An unchanged or empty name is not a rename to refuse loudly; it is
+        // somebody deciding not to. The row is already back to a label.
+        let trimmed = renamed.trim();
+        if trimmed.is_empty() || Some(trimmed) == source.file_name() {
+            return;
+        }
+        let target = hooked.borrow().panes[index].listing().dir().child(trimmed);
+        submit(
+            &hooked,
+            Job::Move {
+                sources: vec![source],
+                destination: Destination::Exact(target),
+            },
+        );
+    };
+    shell.borrow().panes[index].on_rename(accept);
 }
 
 /// Connects the command line: Enter runs, Escape hands the keyboard back.

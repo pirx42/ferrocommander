@@ -13,6 +13,7 @@
 | `Backspace` | Leave the current directory |
 | `F5` | Copy the entry under the cursor |
 | `F6` | Move it, or rename it in place |
+| `Shift+F6` | Rename the row under the cursor, in the list itself |
 | `F7` | Create a directory |
 | `F8`, `Delete` | Delete to the trash |
 | `Shift+F8`, `Shift+Delete` | Delete permanently |
@@ -168,6 +169,35 @@ the marks travel together; anything rebuilt field by field would quietly drop
 one of them, and the test for it marks a file on one side and spends it on the
 other. The keyboard stays in the same physical pane, now showing the other
 side.
+
+## Renaming in the list
+
+`Shift+F6` turns the name under the cursor into a field in the list itself,
+rather than a dialog that covers the thing being renamed — Total Commander's
+behaviour. Enter accepts, Escape abandons and hands the keyboard back.
+
+**The field carries the whole filename**, extension and all. The name and ext
+columns are a presentation split; renaming `notes` to `todo` while silently
+keeping `.txt` in another column is not something the user can see to have
+agreed to. The **stem is selected** when it opens, so typing replaces the name
+and leaves the extension — the ordinary case, and retyping `.txt` every time
+is the annoying one.
+
+**A rename is a move whose destination is exact**, which is the same rule F6's
+dialog follows, so it goes through the same queue and gets the same conflict
+question when something is already called that. Accepting an unchanged name
+does nothing at all: pressing Enter straight away is somebody deciding not to
+rename, not a job to run.
+
+The editable cell is a `Stack` per *recycled* cell, not per entry: a
+`ColumnView` keeps widgets only for the rows on screen, so it is some forty
+deep rather than fifty thousand ([performance.md](performance.md)).
+
+**While a rename is open the cursor sync stops asking for the focus.** It
+belongs to the editor, and the column view taking it back would close the
+field under the user's fingers. That the rename worked at all before that was
+ordering luck — a cell further down happens to bind and grab the focus after
+the scroll, and the first row did not.
 
 ## What the target field means
 
