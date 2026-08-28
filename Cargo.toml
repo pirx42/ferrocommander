@@ -16,3 +16,7 @@ repository = "https://github.com/pirx/ferrocommander"
 [workspace.dependencies]
 tc-core = { path = "crates/tc-core" }
 tempfile = "3"
+# The GTK4 bindings. Deliberately built against the baseline GTK 4.0 API: the
+# shell needs nothing newer, and a higher floor would exclude distributions
+# and Windows builds that ship an older libgtk-4.
+gtk = { package = "gtk4", version = "0.11" }

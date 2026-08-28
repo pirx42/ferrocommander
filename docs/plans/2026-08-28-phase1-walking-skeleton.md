@@ -1,6 +1,6 @@
 # Phase 1 Implementation Plan — Walking Skeleton
 
-Status: In Progress — sub-phases 0, A, B done
+Status: In Progress — sub-phases 0, A, B, C done
 
 *2026-08-28 — implements phase 1 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -80,12 +80,18 @@ build never compiles the `cfg(windows)` half, the gate carries a fifth
 command:
 
 ```bash
-cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings
 ```
 
 `cargo check`-style verification needs no Windows linker, so this runs on the
 Linux box. It is not ceremony — it caught a Windows-only build break on its
 first run in sub-phase A.
+
+Scoped to `tc-core` since sub-phase C: cross-checking `tc-app` would require
+GTK's `-sys` build scripts to find a mingw libgtk-4 via pkg-config, which this
+box has no way to provide. The boundary is acceptable because every
+platform-divergent line lives in `tc-core`; `tc-app` has no `cfg` branches.
+A real Windows or mingw toolchain is what would verify the GTK build.
 
 ### 0 — Workspace bootstrap
 
@@ -259,8 +265,25 @@ unchanged.
 `PaneEntry` mapping are unit-tested headlessly; window construction is
 covered by a manual smoke run, per the design doc's testing section.
 
-*Docs:* `docs/ui-shell.md` — widget tree, the pane/`Listing` relationship,
-why the UI never touches `std::fs`.
+*Docs:* [docs/ui-shell.md](../ui-shell.md) — widget tree, row rendering,
+columns, active-pane marking, the GTK version floor.
+
+**Done.** 62 tests green; the binary runs and holds a window open.
+
+*Decision — build against the baseline GTK 4.0 API.* No `v4_x` feature is
+enabled on the `gtk4` bindings. The shell needs nothing newer, and a higher
+floor would exclude distributions and Windows builds shipping an older
+libgtk-4. It bites immediately and usefully:
+`CssProvider::load_from_string` requires GTK 4.12 and is simply not there, so
+the baseline `load_from_data` is used instead.
+
+*Decision — the active pane is marked on its path bar, not by dimming the
+other pane.* In a dual-pane manager the inactive side must stay fully
+readable: at that moment its entire job is to show where a copy would land.
+
+*Phase-0 scaffolding retired as planned.* `tc-app`'s banner function and its
+test existed to prove the workspace dependency edge before there was a UI.
+The real window replaces them, and `row.rs` now carries the crate's tests.
 
 ### D — Keyboard navigation
 
@@ -335,8 +358,10 @@ environment gate (section 3), which is owner-side setup.
   sub-phase A — `Entry.hidden` comes from the backend, `vfs/platform.rs`
   isolates the divergence, the VFS root is the drive list on Windows, and the
   gate cross-compiles the Windows branch. Still unverified on real hardware:
-  nothing here has been *run* on Windows, only compile-checked. GTK4 on
-  Windows (sub-phase C) is the next place this needs attention.
+  nothing here has been *run* on Windows. Since sub-phase C the cross-check
+  covers `tc-core` only — GTK's `-sys` crates cannot be cross-compiled without
+  a mingw libgtk-4 — so **the Windows GTK build is entirely unverified** and
+  needs a Windows or mingw toolchain to confirm.
 - **Branch workflow.** Skill [10](../skills/10-plan-lifecycle.md) prescribes a
   topic branch on `dev`, but skill 64 is marked Chimera-only and this repo has
   only `main`. Decide before sub-phase 0 whether to adopt `dev` + topic

@@ -20,6 +20,22 @@ const DIR_SIZE: u64 = 0;
 /// Reads the real filesystem through the VFS interface.
 pub struct LocalFs;
 
+impl LocalFs {
+    /// Maps a native path into the VFS path space.
+    ///
+    /// The inverse of what the backend does internally, exposed because
+    /// callers outside the VFS — the UI's start directory, tests working with
+    /// tempdirs — hold native paths and must not hand-roll the mapping.
+    pub fn vfs_path(native: &Path) -> VfsPath {
+        platform::from_std_path(native)
+    }
+
+    /// The user's home directory, where panes start.
+    pub fn home_dir() -> Option<VfsPath> {
+        platform::home_dir().map(|native| Self::vfs_path(&native))
+    }
+}
+
 impl VirtualFs for LocalFs {
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         if path.is_root() {

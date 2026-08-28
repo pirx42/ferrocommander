@@ -97,11 +97,18 @@ Because half of `platform.rs` is invisible to a Linux build, the green gate
 cross-checks the other half:
 
 ```bash
-cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings
 ```
 
 This is not ceremony — it caught a Windows-only build break (an import used
 only inside the `cfg(unix)` test module) on the very first run.
+
+The check covers `tc-core` only. Cross-checking `tc-app` would need GTK's
+`-sys` build scripts to find a mingw libgtk-4 through pkg-config, which a
+Linux box does not have. That is an acceptable boundary because **every
+platform-divergent line lives in `tc-core`** — `tc-app` contains no `cfg`
+branches at all. Verifying the Windows GTK build needs a real Windows or
+mingw toolchain.
 
 ## Known gap
 

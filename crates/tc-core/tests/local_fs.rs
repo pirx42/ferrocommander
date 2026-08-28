@@ -6,17 +6,9 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
 
 use tc_core::vfs::{Entry, EntryKind, LocalFs, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
-
-/// Maps a tempdir onto the VFS path space. On Unix the native path is already
-/// the VFS path; on Windows the drive letter becomes the first component.
-fn vfs_path(path: &Path) -> VfsPath {
-    let text = path.to_string_lossy().replace('\\', "/");
-    VfsPath::new(&text)
-}
 
 fn names(entries: &[Entry]) -> BTreeSet<String> {
     entries.iter().map(|entry| entry.name.clone()).collect()
@@ -36,7 +28,7 @@ fn listing_returns_exactly_the_entries_that_were_created() {
     fs::write(dir.path().join("b.md"), "bb").unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
 
-    let entries = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+    let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
 
     assert_eq!(entries.len(), 3);
     assert_eq!(
@@ -53,7 +45,7 @@ fn file_sizes_sum_to_the_bytes_written() {
         fs::write(dir.path().join(format!("f{index}")), payload).unwrap();
     }
 
-    let entries = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+    let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
 
     let written: u64 = payloads.iter().map(|p| p.len() as u64).sum();
     let listed: u64 = entries.iter().map(|entry| entry.size).sum();
@@ -66,7 +58,7 @@ fn directories_report_zero_size_and_are_enterable() {
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("sub/inner.txt"), "content").unwrap();
 
-    let entries = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+    let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
     let sub = find(&entries, "sub");
 
     assert_eq!(sub.kind, EntryKind::Dir);
@@ -77,7 +69,10 @@ fn directories_report_zero_size_and_are_enterable() {
 #[test]
 fn an_empty_directory_lists_nothing() {
     let dir = TempDir::new().unwrap();
-    assert!(LocalFs.read_dir(&vfs_path(dir.path())).unwrap().is_empty());
+    assert!(LocalFs
+        .read_dir(&LocalFs::vfs_path(dir.path()))
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
@@ -86,11 +81,11 @@ fn nested_directories_are_listed_at_their_own_level() {
     fs::create_dir_all(dir.path().join("a/b")).unwrap();
     fs::write(dir.path().join("a/b/deep.txt"), "deep").unwrap();
 
-    let top = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+    let top = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
     assert_eq!(names(&top), ["a"].map(String::from).into());
 
     let deep = LocalFs
-        .read_dir(&vfs_path(&dir.path().join("a/b")))
+        .read_dir(&LocalFs::vfs_path(&dir.path().join("a/b")))
         .unwrap();
     assert_eq!(names(&deep), ["deep.txt"].map(String::from).into());
 }
@@ -101,7 +96,7 @@ fn hidden_entries_are_listed_and_flagged_not_filtered_out() {
     fs::write(dir.path().join("visible.txt"), "v").unwrap();
     fs::write(dir.path().join(".hidden"), "h").unwrap();
 
-    let entries = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+    let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
 
     // The VFS never filters; hiding is the listing layer's decision.
     assert_eq!(entries.len(), 2);
@@ -119,7 +114,7 @@ fn names_with_spaces_and_unicode_round_trip_through_the_listing() {
         fs::write(dir.path().join(name), name).unwrap();
     }
 
-    let entries = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+    let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
 
     assert_eq!(names(&entries), tricky.map(String::from).into());
     for name in tricky {
@@ -133,7 +128,7 @@ fn stat_describes_a_single_file() {
     fs::write(dir.path().join("one.txt"), "12345").unwrap();
 
     let entry = LocalFs
-        .stat(&vfs_path(&dir.path().join("one.txt")))
+        .stat(&LocalFs::vfs_path(&dir.path().join("one.txt")))
         .unwrap();
 
     assert_eq!(entry.name, "one.txt");
@@ -158,7 +153,7 @@ fn the_root_can_always_be_listed() {
 #[test]
 fn a_missing_path_reports_not_found() {
     let dir = TempDir::new().unwrap();
-    let missing = vfs_path(&dir.path().join("nope"));
+    let missing = LocalFs::vfs_path(&dir.path().join("nope"));
 
     assert_eq!(LocalFs.read_dir(&missing), Err(VfsError::NotFound));
     assert_eq!(LocalFs.stat(&missing), Err(VfsError::NotFound));
@@ -169,7 +164,7 @@ fn listing_a_file_is_an_error_rather_than_an_empty_listing() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("file.txt"), "x").unwrap();
 
-    let result = LocalFs.read_dir(&vfs_path(&dir.path().join("file.txt")));
+    let result = LocalFs.read_dir(&LocalFs::vfs_path(&dir.path().join("file.txt")));
 
     // The exact variant differs by platform; what matters is that it fails
     // instead of quietly pretending the file is an empty directory.
@@ -198,7 +193,7 @@ mod symlinks {
         std::os::unix::fs::symlink(dir.path().join("target_dir"), dir.path().join("to_dir"))
             .unwrap();
 
-        let entries = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+        let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
 
         let to_file = find(&entries, "to_file");
         assert_eq!(to_file.kind, EntryKind::Symlink(SymlinkTarget::File));
@@ -218,7 +213,7 @@ mod symlinks {
         fs::write(dir.path().join("keeper.txt"), "kept").unwrap();
         std::os::unix::fs::symlink(dir.path().join("gone"), dir.path().join("dangling")).unwrap();
 
-        let entries = LocalFs.read_dir(&vfs_path(dir.path())).unwrap();
+        let entries = LocalFs.read_dir(&LocalFs::vfs_path(dir.path())).unwrap();
 
         assert_eq!(entries.len(), 2, "the dangling link must not hide the file");
         let dangling = find(&entries, "dangling");

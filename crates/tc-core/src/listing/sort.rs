@@ -2,6 +2,7 @@
 
 use std::cmp::Ordering;
 
+use super::name::extension;
 use crate::vfs::Entry;
 
 /// Which column the listing is ordered by.
@@ -96,29 +97,9 @@ fn compare_names(a: &str, b: &str) -> Ordering {
         .then_with(|| a.cmp(b))
 }
 
-/// The part after the last dot, or `""` when there is none.
-///
-/// A leading dot does not start an extension: `.gitignore` is a name, not an
-/// extension, which is both the Unix convention and Total Commander's.
-fn extension(name: &str) -> &str {
-    match name.rfind('.') {
-        Some(index) if index > 0 => &name[index + 1..],
-        _ => "",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_leading_dot_does_not_start_an_extension() {
-        assert_eq!(extension("archive.tar.gz"), "gz");
-        assert_eq!(extension("notes.txt"), "txt");
-        assert_eq!(extension(".gitignore"), "");
-        assert_eq!(extension("Makefile"), "");
-        assert_eq!(extension("trailing."), "");
-    }
 
     #[test]
     fn names_compare_case_insensitively_with_a_stable_tiebreak() {

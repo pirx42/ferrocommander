@@ -13,8 +13,10 @@
 //!   something derivable from the name.
 //! - [`root_entries`] answers what the VFS root contains when the platform
 //!   has no single filesystem root.
+//! - [`from_std_path`] is the inverse of [`to_std_path`].
+//! - [`home_dir`] locates the user's home directory.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::path::VfsPath;
 use super::types::Entry;
@@ -36,6 +38,15 @@ mod imp {
     /// Unix has a real root directory, so the generic code path handles it.
     pub fn root_entries() -> Option<Vec<Entry>> {
         None
+    }
+
+    /// Native and VFS paths coincide on Unix.
+    pub fn from_std_path(path: &Path) -> VfsPath {
+        VfsPath::new(&path.to_string_lossy())
+    }
+
+    pub fn home_dir() -> Option<PathBuf> {
+        std::env::var_os("HOME").map(PathBuf::from)
     }
 }
 
@@ -94,9 +105,22 @@ mod imp {
             .collect();
         Some(drives)
     }
+
+    /// `C:\\Users\\pirx` becomes `/C:/Users/pirx`.
+    pub fn from_std_path(path: &Path) -> VfsPath {
+        VfsPath::new(
+            &path
+                .to_string_lossy()
+                .replace(std::path::MAIN_SEPARATOR, "/"),
+        )
+    }
+
+    pub fn home_dir() -> Option<PathBuf> {
+        std::env::var_os("USERPROFILE").map(PathBuf::from)
+    }
 }
 
-pub use imp::{is_hidden, root_entries, to_std_path};
+pub use imp::{from_std_path, home_dir, is_hidden, root_entries, to_std_path};
 
 #[cfg(test)]
 mod tests {
@@ -110,6 +134,15 @@ mod tests {
             // Windows: the root is synthetic and lists drives instead.
             Some(drives) => assert!(drives.iter().all(|drive| drive.name.ends_with(':'))),
         }
+    }
+
+    #[test]
+    fn a_native_path_survives_the_round_trip_through_the_vfs_path_space() {
+        // The listing tests and the UI both map native paths into the VFS
+        // path space; if that mapping is not an inverse, a pane opens
+        // somewhere other than where it was told to.
+        let native = home_dir().expect("a home directory");
+        assert_eq!(to_std_path(&from_std_path(&native)), native);
     }
 
     #[cfg(unix)]

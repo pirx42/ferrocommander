@@ -9,6 +9,7 @@
 //! in tests and, later, from streaming search results.
 
 pub mod constants;
+mod name;
 mod sort;
 
 use crate::vfs::constants::PARENT;
@@ -16,6 +17,7 @@ use crate::vfs::{Entry, EntryKind, VfsError, VfsPath, VirtualFs};
 
 use constants::{DEFAULT_SHOW_HIDDEN, DEFAULT_SORT_KEY, DEFAULT_SORT_ORDER, PARENT_MODIFIED};
 
+pub use name::{extension, split_name};
 pub use sort::{Sort, SortKey, SortOrder};
 
 /// One directory as the UI sees it.

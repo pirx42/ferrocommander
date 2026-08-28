@@ -301,7 +301,7 @@ fn loading_a_real_directory_lists_its_entries_below_the_parent_row() {
     let dir = tempfile::TempDir::new().unwrap();
     fs::write(dir.path().join("one.txt"), "1").unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
-    let path = VfsPath::new(&dir.path().to_string_lossy().replace('\\', "/"));
+    let path = LocalFs::vfs_path(dir.path());
 
     let listing = Listing::load(&LocalFs, path).unwrap();
 
@@ -314,7 +314,7 @@ fn reloading_keeps_the_cursor_on_the_same_entry() {
     for name in ["a.txt", "b.txt", "c.txt"] {
         fs::write(dir.path().join(name), name).unwrap();
     }
-    let path = VfsPath::new(&dir.path().to_string_lossy().replace('\\', "/"));
+    let path = LocalFs::vfs_path(dir.path());
     let mut listing = Listing::load(&LocalFs, path).unwrap();
     listing.move_cursor_to_last();
     assert_eq!(listing.current().unwrap().name, "c.txt");
@@ -333,7 +333,7 @@ fn reloading_clamps_the_cursor_when_the_focused_entry_is_gone() {
     for name in ["a.txt", "b.txt", "c.txt"] {
         fs::write(dir.path().join(name), name).unwrap();
     }
-    let path = VfsPath::new(&dir.path().to_string_lossy().replace('\\', "/"));
+    let path = LocalFs::vfs_path(dir.path());
     let mut listing = Listing::load(&LocalFs, path).unwrap();
     listing.move_cursor_to_last();
 

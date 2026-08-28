@@ -20,7 +20,7 @@ cargo run -p tc-app        # Run the app
 cargo test --workspace     # Unit/integration tests (tc-core headless)
 cargo fmt --all -- --check # Format gate
 cargo clippy --workspace --all-targets -- -D warnings  # Lint gate (CI)
-cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings  # Windows cfg branch
+cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings  # Windows cfg branch
 cargo build --release      # Release build
 ```
 
@@ -44,6 +44,7 @@ The project is in its build-up phase; this table grows with the code.
 |---|---|
 | Read/list files, path handling, platform differences | [docs/vfs.md](docs/vfs.md) |
 | Sorting, hidden files, cursor, the `..` row | [docs/listing.md](docs/listing.md) |
+| Widgets, row rendering, GTK version floor | [docs/ui-shell.md](docs/ui-shell.md) |
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
 | What is being built right now | [docs/plans/2026-08-28-phase1-walking-skeleton.md](docs/plans/2026-08-28-phase1-walking-skeleton.md) |
 | Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
