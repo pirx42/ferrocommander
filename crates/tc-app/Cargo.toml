@@ -10,3 +10,6 @@ repository.workspace = true
 [dependencies]
 gtk.workspace = true
 tc-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

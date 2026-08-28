@@ -1,6 +1,6 @@
 # Phase 1 Implementation Plan — Walking Skeleton
 
-Status: In Progress — sub-phases 0, A, B, C done
+Status: In Progress — sub-phases 0, A, B, C, D done; E (audit) outstanding
 
 *2026-08-28 — implements phase 1 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -306,7 +306,26 @@ tested headlessly (key + modifier → expected `Action`, including "unbound key
 yields no action"); the reload-on-activate path is tested through
 `tc-core::listing` against a tempdir.
 
-*Docs:* `docs/keymap.md` — the phase-1 binding table.
+*Docs:* [docs/keymap.md](../keymap.md) — the binding table, the capture
+phase, and the failed-navigation behavior.
+
+**Done.** 74 tests green; the binary runs clean with no GTK warnings.
+
+*Decision — the key controller sits in the capture phase.* The window must see
+Tab and the arrow keys before the `ColumnView` applies its own focus and
+selection handling, which would otherwise fight the pane cursor.
+
+*Decision — unlisted modifiers are masked out; listed ones must match.* GTK
+reports Caps Lock, Num Lock and held mouse buttons alongside real modifiers,
+so a binding that compared them raw would leave a user with Caps Lock on
+unable to navigate. Conversely `Ctrl+↓` does not fall through to plain `↓`,
+because phase 3 will bind it to something else.
+
+*Verification gap.* The keymap table and the navigation targets are unit
+tested, and the window runs warning-free, but the path from a physical
+keypress through the GTK controller to the pane has no automated coverage —
+this session has no way to synthesize keystrokes. It needs a human at the
+keyboard.
 
 ### E — Refactoring audit + correction (skill [49](../skills/49-final-phase-refactoring-audit.md))
 

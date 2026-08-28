@@ -14,6 +14,8 @@ cross-references instead of duplication.
   rules, the `..` row, hidden-file filtering, cursor behavior.
 - [ui-shell.md](ui-shell.md) — the GTK4 window: widget tree, row rendering,
   columns, active-pane marking, and the GTK version floor.
+- [keymap.md](keymap.md) — what each key does, how bindings are looked up,
+  and what happens when a directory cannot be entered.
 - [good-development-practices.md](good-development-practices.md) —
   working rules, workflow, and the four-phase cycle (adopted from the
   Chimera project); read before starting non-trivial work.

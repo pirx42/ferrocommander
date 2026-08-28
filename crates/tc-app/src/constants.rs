@@ -26,6 +26,9 @@ pub const THOUSANDS_GROUP: usize = 3;
 /// free of locale surprises in a column of fixed width.
 pub const DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
 
+/// Separates the directory path from an error notice in the path bar.
+pub const PATH_BAR_ERROR_SEPARATOR: &str = "   ⚠ ";
+
 /// Spacing and padding of the pane's own widgets.
 pub const PANE_SPACING: i32 = 0;
 

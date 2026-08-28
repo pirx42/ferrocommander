@@ -8,7 +8,10 @@ use gtk::subclass::prelude::*;
 use tc_core::listing::Listing;
 use tc_core::vfs::{VfsPath, VirtualFs};
 
-use crate::constants::{CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR, PANE_SPACING};
+use crate::constants::{
+    CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
+};
+use crate::navigation::{activation_target, parent_target};
 use crate::row::Row;
 
 /// The columns a pane shows.
@@ -116,22 +119,27 @@ pub struct PaneView {
     path_bar: gtk::Label,
     store: gio::ListStore,
     selection: gtk::SingleSelection,
+    column_view: gtk::ColumnView,
     listing: Listing,
+    fs: Box<dyn VirtualFs>,
+    /// Why the last navigation attempt failed, shown beside the path.
+    error: Option<String>,
 }
 
 impl PaneView {
     /// Builds a pane showing `dir`.
     ///
-    /// The filesystem is borrowed rather than owned: nothing in this phase
-    /// re-reads after construction, and the pane will take ownership in
-    /// phase D, where navigation gives it a caller.
+    /// The pane owns its filesystem, because navigation re-reads through it
+    /// and phase 6 swaps it for an archive backend while the pane lives on.
     ///
     /// A directory that cannot be read yields an empty pane rather than
     /// failing construction — a window with one broken pane is still a usable
-    /// program. Phase D reports the reason in the path bar.
-    pub fn new(fs: &dyn VirtualFs, dir: VfsPath) -> Self {
-        let listing =
-            Listing::load(fs, dir.clone()).unwrap_or_else(|_| Listing::new(dir, Vec::new()));
+    /// program, and the reason is shown in the path bar.
+    pub fn new(fs: Box<dyn VirtualFs>, dir: VfsPath) -> Self {
+        let (listing, error) = match Listing::load(fs.as_ref(), dir.clone()) {
+            Ok(listing) => (listing, None),
+            Err(reason) => (Listing::new(dir, Vec::new()), Some(reason.to_string())),
+        };
 
         let store = gio::ListStore::new::<PaneEntry>();
         let selection = gtk::SingleSelection::new(Some(store.clone()));
@@ -163,7 +171,10 @@ impl PaneView {
             path_bar,
             store,
             selection,
+            column_view,
             listing,
+            fs,
+            error,
         };
         pane.refresh();
         pane
@@ -177,7 +188,11 @@ impl PaneView {
     /// Rebuilds the rows from the listing and puts the selection back on the
     /// cursor. Called after anything that changes the model.
     pub fn refresh(&mut self) {
-        self.path_bar.set_text(self.listing.dir().as_str());
+        let path = self.listing.dir().as_str();
+        self.path_bar.set_text(&match &self.error {
+            Some(reason) => format!("{path}{PATH_BAR_ERROR_SEPARATOR}{reason}"),
+            None => path.to_string(),
+        });
 
         self.store.remove_all();
         for index in 0..self.listing.len() {
@@ -198,6 +213,62 @@ impl PaneView {
             return;
         }
         self.selection.set_selected(self.listing.cursor() as u32);
+    }
+
+    /// Moves the cursor by `delta` rows.
+    pub fn move_cursor_by(&mut self, delta: isize) {
+        self.listing.move_cursor_by(delta);
+        self.sync_cursor();
+    }
+
+    pub fn move_cursor_to_first(&mut self) {
+        self.listing.move_cursor_to_first();
+        self.sync_cursor();
+    }
+
+    pub fn move_cursor_to_last(&mut self) {
+        self.listing.move_cursor_to_last();
+        self.sync_cursor();
+    }
+
+    /// Enters the directory under the cursor. Does nothing on a file — F3/F4
+    /// arrive in phase 4.
+    pub fn activate(&mut self) {
+        if let Some(target) = activation_target(&self.listing) {
+            self.navigate_to(target);
+        }
+    }
+
+    /// Leaves the current directory. Does nothing at the root.
+    pub fn go_parent(&mut self) {
+        if let Some(target) = parent_target(&self.listing) {
+            self.navigate_to(target);
+        }
+    }
+
+    /// Shows `dir`, or stays put and reports why it could not.
+    ///
+    /// A pane that cannot read a directory must not end up displaying it as
+    /// empty: leaving the user where they were, with the reason next to the
+    /// path, keeps the pane in a state they can navigate out of.
+    fn navigate_to(&mut self, dir: VfsPath) {
+        match Listing::load(self.fs.as_ref(), dir.clone()) {
+            Ok(listing) => {
+                self.listing = listing;
+                self.error = None;
+            }
+            Err(reason) => {
+                let name = dir.file_name().unwrap_or(dir.as_str()).to_string();
+                self.error = Some(format!("{name}: {reason}"));
+            }
+        }
+        self.refresh();
+    }
+
+    /// Gives this pane the keyboard focus, so its cursor row is drawn as the
+    /// focused selection rather than a dim one.
+    pub fn grab_focus(&self) {
+        self.column_view.grab_focus();
     }
 
     /// Marks this pane as the one keystrokes go to.
