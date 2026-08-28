@@ -231,18 +231,22 @@ stale number or a real one that is wrong the moment anything else is
 committed.
 
 **A missing git is not a build failure.** Building from a source tarball, or
-in an image without git, leaves both values empty and the title falls back to
-the bare product name — not to a placeholder like `#0 (unknown)`, which looks
-like a build that exists when the point of the title is that it names one that
-does.
+in an image without git, leaves the tail empty and the title is the bare
+product name — not a placeholder like `#0 (unknown)`, which looks like a build
+that exists when the point of the title is that it names one that does.
 
-That rule lives in `crates/tc-app/src/build_stamp.rs`, which **two things
-compile**: `build.rs` pulls it in with `include!`, and the crate compiles it
-under `cfg(test)`. A build script's own tests are never run by `cargo test`,
-and the no-git case is exactly the one that cannot be reproduced by building
-this crate a second way — so the rule is shared rather than the test given up.
-A separate test asserts *this* binary was stamped at all, which is the half
-that actually breaks.
+**That case costs no code.** Both git calls need `HEAD` to resolve, so they
+answer or fail together: there is no half-stamped build to describe, and when
+they fail `concat!` joins an empty tail and yields the product name on its
+own. An earlier version spelled the rule out in a shared file that `build.rs`
+pulled in with `include!` so the crate could unit-test it — for a branch that
+cannot be reached and one that happens by itself. It was deleted.
+
+What is left is a test asserting *this* binary was stamped, which is the half
+that actually breaks. The empty case is checked by hand instead, and more
+honestly than a unit test could: building with `git` replaced by a failing
+stub emits an empty `TC_BUILD_STAMP` and produces a binary whose title carries
+no `#`.
 
 The build script rebuilds on a commit and not otherwise: it watches
 `.git/HEAD` and the branch file HEAD points at. Watching `.git/index` instead

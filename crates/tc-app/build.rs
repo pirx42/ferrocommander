@@ -13,12 +13,6 @@
 use std::path::Path;
 use std::process::Command;
 
-// Shared with the crate, which compiles the same file under `cfg(test)`: a
-// build script's own tests are never run by `cargo test`, and the rule below
-// has a case — no git to ask — that cannot be reached by building this crate a
-// second way.
-include!("src/build_stamp.rs");
-
 /// The commit count, which is what makes a build *number* rather than another
 /// hash: it goes up, so two builds can be told apart at a glance.
 const BUILD_NUMBER_ARGS: &[&str] = &["rev-list", "--count", "HEAD"];
@@ -29,13 +23,17 @@ const BUILD_HASH_ARGS: &[&str] = &["rev-parse", "--short", "HEAD"];
 fn main() {
     watch_head();
     // One finished string rather than two values for the crate to assemble,
-    // so the title is a `&'static str` constant and nothing is formatted at
-    // run time. The decision to leave it out belongs here too: this is the
-    // only place that knows whether git answered.
-    let stamp = stamp(
-        &git(BUILD_NUMBER_ARGS).unwrap_or_default(),
-        &git(BUILD_HASH_ARGS).unwrap_or_default(),
-    );
+    // so the title is a `&'static str` constant and nothing is put together at
+    // run time.
+    //
+    // Both calls need `HEAD` to resolve, so they answer or fail together —
+    // there is no half-stamped build to describe. When they fail the tail is
+    // empty and `concat!` yields the bare product name on its own, which is
+    // why nothing here spells that case out.
+    let stamp = match (git(BUILD_NUMBER_ARGS), git(BUILD_HASH_ARGS)) {
+        (Some(number), Some(hash)) => format!(" #{number} ({hash})"),
+        _ => String::new(),
+    };
     println!("cargo:rustc-env=TC_BUILD_STAMP={stamp}");
 }
 

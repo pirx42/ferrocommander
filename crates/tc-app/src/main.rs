@@ -4,11 +4,6 @@
 //! keystroke up in the keymap, and forwards to `tc-core`, which owns every
 //! decision about what a directory contains and how it is ordered.
 
-/// Compiled only for the tests. `build.rs` is the one that uses it, through
-/// `include!`; the crate pulls it in so its rule gets ordinary unit tests,
-/// which a build script's own never are.
-#[cfg(test)]
-mod build_stamp;
 mod constants;
 mod dialogs;
 mod jobs;
