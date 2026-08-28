@@ -13,6 +13,7 @@ mod name;
 mod sort;
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::glob;
 use crate::vfs::constants::PARENT;
@@ -22,6 +23,11 @@ use constants::{DEFAULT_SHOW_HIDDEN, DEFAULT_SORT_KEY, DEFAULT_SORT_ORDER, PAREN
 
 pub use name::split_name;
 pub use sort::{Sort, SortKey, SortOrder};
+
+/// Where a directory read started by [`Listing::spawn_load`] arrives.
+///
+/// Named here so the shell can hold one without naming the channel crate.
+pub type Loading = async_channel::Receiver<Result<Listing, VfsError>>;
 
 /// A count of rows and the bytes they hold.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -67,6 +73,38 @@ impl Listing {
     pub fn load(fs: &dyn VirtualFs, dir: VfsPath) -> Result<Self, VfsError> {
         let entries = fs.read_dir(&dir)?;
         Ok(Listing::new(dir, entries))
+    }
+
+    /// Reads a directory on a thread of its own, and says where the answer
+    /// will arrive.
+    ///
+    /// A directory read is the one thing the shell does that has no bound on
+    /// how long it takes — a cold cache, a network mount, a hundred thousand
+    /// files — and doing it on the UI thread froze the window for all of it.
+    ///
+    /// The whole listing arrives at once rather than streaming in. That is not
+    /// laziness: the view is **sorted**, so an entry read late belongs in the
+    /// middle, and showing rows as they arrive would shove everything below
+    /// them down while the user is looking at it. One swap moves the list
+    /// once (`docs/listing.md`).
+    pub fn spawn_load(fs: Arc<dyn VirtualFs>, dir: VfsPath) -> Loading {
+        let (sender, receiver) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let _ = sender.send_blocking(Listing::load(fs.as_ref(), dir));
+        });
+        receiver
+    }
+
+    /// Reads `dir` on a thread, falling back to the nearest readable ancestor.
+    ///
+    /// What a pane needs after a job or a re-read, for the reason
+    /// [`load_nearest`](Self::load_nearest) gives.
+    pub fn spawn_load_nearest(fs: Arc<dyn VirtualFs>, dir: VfsPath) -> Loading {
+        let (sender, receiver) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let _ = sender.send_blocking(Ok(Listing::load_nearest(fs.as_ref(), dir)));
+        });
+        receiver
     }
 
     /// Reads `dir`, or the nearest ancestor that can still be read.

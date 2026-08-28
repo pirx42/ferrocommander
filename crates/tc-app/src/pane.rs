@@ -9,8 +9,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use tc_core::listing::{split_name, Listing, Sort, SortKey, SortOrder};
-use tc_core::vfs::{VfsPath, VirtualFs};
+use tc_core::listing::{split_name, Listing, Loading, Sort, SortKey, SortOrder};
+use tc_core::vfs::{VfsError, VfsPath, VirtualFs};
 
 use crate::constants::{
     CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
@@ -215,6 +215,12 @@ pub struct PaneView {
     /// watched at all — a pane that does not refresh itself, not one that
     /// fails to open.
     watch: Option<tc_core::watch::Watch>,
+    /// The directory a read is in flight for, so an answer that arrives after
+    /// the pane has moved on can be recognised and dropped.
+    wanted: Option<VfsPath>,
+    /// Which entry to put the cursor on when that read arrives — the directory
+    /// just left, when stepping up.
+    focus_on_arrival: Option<String>,
     /// Which directory [`watch`](Self::watch) is about, so the shell can tell
     /// when navigation has left it behind.
     watched: Option<VfsPath>,
@@ -321,6 +327,8 @@ impl PaneView {
             column_view,
             listing,
             scroller,
+            wanted: None,
+            focus_on_arrival: None,
             watch: None,
             watched: None,
             renaming: None,
@@ -378,6 +386,15 @@ impl PaneView {
         // Set even when the watch could not be started, so a directory that
         // cannot be watched is not retried on every keystroke.
         self.watched = Some(self.listing.dir().clone());
+        // The old one goes on a thread of its own. Dropping a watcher joins
+        // the worker inside it, and that worker sits in a poll with a timeout
+        // — so letting the drop happen here stalled every navigation by up to
+        // a fifth of a second, measured. Nothing waits for it: an inotify
+        // registration that outlives its pane by a few milliseconds costs
+        // nothing at all.
+        if let Some(previous) = self.watch.take() {
+            std::thread::spawn(move || drop(previous));
+        }
         self.watch = tc_core::watch::Watch::start(self.listing.dir());
         self.watch.as_ref().map(|watch| watch.changes())
     }
@@ -867,23 +884,22 @@ impl PaneView {
     }
 
     /// Sends this pane somewhere, which is what the drive bar does.
-    pub fn go_to(&mut self, dir: VfsPath) {
-        self.navigate_to(dir);
+    #[must_use = "the caller has to await the listing, or the pane never moves"]
+    pub fn go_to(&mut self, dir: VfsPath) -> Loading {
+        self.navigate_to(dir)
     }
 
     /// Enters the directory under the cursor. Does nothing on a file — F3/F4
     /// arrive in phase 4.
-    pub fn activate(&mut self) {
-        if let Some(target) = activation_target(&self.listing) {
-            self.navigate_to(target);
-        }
+    #[must_use = "the caller has to await the listing, or the pane never moves"]
+    pub fn activate(&mut self) -> Option<Loading> {
+        activation_target(&self.listing).map(|target| self.navigate_to(target))
     }
 
     /// Leaves the current directory. Does nothing at the root.
-    pub fn go_parent(&mut self) {
-        if let Some(target) = parent_target(&self.listing) {
-            self.navigate_to(target);
-        }
+    #[must_use = "the caller has to await the listing, or the pane never moves"]
+    pub fn go_parent(&mut self) -> Option<Loading> {
+        parent_target(&self.listing).map(|target| self.navigate_to(target))
     }
 
     /// Shows `dir`, or stays put and reports why it could not.
@@ -891,16 +907,62 @@ impl PaneView {
     /// A pane that cannot read a directory must not end up displaying it as
     /// empty: leaving the user where they were, with the reason next to the
     /// path, keeps the pane in a state they can navigate out of.
-    fn navigate_to(&mut self, dir: VfsPath) {
+    /// Asks for a directory, and hands back where the answer will arrive.
+    ///
+    /// The pane keeps showing what it has until the new listing turns up:
+    /// blanking it first would flash an empty pane on every step, and there is
+    /// nothing to put there that is more true than what is already on screen.
+    #[must_use = "the caller has to await the listing, or the pane never moves"]
+    fn navigate_to(&mut self, dir: VfsPath) -> Loading {
         // A filter belongs to the directory it was typed in. Carrying it into
         // the next one would show an empty pane and no reason why.
         self.filter_bar.set_text("");
         self.filter_bar.set_visible(false);
-        let focus = focus_after_move(self.listing.dir(), &dir);
-        match Listing::load(self.fs.as_ref(), dir.clone()) {
+        self.focus_on_arrival = focus_after_move(self.listing.dir(), &dir);
+        self.wanted = Some(dir.clone());
+        Listing::spawn_load(Arc::clone(&self.fs), dir)
+    }
+
+    /// The directory a read is in flight for.
+    pub fn awaiting(&self) -> Option<VfsPath> {
+        self.wanted.clone()
+    }
+
+    /// The directory this pane is **about**: where it is, or where it is on
+    /// its way to.
+    ///
+    /// Reading the directory off the listing is not the same thing now that a
+    /// read happens on a worker thread. Keys arrive faster than listings: press
+    /// Enter and then F7 quickly enough and both are dispatched before the
+    /// first read lands, so a pane asked where it *is* would answer with the
+    /// directory it is leaving — and F7 would make the directory in the wrong
+    /// place. A pane that has been told to go somewhere is already about that
+    /// somewhere.
+    ///
+    /// Everything that acts *in* a directory uses this. Anything acting on
+    /// what is **marked** keeps reading the listing, because the marks belong
+    /// to the rows the user was looking at when they made them.
+    pub fn target_dir(&self) -> VfsPath {
+        self.wanted
+            .clone()
+            .unwrap_or_else(|| self.listing.dir().clone())
+    }
+
+    /// Takes a listing that was read on a worker thread.
+    ///
+    /// `dir` is what was asked for. A pane that has since been sent somewhere
+    /// else drops it on the floor: two quick steps would otherwise land in
+    /// whichever order the reads happened to finish, which is a pane that
+    /// sometimes goes back.
+    pub fn arrived(&mut self, dir: &VfsPath, listing: Result<Listing, VfsError>) {
+        if self.wanted.as_ref() != Some(dir) {
+            return;
+        }
+        self.wanted = None;
+        match listing {
             Ok(mut listing) => {
                 self.adopt(&mut listing);
-                if let Some(name) = focus {
+                if let Some(name) = self.focus_on_arrival.take() {
                     listing.focus_entry(&name);
                 }
                 self.listing = listing;

@@ -72,6 +72,37 @@ name is not visible, since the cursor cannot sit on a row that is not there.
 An empty listing has no current row: `current()` and `current_path()` return
 `None` rather than a placeholder.
 
+## The read happens on a worker thread
+
+A directory read is the one thing the shell does with no bound on how long it
+takes — a cold cache, a network mount, a hundred thousand files — and doing it
+on the UI thread froze the window for all of it. `Listing::spawn_load` reads on
+a thread and the pane takes the result on the main loop, like a job.
+
+**The whole listing arrives at once.** Not laziness: the view is *sorted*, so an
+entry read late belongs in the middle, and showing rows as they arrive would
+shove everything below them down while the user is looking at it. One swap
+moves the list once. The pane also keeps showing what it has until the new
+listing lands, rather than blanking first — there is nothing to put there that
+is more true than what is already on screen.
+
+**A read that is overtaken is dropped.** The pane records what it asked for;
+an answer for anywhere else is a navigation that has since been superseded, and
+applying it would make two quick steps land in whichever order the reads
+happened to finish.
+
+### A pane is about where it is *going*
+
+Keys arrive faster than listings. Press Enter and then F7 quickly enough and
+both are dispatched before the first read comes back — so a pane asked where it
+*is* answers with the directory it is leaving, and F7 makes the directory in the
+wrong place. That is not hypothetical; it is what happened.
+
+So everything that acts **in** a directory asks `PaneView::target_dir`, which is
+where the pane is going if a read is in flight and where it is otherwise.
+Anything acting on what is **marked** keeps reading the listing, because the
+marks belong to the rows the user was looking at when they made them.
+
 ## Loading after a job
 
 `Listing::load_nearest` reads a directory, or the nearest ancestor that can

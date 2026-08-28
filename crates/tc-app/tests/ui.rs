@@ -75,7 +75,35 @@ fn in_src_and_dst(arrange: impl FnOnce(&Path)) -> App {
     app.keys(&["Tab", "Down", "Return"]);
     // Back to the left pane, which is still on `..`, and into src.
     app.keys(&["Tab", "Down", "Down", "Return"]);
+    // And wait until both panes are really there.
+    //
+    // A directory is read on a worker thread now, so a navigation is no longer
+    // finished by the time the next key is sent — and a test that marked files
+    // straight afterwards was marking the directory it was leaving. Every test
+    // starting here shares that precondition, so it is established once, here,
+    // rather than left to each of them to get right.
+    await_panes_at(&app, "/src", "/dst");
     app
+}
+
+/// Waits until the app has recorded both panes at those directories.
+///
+/// The settings file is the only place a pane's directory is observable from
+/// outside, and it is written when one changes — so this is a poll on the
+/// thing itself rather than a sleep long enough to probably do.
+fn await_panes_at(app: &App, left: &str, right: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let recorded = recorded_directories(app.home());
+        if recorded[0].ends_with(left) && recorded[1].ends_with(right) {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the panes never reached {left} and {right}: {recorded:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
 }
 
 /// Puts the cursor on `notes.txt`.
@@ -1053,6 +1081,8 @@ fn shift_num_star_takes_the_directories_with_it() {
 fn recorded_directories(home: &Path) -> Vec<String> {
     let config = VfsPath::new(home.join(".config").to_str().unwrap());
     let (settings, complaint) = tc_core::config::load(&LocalFs, &config);
+    // A file that is not there yet is a first run that has not saved, not a
+    // problem: this is polled while the app is starting up.
     assert_eq!(complaint, None, "the settings could not be read back");
     (0..2).map(|index| settings.pane(index).directory).collect()
 }
@@ -2076,5 +2106,30 @@ fn an_ordinary_plus_reaches_the_keypad_binding() {
     assert!(
         !app.path("dst/notes.txt").exists(),
         "the pattern dialog acted on more than it matched"
+    );
+}
+
+#[test]
+fn a_key_pressed_before_a_listing_lands_still_means_the_new_directory() {
+    // Reading a directory happens on a worker thread now, and keys arrive
+    // faster than listings: Enter and F7 in quick succession are both
+    // dispatched before the first read comes back. A pane asked where it *is*
+    // would answer with the directory it is leaving, and F7 would make the
+    // directory in the wrong place — which is what happened until panes
+    // started answering with where they are going.
+    //
+    // No pause between the two keys on purpose: the harness sends them 50 ms
+    // apart, and the app processes both before the read lands.
+    let app = App::launch(arrange);
+    app.keys(&["Home", "Down", "Down", "Return", "F7"]);
+
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("in-the-new-place");
+    app.key("Return");
+
+    app.await_exists("src/in-the-new-place");
+    assert!(
+        !app.home().join("in-the-new-place").exists(),
+        "it was made in the directory the pane was leaving"
     );
 }

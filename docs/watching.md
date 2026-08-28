@@ -39,6 +39,16 @@ anyway, so which file moved is not information it can use. The timer restarts
 on every event, so a directory under continuous change is re-read when it
 settles rather than never.
 
+## Dropping a watcher is not free
+
+`notify`'s watcher joins its worker thread when it is dropped, and that worker
+sits in a poll with a timeout — so replacing a pane's watch on the UI thread
+stalled **every navigation** by up to a fifth of a second, measured. The old
+watch now goes onto a thread of its own to be dropped. Nothing waits for it: an
+inotify registration outliving its pane by a few milliseconds costs nothing.
+
+Starting one is cheap by comparison — under 300 µs for a start-and-drop pair.
+
 ## What it deliberately does not do
 
 - **It does not watch a subtree.** A pane shows one directory; waking it for

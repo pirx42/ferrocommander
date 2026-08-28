@@ -36,6 +36,7 @@ use constants::{
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
+use tc_core::listing::Loading;
 
 /// The two panes, which of them keystrokes go to, and the jobs they started.
 struct Shell {
@@ -52,6 +53,11 @@ struct Shell {
     /// What was last written. Compared against the current state so that
     /// moving the cursor around does not rewrite an identical file.
     saved: config::Settings,
+    /// The command lines that were run, newest first.
+    ///
+    /// Beside `saved` rather than in it — see
+    /// [`remember_command`](Self::remember_command).
+    command_history: Vec<String>,
     /// The command line across the bottom, which follows the active pane.
     command_line: command_line::CommandLine,
     /// Where each mount point was last showing, keyed by mount path.
@@ -86,6 +92,7 @@ impl Shell {
             window: window.downgrade(),
             config_root,
             drives: saved.drives.clone(),
+            command_history: saved.command_history.clone(),
             saved,
             keymap,
             save_queued: false,
@@ -111,13 +118,16 @@ impl Shell {
         self.follow_active();
     }
 
-    /// Adds a command line to the history, which is part of the settings.
+    /// Adds a command line to the history.
     ///
-    /// Written into `saved` rather than a field of its own, because `saved` is
-    /// what the next write compares against — a history kept beside it would
-    /// look like no change at all and never reach the disk.
+    /// Kept beside `saved` rather than inside it, and that is the whole point:
+    /// `saved` is the record of what is *on disk*, and the next write happens
+    /// only where the two differ. Writing a new command straight into `saved`
+    /// marked it as already saved, so it never reached the file — the history
+    /// survived a restart only by accident, when some other setting happened
+    /// to have changed too, and stopped surviving the moment one stopped.
     fn remember_command(&mut self, line: &str) {
-        self.saved.remember_command(line);
+        config::remember_command(&mut self.command_history, line);
     }
 
     /// Points the command line's prompt at the active pane.
@@ -127,7 +137,7 @@ impl Shell {
     /// that did not say so is one you check by running something.
     fn follow_active(&self) {
         self.command_line
-            .follow(self.panes[self.active].listing().dir());
+            .follow(&self.panes[self.active].target_dir());
     }
 
     /// What the settings file would say if it were written right now.
@@ -155,6 +165,7 @@ impl Shell {
                 None => self.saved.window,
             },
             drives: self.drives.clone(),
+            command_history: self.command_history.clone(),
             ..self.saved.clone()
         };
         settings.active_pane = self.active;
@@ -221,8 +232,16 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::CursorDown => shell.borrow_mut().active_pane().move_cursor_by(1),
         Action::CursorFirst => shell.borrow_mut().active_pane().move_cursor_to_first(),
         Action::CursorLast => shell.borrow_mut().active_pane().move_cursor_to_last(),
-        Action::Activate => shell.borrow_mut().active_pane().activate(),
-        Action::GoParent => shell.borrow_mut().active_pane().go_parent(),
+        Action::Activate => {
+            let index = shell.borrow().active;
+            let loading = shell.borrow_mut().panes[index].activate();
+            await_listing(shell, index, loading);
+        }
+        Action::GoParent => {
+            let index = shell.borrow().active;
+            let loading = shell.borrow_mut().panes[index].go_parent();
+            await_listing(shell, index, loading);
+        }
         Action::ToggleMark => shell.borrow_mut().active_pane().toggle_mark(0),
         Action::ToggleMarkAndAdvance => shell.borrow_mut().active_pane().toggle_mark(1),
         Action::ToggleMarkAndRetreat => shell.borrow_mut().active_pane().toggle_mark(-1),
@@ -300,7 +319,7 @@ fn show_command_history(shell: &Rc<RefCell<Shell>>) {
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        (window, state.saved.command_history.clone())
+        (window, state.command_history.clone())
     };
     // Nothing run yet is not a window worth opening on an empty list.
     if history.is_empty() {
@@ -337,22 +356,27 @@ fn run_command(shell: &Rc<RefCell<Shell>>) {
         if line.trim().is_empty() {
             return;
         }
-        (line, state.active_pane().listing().dir().clone())
+        (line, state.active_pane().target_dir())
     };
 
     match command_line::read(&line) {
         command_line::Typed::ChangeDirectory(argument) => {
             let target = command_line::destination(&directory, &argument, LocalFs::home_dir());
             if let Some(target) = target {
-                shell.borrow_mut().active_pane().go_to(target);
+                let index = shell.borrow().active;
+                let loading = shell.borrow_mut().panes[index].go_to(target);
+                await_listing(shell, index, Some(loading));
             }
             finish_command(shell);
-            remember(shell);
         }
         command_line::Typed::Shell(line) => {
             // Remembered before it runs, and whatever it does: a command that
             // failed is the one most worth getting back to and correcting.
             shell.borrow_mut().remember_command(&line);
+            // Scheduled here because a command does not come through
+            // `dispatch`: the entry's own activate handler calls this, and the
+            // one save at the end of a keystroke never runs for it.
+            remember(shell);
             finish_command(shell);
             // Before it finishes, not after: the keyboard belongs back in the
             // rows the moment the command is away, and a long one would
@@ -409,7 +433,7 @@ fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &VfsPath) {
 
     // Where the pane is now belongs to whatever drive it is on, and has to be
     // put away before the pane leaves it.
-    let leaving = state.panes[target].listing().dir().clone();
+    let leaving = state.panes[target].target_dir();
     if let Some(from) = tc_core::vfs::mount_for(&leaving, &tc_core::vfs::mount_points()) {
         state
             .drives
@@ -421,13 +445,9 @@ fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &VfsPath) {
         .get(mount.as_str())
         .map(|dir| VfsPath::new(dir));
     let arriving = remembered.unwrap_or_else(|| mount.clone());
-    state.panes[target].go_to(arriving);
-    if state.panes[target].went_wrong() {
-        state.panes[target].go_to(mount.clone());
-    }
+    let loading = state.panes[target].go_to(arriving);
     drop(state);
-    resync_watches(shell);
-    remember(shell);
+    await_listing_or(shell, target, Some(loading), Some(mount.clone()));
 }
 
 /// Alt+F1 / Alt+F2: offer `target` a list of places to go.
@@ -465,8 +485,10 @@ fn clone_pane(shell: &Rc<RefCell<Shell>>, target: usize) {
     if state.active == target {
         return;
     }
-    let dir = state.active_pane().listing().dir().clone();
-    state.panes[target].go_to(dir);
+    let dir = state.active_pane().target_dir();
+    let loading = state.panes[target].go_to(dir);
+    drop(state);
+    await_listing(shell, target, Some(loading));
 }
 
 /// Shift+PgUp / Shift+PgDn: mark across one screenful and land there.
@@ -495,7 +517,9 @@ fn start_transfer(shell: &Rc<RefCell<Shell>>, copying: bool) {
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        let prefill = jobs::prefilled_target(state.panes[state.other()].listing().dir());
+        let prefill = jobs::prefilled_target(&state.panes[state.other()].target_dir());
+        // Sources from the listing, because that is where the marks are, and
+        // a relative destination against the same listing they came from.
         (window, sources, pane.listing().dir().clone(), prefill)
     };
 
@@ -561,7 +585,7 @@ fn start_create_dir(shell: &Rc<RefCell<Shell>>) {
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        (window, state.panes[state.active].listing().dir().clone())
+        (window, state.panes[state.active].target_dir())
     };
 
     let shell = shell.clone();
@@ -951,7 +975,7 @@ fn start_create_file(shell: &Rc<RefCell<Shell>>) {
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        let directory = state.active_pane().listing().dir().clone();
+        let directory = state.active_pane().target_dir();
         (window, directory)
     };
 
@@ -975,6 +999,65 @@ fn start_create_file(shell: &Rc<RefCell<Shell>>) {
             });
         },
     );
+}
+
+/// Hands a pane the listing a worker thread is reading for it.
+///
+/// `None` is a navigation that was never started — activating a file, or `..`
+/// at the root — and there is nothing to wait for.
+///
+/// Nothing here blocks: the pane keeps showing what it has until the read
+/// lands. Every navigation goes through this, which is what took the directory
+/// read off the UI thread — it is the one thing the shell does with no bound
+/// on how long it takes ([`docs/listing.md`]).
+fn await_listing(shell: &Rc<RefCell<Shell>>, index: usize, loading: Option<Loading>) {
+    await_listing_or(shell, index, loading, None);
+}
+
+/// The same, with somewhere to go if the directory could not be read.
+///
+/// Only the drive selector needs it: a remembered directory that has since
+/// gone falls back to the drive itself rather than leaving the pane showing an
+/// error about a path nobody asked for by name. That check used to happen
+/// right after a synchronous read; now it waits for the answer like everything
+/// else.
+fn await_listing_or(
+    shell: &Rc<RefCell<Shell>>,
+    index: usize,
+    loading: Option<Loading>,
+    fallback: Option<VfsPath>,
+) {
+    let Some(loading) = loading else {
+        return;
+    };
+    let wanted = match shell.borrow().panes[index].awaiting() {
+        Some(dir) => dir,
+        None => return,
+    };
+    let shell = shell.clone();
+    glib::spawn_future_local(async move {
+        let Ok(listing) = loading.recv().await else {
+            return;
+        };
+        shell.borrow_mut().panes[index].arrived(&wanted, listing);
+
+        // Somewhere else to try, and a reason to.
+        if let Some(fallback) = fallback {
+            let mut state = shell.borrow_mut();
+            if state.panes[index].went_wrong() {
+                let retry = state.panes[index].go_to(fallback);
+                drop(state);
+                await_listing(&shell, index, Some(retry));
+                return;
+            }
+        }
+
+        // The pane is somewhere else now, which moves the prompt, the watch
+        // and what is worth saving.
+        shell.borrow().follow_active();
+        resync_watches(&shell);
+        remember(&shell);
+    });
 }
 
 /// Points every pane's watch at the directory it is showing now.

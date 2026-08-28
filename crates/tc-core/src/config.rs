@@ -211,17 +211,6 @@ impl Settings {
         self.panes.get(index).cloned().unwrap_or_default()
     }
 
-    /// Puts `line` at the front of the history, and keeps it capped.
-    ///
-    /// Newest first, and a line run again moves up rather than appearing
-    /// twice: a history listing `make` eleven times is one you have to read
-    /// past to find anything else.
-    pub fn remember_command(&mut self, line: &str) {
-        self.command_history.retain(|previous| previous != line);
-        self.command_history.insert(0, line.to_string());
-        self.command_history.truncate(COMMAND_HISTORY_LIMIT);
-    }
-
     /// Records the settings for pane `index`, growing the list as needed.
     pub fn set_pane(&mut self, index: usize, settings: PaneSettings) {
         if self.panes.len() <= index {
@@ -229,6 +218,21 @@ impl Settings {
         }
         self.panes[index] = settings;
     }
+}
+
+/// Puts `line` at the front of a command history, and keeps it capped.
+///
+/// Newest first, and a line run again moves up rather than appearing twice: a
+/// history listing `make` eleven times is one you have to read past to find
+/// anything else.
+///
+/// On the list rather than on [`Settings`], because the shell keeps the live
+/// history beside its record of what is on disk — writing a new command into
+/// that record marks it as already saved, and it never reaches the file.
+pub fn remember_command(history: &mut Vec<String>, line: &str) {
+    history.retain(|previous| previous != line);
+    history.insert(0, line.to_string());
+    history.truncate(COMMAND_HISTORY_LIMIT);
 }
 
 /// Where the settings file lives, given a config root.
@@ -417,29 +421,26 @@ mod tests {
     fn a_command_run_again_moves_up_rather_than_appearing_twice() {
         // A history listing `make` eleven times is one you read past to find
         // anything else.
-        let mut settings = Settings::default();
-        settings.remember_command("make");
-        settings.remember_command("ls -la");
-        settings.remember_command("make");
+        let mut history = Vec::new();
+        remember_command(&mut history, "make");
+        remember_command(&mut history, "ls -la");
+        remember_command(&mut history, "make");
 
-        assert_eq!(settings.command_history, ["make", "ls -la"]);
+        assert_eq!(history, ["make", "ls -la"]);
     }
 
     #[test]
     fn the_history_stops_growing_at_the_cap() {
         // The settings file is rewritten whenever anything changes, so an
         // unbounded list would make that write grow without limit.
-        let mut settings = Settings::default();
+        let mut history = Vec::new();
         for index in 0..COMMAND_HISTORY_LIMIT + 10 {
-            settings.remember_command(&format!("command {index}"));
+            remember_command(&mut history, &format!("command {index}"));
         }
 
-        assert_eq!(settings.command_history.len(), COMMAND_HISTORY_LIMIT);
+        assert_eq!(history.len(), COMMAND_HISTORY_LIMIT);
         // The newest survived the trimming, not the oldest.
-        assert_eq!(
-            settings.command_history[0],
-            format!("command {}", COMMAND_HISTORY_LIMIT + 9)
-        );
+        assert_eq!(history[0], format!("command {}", COMMAND_HISTORY_LIMIT + 9));
     }
 
     #[test]
