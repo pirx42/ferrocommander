@@ -2,7 +2,33 @@
 //! site (skills 16/17).
 
 /// Product name as shown to the user.
-pub const APP_NAME: &str = "Ferrocommander";
+pub const APP_NAME: &str = "FerroCommander";
+
+/// Which build this is, stamped in by `build.rs` from git. Empty when the
+/// binary was built without a repository to ask — see that file.
+const BUILD_NUMBER: &str = env!("TC_BUILD_NUMBER");
+const BUILD_HASH: &str = env!("TC_BUILD_HASH");
+
+/// What the window is called: `FerroCommander #527 (ef8b326)`.
+///
+/// The build is on the title bar because that is the one part of the window
+/// that survives into a screenshot or a bug report, and "which build were you
+/// running" is the first question either raises.
+pub fn window_title() -> String {
+    titled(APP_NAME, BUILD_NUMBER, BUILD_HASH)
+}
+
+/// Split out from [`window_title`] so the no-git case can be tested without
+/// building the crate a second way.
+fn titled(name: &str, number: &str, hash: &str) -> String {
+    // Nothing rather than a placeholder: a title reading `#0 (unknown)` looks
+    // like a build that exists, and the whole point of putting it there is
+    // that it can be trusted to name one.
+    if number.is_empty() || hash.is_empty() {
+        return name.to_string();
+    }
+    format!("{name} #{number} ({hash})")
+}
 
 /// Reverse-DNS application id GTK identifies the process by.
 pub const APP_ID: &str = "st.rose.Ferrocommander";
@@ -293,3 +319,42 @@ pub const FAILURE_LIST_HEIGHT: i32 = 240;
 /// it grows with its contents, so two mount points do not open a window mostly
 /// full of nothing.
 pub const DRIVE_LIST_HEIGHT: i32 = 320;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_stamped_build_is_named_in_full() {
+        assert_eq!(
+            titled("FerroCommander", "527", "ef8b326"),
+            "FerroCommander #527 (ef8b326)"
+        );
+    }
+
+    #[test]
+    fn a_build_with_no_repository_to_ask_says_only_its_name() {
+        // Building from a source tarball, or in an image with no git. A
+        // placeholder like `#0 (unknown)` would look like a real build, and
+        // the point of the title is that it names one that exists.
+        for (number, hash) in [("", "ef8b326"), ("527", ""), ("", "")] {
+            assert_eq!(
+                titled("FerroCommander", number, hash),
+                "FerroCommander",
+                "{number:?} {hash:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn this_binary_was_stamped() {
+        // The values come from `build.rs`, so this asserts the build script
+        // ran and found the repository — which no test of `titled` can, and
+        // which is the half that actually breaks.
+        assert!(window_title().starts_with(APP_NAME), "{}", window_title());
+        assert!(
+            !BUILD_NUMBER.is_empty() && !BUILD_HASH.is_empty(),
+            "build.rs stamped nothing: number {BUILD_NUMBER:?}, hash {BUILD_HASH:?}"
+        );
+    }
+}

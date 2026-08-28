@@ -2,7 +2,7 @@
 
 Status: In Progress — phases 1, 2 and 3 implemented
 
-*2026-08-28 — working name: "Ferrocommander" (pick whatever you like)*
+*2026-08-28 — name: "FerroCommander"*
 
 > Process: this plan follows [good-development-practices.md](../good-development-practices.md)
 > and the [skills](../skills/CLAUDE.md) — see section 7 for how the

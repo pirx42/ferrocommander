@@ -68,8 +68,11 @@ const POLL: Duration = Duration::from_millis(50);
 /// matcher.
 const FOCUS_SETTLE: Duration = Duration::from_millis(200);
 
-/// Title the main window carries, and the name dialogs are found by.
-const MAIN_WINDOW: &str = "Ferrocommander";
+/// What the main window's title starts with. The rest of it is the build
+/// number and commit hash, which change with every commit — so this is the
+/// part a window search can rely on, and `xdotool search --name` matches a
+/// substring.
+const MAIN_WINDOW: &str = "FerroCommander";
 
 /// Where the app's own output goes, inside its private home.
 const APP_LOG: &str = "app.log";
@@ -181,6 +184,16 @@ impl App {
         app.window = app.await_main_window().expect("the main window appears");
         app.focus_main();
         app
+    }
+
+    /// The main window's full title, build stamp and all.
+    pub fn title(&self) -> String {
+        let name = Command::new("xdotool")
+            .env("DISPLAY", &self.display)
+            .args(["getwindowname", &self.window])
+            .output()
+            .expect("xdotool reads the window name");
+        String::from_utf8_lossy(&name.stdout).trim().to_string()
     }
 
     pub fn home(&self) -> &Path {

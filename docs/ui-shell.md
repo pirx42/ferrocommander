@@ -200,6 +200,38 @@ Raising it is not free elsewhere: from 4.12 a `SignalListItemFactory` hands
 its callbacks a plain `Object` rather than a `ListItem`, because a factory
 can also produce header and cell items, so the column factory downcasts.
 
+## The title names the build
+
+The window is called `FerroCommander #527 (ef8b326)` — the product, the build
+number, and the commit it was built from. The title bar is the one part of the
+window that survives into a screenshot or a bug report, and "which build were
+you running" is the first question either raises.
+
+Both values are stamped in at **build time** by `crates/tc-app/build.rs`,
+which asks git for them: the build number is the commit count, so it goes up
+and two builds can be told apart at a glance, and the hash is short enough to
+read off a title bar and long enough to find the commit. Read from git rather
+than kept in a file, because a number somebody has to remember to bump is a
+number that stops describing the binary.
+
+**A missing git is not a build failure.** Building from a source tarball, or
+in an image without git, leaves both values empty and the title falls back to
+the bare product name — not to a placeholder like `#0 (unknown)`, which looks
+like a build that exists when the point of the title is that it names one that
+does. There is a unit test for that fallback and another asserting *this*
+binary was stamped, which is the half that actually breaks.
+
+The build script rebuilds on a commit and not otherwise: it watches
+`.git/HEAD` and the branch file HEAD points at. Watching `.git/index` instead
+would rebuild after every `git add`, once per staged file, for a value that
+has not moved.
+
+**The application id is unchanged** (`st.rose.Ferrocommander`). It is the
+D-Bus identity GTK uses for single-instance handoff and desktop integration,
+nobody sees it, and renaming identity strings costs more than the tidiness is
+worth. The settings directory (`ferrocommander`, lower case) is likewise its
+own name and stays put.
+
 ## The drive selector is a window, not a popover
 
 `Alt+F1`/`Alt+F2` open a modal window listing the mount points, where Total

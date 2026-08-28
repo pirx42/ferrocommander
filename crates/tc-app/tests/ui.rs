@@ -1345,6 +1345,35 @@ fn the_app_saving_does_not_touch_the_bindings_the_user_wrote() {
 }
 
 #[test]
+fn the_title_names_the_build_it_is_running() {
+    // "Which build were you running" is the first question a screenshot or a
+    // bug report raises, and the title bar is the one part of the window that
+    // survives into either. The values are stamped in by `build.rs`, so this
+    // is also the only check that the build script ran at all.
+    let app = App::launch(arrange);
+
+    let title = app.title();
+    let stamp = title
+        .strip_prefix("FerroCommander #")
+        .unwrap_or_else(|| panic!("the title does not name the product and a build: {title:?}"));
+    let (number, hash) = stamp
+        .split_once(" (")
+        .unwrap_or_else(|| panic!("the title carries no commit hash: {title:?}"));
+    let hash = hash
+        .strip_suffix(')')
+        .unwrap_or_else(|| panic!("the hash is not bracketed: {title:?}"));
+
+    assert!(
+        !number.is_empty() && number.chars().all(|digit| digit.is_ascii_digit()),
+        "the build number is not a number: {number:?}"
+    );
+    assert!(
+        !hash.is_empty() && hash.chars().all(|digit| digit.is_ascii_hexdigit()),
+        "the commit hash is not a hash: {hash:?}"
+    );
+}
+
+#[test]
 fn a_settings_file_that_is_nonsense_does_not_stop_the_program() {
     // A file manager that refuses to start over its own settings is worse
     // than one that forgets where you were.

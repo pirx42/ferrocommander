@@ -13,7 +13,8 @@ cross-references instead of duplication.
 - [listing.md](listing.md) — the directory model behind a pane: ordering
   rules, the `..` row, hidden-file filtering, cursor behavior.
 - [ui-shell.md](ui-shell.md) — the GTK4 window: widget tree, row rendering,
-  columns, active-pane marking, and the GTK version floor.
+  columns, active-pane marking, the build stamp in the title, and the GTK
+  version floor.
 - [ops.md](ops.md) — the file-operation engine: jobs, the scan/execute
   split, progress events, conflict resolution, what a cancel does and does
   not undo.
