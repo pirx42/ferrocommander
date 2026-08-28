@@ -6,4 +6,5 @@
 //! enough to be verified by hand.
 
 pub mod listing;
+pub mod ops;
 pub mod vfs;

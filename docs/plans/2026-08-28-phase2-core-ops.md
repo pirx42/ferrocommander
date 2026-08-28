@@ -1,6 +1,6 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: In Progress — sub-phases 0, A done
+Status: In Progress — sub-phases 0, A, B done
 
 *2026-08-28 — implements phase 2 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -281,13 +281,23 @@ its behavior is pinned before concurrency can obscure it.
 - **Per-file errors never abort the batch.** A failure is logged as `Failed`
   and the walk continues, which is what the design doc's error-handling
   section asks for.
-- `Conflict` is answered by a `ConflictResolver` trait —
-  `fn resolve(&mut self, conflict: &Conflict) -> Resolution` with
-  `Resolution { Overwrite, Skip, Rename(String), Abort }`. Sub-phase C
+- `Conflict` is answered by a `ConflictResolver` trait. Sub-phase C
   implements it over a channel; every test here implements it as a scripted
   list, so conflict behavior is tested without a thread in sight.
-  *Apply-to-all* is a wrapper resolver that remembers the first answer, so
-  the policy lives in one pure place instead of in the dialog.
+  *Apply-to-all* is a wrapper resolver, so the policy lives in one pure place
+  instead of in the dialog.
+
+  *Deviation, implemented deliberately:* the sketch's `Resolution::Rename(String)`
+  became `Resolution::KeepBoth`, with the engine inventing `name (2).ext`
+  rather than the user typing a name. A typed name cannot be applied to all —
+  a hundred collisions would need a hundred names — so the parameterless
+  version is what makes *apply to all* mean anything on that answer, and it
+  keeps the "target count +1, original untouched" invariant testable without
+  a UI. A user-typed name is a later refinement.
+
+  *Also added:* a `Job::Rename` variant. F6 edited down to a bare name is a
+  distinct intent and the UI has to know which question to ask, even though it
+  executes exactly like a move.
 - `Cancel` is an `AtomicBool` token, checked between tasks and between copy
   chunks. **Rollback on cancel is limited to the file in flight**: the
   partially written destination is removed, so the target never holds a
@@ -333,10 +343,32 @@ and a unicode name:
 - **Progress adds up:** Σ `Advanced.bytes` == `Scanned.bytes` on a run with
   no skips — the event stream is checked as an invariant, not as a
   hand-written sequence.
+- **Symlinks**, whose two operations differ on purpose: delete removes the
+  link and never what it points at (descending would destroy files outside
+  the selected tree), while copy follows a link to a file and refuses a link
+  to a directory (following loops forever on a cycle, and `VirtualFs` has no
+  `symlink` call to recreate one).
 - **Mutation probes** (skill [59](../skills/59-mutation-probe-over-coverage-percent.md)),
-  run once and recorded in the commit message: disable the rollback → the
-  cancel test must go red; make `Move` always copy → the zero-reads test must
-  go red. An invariant test that does not catch its own bug is worthless.
+  run and recorded: rollback removed, rename fast path removed, skip tracking
+  removed, mtime stamping removed — each must turn its own test red.
+
+  *The first probe earned its keep immediately.* With the rollback deleted
+  outright, all 21 tests stayed green: the cancel was landing on a file that
+  had already been read completely, so nothing was ever truncated. The
+  decorator now cancels only after a read that filled the whole buffer, which
+  is the only moment a destination is genuinely half written. Every probe
+  fails its test now.
+
+*Deviation on rollback, implemented deliberately:* the sketch rolled back the
+file in flight unconditionally. It does not roll back an **overwrite** — the
+original was already gone the moment the destination was truncated, so
+deleting the remains would leave the user with neither copy instead of one
+damaged one. The invariant is therefore about destinations that did not exist
+before, which is what the test asserts.
+
+*Gap opened and recorded:* `Move` assumes a single store. The rename fast path
+and the `CrossDevice` fallback both address one backend, which holds while the
+UI has one; phase 6 is where a cross-store move has to be told apart.
 
 *Docs:* new [ops.md](../ops.md) — the job model, the scan/execute split, the
 event vocabulary, the conflict protocol, and what cancel does and does not

@@ -14,6 +14,9 @@ cross-references instead of duplication.
   rules, the `..` row, hidden-file filtering, cursor behavior.
 - [ui-shell.md](ui-shell.md) — the GTK4 window: widget tree, row rendering,
   columns, active-pane marking, and the GTK version floor.
+- [ops.md](ops.md) — the file-operation engine: jobs, the scan/execute
+  split, progress events, conflict resolution, what a cancel does and does
+  not undo.
 - [keymap.md](keymap.md) — what each key does, how bindings are looked up,
   and what happens when a directory cannot be entered.
 - [future-improvements.md](future-improvements.md) — gaps deliberately left

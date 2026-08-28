@@ -34,6 +34,14 @@ is what the date column shows.
 the Windows equivalent, weighed against how much a directory's mtime is worth.
 *From:* [vfs.md](vfs.md), phase 2 sub-phase A.
 
+**A move assumes a single store.**
+`ops` tries one `rename` for a whole tree and falls back to copy + delete only
+on `CrossDevice`. Both address one backend. Phase 2's UI has exactly one, so
+the assumption holds today.
+*Home:* design phase 6, which introduces the archive backend and therefore the
+first cross-store move.
+*From:* [ops.md](ops.md), phase 2 sub-phase B.
+
 ## Platform coverage
 
 **The Windows GTK build is unverified.**

@@ -44,6 +44,7 @@ The project is in its build-up phase; this table grows with the code.
 |---|---|
 | Read/list files, path handling, platform differences | [docs/vfs.md](docs/vfs.md) |
 | Sorting, hidden files, cursor, the `..` row | [docs/listing.md](docs/listing.md) |
+| Copy/move/delete/mkdir, progress, conflicts, cancel | [docs/ops.md](docs/ops.md) |
 | Widgets, row rendering, GTK version floor | [docs/ui-shell.md](docs/ui-shell.md) |
 | Key bindings, navigation actions | [docs/keymap.md](docs/keymap.md) |
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
