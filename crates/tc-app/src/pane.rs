@@ -144,6 +144,18 @@ impl PaneEntry {
             .unwrap_or_default()
     }
 
+    /// Whether this entry would say something different with those flags.
+    ///
+    /// Asked rather than assigned: the answer is what keeps a mark toggle from
+    /// replacing fifty thousand rows that did not change.
+    fn differs(&self, selected: bool, renaming: bool) -> bool {
+        self.imp()
+            .row
+            .borrow()
+            .as_ref()
+            .is_some_and(|row| row.selected != selected || row.renaming != renaming)
+    }
+
     fn is_renaming(&self) -> bool {
         self.imp()
             .row
@@ -409,8 +421,80 @@ impl PaneView {
         self.scroller.vadjustment().set_value(scroll);
     }
 
+    /// Updates the marks on the rows already in the store, without rebuilding.
+    ///
+    /// For the marking commands, which change what a row *says* rather than
+    /// which rows there are — and which are the ones pressed over and over.
+    ///
+    /// **Not** the rename editor, though it changes a row the same way: a
+    /// spliced row does not end up with the keyboard focus the way a rebuilt
+    /// one does, and a rename field that opens without the focus is no field
+    /// at all. Renaming happens once in a while and can afford the rebuild;
+    /// marking cannot.
+    ///
+    /// The distinction is not tidiness. Rebuilding a fifty-thousand entry
+    /// store costs 69 ms and allocates a `PaneEntry` per row; updating one row
+    /// costs 3 µs (`docs/performance.md`). Pressing Space used to pay the
+    /// former — and rebuilding also empties the store, which drops the scroll
+    /// adjustment to zero before `sync_cursor` puts it back, so the view
+    /// visibly moved for a keystroke that changed one row's colour.
+    fn refresh_marks(&mut self) {
+        // Which rows actually say something different now. Everything else is
+        // left exactly as it is, object identity included.
+        let changed: Vec<usize> = (0..self.listing.len())
+            .filter(|&index| {
+                self.store
+                    .item(index as u32)
+                    .and_downcast::<PaneEntry>()
+                    .is_some_and(|entry| {
+                        let renaming = self.renaming.as_deref() == Some(entry.full_name().as_str());
+                        entry.differs(self.listing.is_selected(index), renaming)
+                    })
+            })
+            .collect();
+
+        if let (Some(&first), Some(&last)) = (changed.first(), changed.last()) {
+            // The span between the first and last change, replaced in one
+            // splice. **Replaced**, not mutated: a `ListView` rebinds a cell
+            // when its item is a different object, and mutating one behind the
+            // model's back leaves the row on screen saying what it used to —
+            // the mark would not repaint and the rename field would not open.
+            //
+            // One splice rather than a remove-all and refill, because emptying
+            // the store drops the scroll adjustment to zero and the view jumps
+            // for a keystroke that changed one row's colour.
+            let replacements: Vec<PaneEntry> =
+                (first..=last).map(|index| self.entry_at(index)).collect();
+            self.store
+                .splice(first as u32, replacements.len() as u32, &replacements);
+        }
+
+        self.status
+            .set_text(&crate::jobs::selection_status(&self.listing));
+        self.sync_cursor();
+    }
+
+    /// One row of the store, built from the listing.
+    fn entry_at(&self, index: usize) -> PaneEntry {
+        let entry = self
+            .listing
+            .get(index)
+            .expect("indices below len() always resolve");
+        let mut row = Row::from_entry(
+            entry,
+            self.listing.is_parent(index),
+            self.listing.is_selected(index),
+        );
+        row.renaming = self.renaming.as_deref() == Some(row.full_name.as_str());
+        PaneEntry::new(row)
+    }
+
     /// Rebuilds the rows from the listing and puts the selection back on the
-    /// cursor. Called after anything that changes the model.
+    /// cursor.
+    ///
+    /// For when the *set* of rows changed — a navigation, a sort, a filter, a
+    /// re-read. Anything that only changes what a row says goes through
+    /// [`refresh_marks`](Self::refresh_marks) instead.
     pub fn refresh(&mut self) {
         let path = self.listing.dir().as_str();
         self.path_bar.set_text(&match &self.error {
@@ -424,17 +508,7 @@ impl PaneView {
         let cursor = self.listing.cursor();
         self.store.remove_all();
         for index in 0..self.listing.len() {
-            let entry = self
-                .listing
-                .get(index)
-                .expect("indices below len() always resolve");
-            let mut row = Row::from_entry(
-                entry,
-                self.listing.is_parent(index),
-                self.listing.is_selected(index),
-            );
-            row.renaming = self.renaming.as_deref() == Some(row.full_name.as_str());
-            self.store.append(&PaneEntry::new(row));
+            self.store.append(&self.entry_at(index));
         }
 
         self.listing.set_cursor(cursor);
@@ -559,7 +633,7 @@ impl PaneView {
         self.adopt_selection();
         self.listing.toggle_selected(self.listing.cursor());
         self.listing.move_cursor_by(step);
-        self.refresh();
+        self.refresh_marks();
     }
 
     /// Marks every row between the cursor and `target`, then goes there.
@@ -572,7 +646,7 @@ impl PaneView {
         self.listing
             .select_range(self.listing.cursor(), target, true);
         self.listing.set_cursor(target);
-        self.refresh();
+        self.refresh_marks();
     }
 
     /// Exchanges everything this pane is showing with another's.
@@ -684,7 +758,7 @@ impl PaneView {
 
     pub fn mark_matching(&mut self, pattern: &str, selected: bool) {
         self.listing.select_matching(pattern, selected);
-        self.refresh();
+        self.refresh_marks();
     }
 
     /// Flips the visible files, leaving directories alone — Total Commander's
@@ -695,24 +769,24 @@ impl PaneView {
         } else {
             self.listing.invert_selection_files();
         }
-        self.refresh();
+        self.refresh_marks();
     }
 
     pub fn mark_all(&mut self) {
         self.listing.select_all();
-        self.refresh();
+        self.refresh_marks();
     }
 
     pub fn unmark_all(&mut self) {
         self.listing.clear_selection();
-        self.refresh();
+        self.refresh_marks();
     }
 
     /// `Alt+Num ±`: every visible file sharing the cursor row's extension.
     pub fn mark_same_extension(&mut self, selected: bool) {
         self.adopt_selection();
         self.listing.select_same_extension(selected);
-        self.refresh();
+        self.refresh_marks();
     }
 
     /// Puts away what is marked, so `Num /` can bring it back.
@@ -728,7 +802,7 @@ impl PaneView {
         let remembered = std::mem::take(&mut self.remembered_marks);
         self.listing.set_selected_names(&remembered);
         self.remembered_marks = remembered;
-        self.refresh();
+        self.refresh_marks();
     }
 
     /// Selects the listing's cursor row, focuses it, and scrolls it into
@@ -985,4 +1059,35 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
 fn list_item(item: &glib::Object) -> &gtk::ListItem {
     item.downcast_ref::<gtk::ListItem>()
         .expect("a column view factory always yields ListItems")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(selected: bool, renaming: bool) -> Row {
+        Row {
+            name: "notes".to_string(),
+            ext: "txt".to_string(),
+            full_name: "notes.txt".to_string(),
+            size: "0".to_string(),
+            modified: String::new(),
+            attributes: String::new(),
+            is_dir: false,
+            selected,
+            renaming,
+        }
+    }
+
+    #[test]
+    fn a_row_that_did_not_move_is_not_replaced() {
+        // The guard that makes marking cheap. Without it, pressing Space in a
+        // fifty-thousand entry directory replaces every row: 70 ms and a
+        // scroll adjustment reset, for one row changing colour
+        // (`docs/performance.md`).
+        let entry = PaneEntry::new(row(false, false));
+        assert!(!entry.differs(false, false), "nothing moved");
+        assert!(entry.differs(true, false), "the mark moved");
+        assert!(entry.differs(false, true), "the rename moved");
+    }
 }

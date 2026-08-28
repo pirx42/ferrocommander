@@ -87,3 +87,39 @@ rows it does not yet have.
 **One `stat` per entry is unavoidable** as long as the pane shows size and
 date, which is the whole point of the columns. The 12 ms floor in the table
 is names only.
+
+## Marking a row does not rebuild the pane
+
+`gio::ListStore` holds one `PaneEntry` per visible row, and the first version
+of `refresh` emptied it and refilled it for **every** change — including a mark
+toggle. Measured on 50 000 entries, release build:
+
+| | |
+|---|---|
+| Empty the store and refill it | **70 ms** |
+| Splice the one row that changed | **9.6 µs** |
+| Splice all 50 000 (Ctrl+A, Num *) | 60 ms |
+
+So `Space` in a large directory cost 70 ms — a felt stall for one row changing
+colour — and worse, emptying the store drops the scroll adjustment to zero
+before `sync_cursor` puts it back, so the view moved under the user.
+
+Now the marking commands go through `refresh_marks`, which finds the rows whose
+mark or rename flag actually moved and splices only the span between the first
+and the last. A single toggle is one row. `Ctrl+A` still replaces everything,
+because everything genuinely changed — but as one splice rather than an empty
+followed by a refill, so the scroll position survives.
+
+**Replaced, not mutated.** A `ListView` rebinds a cell when its item is a
+different object; mutating a row behind the model's back leaves the screen
+saying what it used to, and the mark would silently never repaint. No test in
+this repository could see that — the end-to-end suite asserts on the
+filesystem, not on pixels — so it was checked by screenshotting the running
+app before and after a `Space`. What `differs` decides has a unit test; the
+repaint itself does not, and this paragraph is the record of how it was
+verified instead.
+
+**The rename editor still rebuilds.** A spliced row does not end up with the
+keyboard focus the way a rebuilt one does, and a rename field that opens
+without focus is no field at all. Renaming happens once in a while and can
+afford 70 ms; marking cannot.
