@@ -39,6 +39,8 @@ pub enum Action {
     Move,
     /// Ctrl+R — re-read the directory, keeping marks, cursor and position.
     Reread,
+    /// Alt+F7 — find files below the active pane's directory.
+    Search,
     /// F3 — look inside the file under the cursor.
     View,
     /// F4 — hand it to the editor.
@@ -171,6 +173,11 @@ static BINDINGS: &[Binding] = &[
         key: Key::BackSpace,
         modifiers: PLAIN,
         action: Action::GoParent,
+    },
+    Binding {
+        key: Key::F7,
+        modifiers: ModifierType::ALT_MASK,
+        action: Action::Search,
     },
     Binding {
         key: Key::F3,
@@ -465,6 +472,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("copy", Action::Copy),
     ("move", Action::Move),
     ("reread", Action::Reread),
+    ("search", Action::Search),
     ("view", Action::View),
     ("edit", Action::Edit),
     ("create_file", Action::CreateFile),
@@ -701,6 +709,7 @@ mod tests {
             (Key::Return, PLAIN, Action::Activate),
             (Key::KP_Enter, PLAIN, Action::Activate),
             (Key::BackSpace, PLAIN, Action::GoParent),
+            (Key::F7, ModifierType::ALT_MASK, Action::Search),
             (Key::F3, PLAIN, Action::View),
             (Key::F4, PLAIN, Action::Edit),
             (Key::F5, PLAIN, Action::Copy),

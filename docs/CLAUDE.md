@@ -22,6 +22,8 @@ cross-references instead of duplication.
   and what happens when a directory cannot be entered.
 - [watching.md](watching.md) — how a pane notices what another program did:
   the directory watcher, `Ctrl+R`, and what survives a re-read.
+- [search.md](search.md) — Alt+F7: why the walk streams and stops, and what
+  choosing a result does.
 - [viewer.md](viewer.md) — the F3 viewer: why it never reads the file, how
   paging works, and what encoding detection amounts to.
 - [command-line.md](command-line.md) — the command line at the bottom: how a

@@ -36,6 +36,7 @@ const DIALOG_DRIVES: &str = "Drives";
 const DIALOG_OUTPUT: &str = "Command output";
 const DIALOG_HISTORY: &str = "Command history";
 const DIALOG_NEW_FILE: &str = "New file";
+const DIALOG_SEARCH: &str = "Find files";
 
 /// Where the settings file lands inside a test's private home. Spelled out
 /// rather than read from `tc-core`, for the same reason the dialog titles
@@ -542,6 +543,69 @@ fn a_re_read_of_a_directory_that_has_gone_lands_somewhere_real() {
     app.key("Return");
 
     app.await_exists("still-usable");
+}
+
+#[test]
+fn alt_f7_finds_a_file_and_going_to_it_lands_on_it() {
+    // What a search is *for*: getting to the file. Finding it and leaving the
+    // user to hunt for the row is half the job.
+    let app = in_src_and_dst(arrange);
+
+    app.key("alt+F7");
+    app.focus_dialog(DIALOG_SEARCH);
+    app.type_text("inner*");
+    app.key("Return");
+
+    // One result, selected, so Enter takes it: the pane goes to src/nested
+    // with the cursor on inner.txt.
+    app.settle();
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_SEARCH);
+
+    // F5 with nothing marked copies the cursor row, which must be the result.
+    app.focus_main();
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/inner.txt", "deep");
+}
+
+#[test]
+fn a_search_by_content_finds_only_what_says_it() {
+    let app = in_src_and_dst(arrange);
+
+    app.key("alt+F7");
+    app.focus_dialog(DIALOG_SEARCH);
+    // The name pattern stays `*`; the content is what narrows it.
+    app.key("Tab");
+    app.type_text("deep");
+    app.key("Return");
+
+    app.settle();
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_SEARCH);
+
+    app.focus_main();
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/inner.txt", "deep");
+}
+
+#[test]
+fn a_search_that_finds_nothing_says_so_and_stays_open() {
+    // Rather than closing, which would look like it had done something.
+    let app = in_src_and_dst(arrange);
+
+    app.key("alt+F7");
+    app.focus_dialog(DIALOG_SEARCH);
+    app.type_text("no-such-file-anywhere");
+    app.key("Return");
+
+    app.settle();
+    assert!(app.has_dialog(DIALOG_SEARCH), "the search window closed");
 }
 
 #[test]

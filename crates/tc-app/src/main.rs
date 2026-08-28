@@ -292,6 +292,7 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::Move => start_transfer(shell, false),
         Action::RenameInline => shell.borrow_mut().active_pane().begin_rename(),
         Action::CreateDir => start_create_dir(shell),
+        Action::Search => start_search(shell),
         Action::View => start_viewing(shell),
         Action::Edit => start_editing(shell),
         Action::CreateFile => start_create_file(shell),
@@ -964,6 +965,43 @@ fn typed_into_command_line(
     };
     shell.borrow().command_line.accept(character);
     glib::Propagation::Stop
+}
+
+/// Alt+F7: find files below the active pane's directory.
+///
+/// Results arrive as they are found and the window stays open while they do —
+/// the whole point of the search streaming rather than returning a list.
+/// Choosing one sends the pane to the file's directory **with the cursor on
+/// it**, which is what a search is for: getting to the file. Landing in the
+/// right directory and leaving somebody to hunt for the row is half the job.
+fn start_search(shell: &Rc<RefCell<Shell>>) {
+    let (window, fs, root) = {
+        let mut state = shell.borrow_mut();
+        let Some(window) = state.window.upgrade() else {
+            return;
+        };
+        let root = state.active_pane().target_dir();
+        let fs = state.active_pane().fs();
+        (window, fs, root)
+    };
+
+    let searching = Arc::clone(&fs);
+    let going = shell.clone();
+    dialogs::Search::open(
+        &window,
+        move |criteria, cancel| {
+            tc_core::search::spawn(Arc::clone(&searching), root.clone(), criteria, cancel)
+        },
+        move |path| {
+            let Some(directory) = path.parent() else {
+                return;
+            };
+            let index = going.borrow().active;
+            let loading = going.borrow_mut().panes[index].go_to(directory);
+            going.borrow_mut().panes[index].focus_on_arrival(&path);
+            await_listing(&going, index, Some(loading));
+        },
+    );
 }
 
 /// F3: look inside the file under the cursor.

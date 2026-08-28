@@ -308,6 +308,37 @@ pub const VIEWER_HEIGHT: i32 = 700;
 /// like it failed to load.
 pub const VIEWER_EMPTY: &str = "(empty file)";
 
+/// The search dialog: what it is called, what it asks, and how it reports.
+pub const TITLE_SEARCH: &str = "Find files";
+pub const PROMPT_SEARCH_NAME: &str = "File name:";
+
+/// What the name field starts with: everything.
+///
+/// Its own constant rather than the mark dialog's `PATTERN_DEFAULT`, which is
+/// `*.` — a starting point to be edited there, and a pattern that matches
+/// almost nothing here.
+pub const SEARCH_NAME_DEFAULT: &str = "*";
+pub const PROMPT_SEARCH_CONTENT: &str = "Containing text (optional):";
+pub const SEARCH_START: &str = "Search";
+pub const SEARCH_STOP: &str = "Stop";
+pub const SEARCH_FOUND: &str = "{count} found";
+pub const SEARCH_SEARCHING: &str = "{count} found, searching\u{2026}";
+pub const SEARCH_NOTHING: &str = "Nothing found";
+
+/// How tall the result list may grow before it scrolls.
+pub const SEARCH_LIST_HEIGHT: i32 = 360;
+
+/// How many results the list shows.
+///
+/// A `ListBox` is not virtualised — every row is a widget — so a search that
+/// found a hundred thousand files would build a hundred thousand of them and
+/// take the window down with it. Counting carries on past the cap and the
+/// status says so, which is the honest version of a limit.
+pub const SEARCH_LIST_LIMIT: usize = 5_000;
+
+/// What the status says once the list has stopped growing.
+pub const SEARCH_CAPPED: &str = "{count} found, showing the first {shown}";
+
 /// Title of the command history Ctrl+Down opens.
 pub const TITLE_HISTORY: &str = "Command history";
 

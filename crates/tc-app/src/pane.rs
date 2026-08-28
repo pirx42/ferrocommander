@@ -935,6 +935,15 @@ impl PaneView {
         Listing::spawn_load(Arc::clone(&self.fs), dir)
     }
 
+    /// Puts the cursor on `path` when the listing being read arrives.
+    ///
+    /// For a search result: going to a file's directory is only half of what
+    /// was asked for, and hunting for the row afterwards is the other half
+    /// nobody wants to do by hand.
+    pub fn focus_on_arrival(&mut self, path: &VfsPath) {
+        self.focus_on_arrival = path.file_name().map(str::to_string);
+    }
+
     /// The directory a read is in flight for.
     pub fn awaiting(&self) -> Option<VfsPath> {
         self.wanted.clone()
