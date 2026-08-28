@@ -92,3 +92,29 @@ bottleneck in opening a large directory. It takes an ASCII path where that is
 provably equivalent to comparing characters, which is what brought sorting
 50 000 entries down from 153 ms to 22 ms. See
 [performance.md](performance.md).
+
+## Selection
+
+Marks live in a `Vec<bool>` parallel to the loaded entries, not in a set of
+names. Selecting everything is then a fill, reading the selection is a scan,
+and neither sorting nor filtering costs anything at all, because neither
+touches the entries themselves. A set of names would allocate a string per
+marked file for a question the pane asks on every redraw
+([performance.md](performance.md)).
+
+**The `..` row can never be marked.** It is not an entry — it is a navigation
+control the model synthesises — so it is not in the array at all, and every
+route in (set, toggle, select-all, invert, by pattern) leaves it alone by
+construction rather than by five separate checks.
+
+**Select-all, invert and select-by-pattern act on what is visible**, not on
+everything loaded. What a filter or the hidden-file flag is hiding is not
+something the user can see to have meant.
+
+**Marks survive a reload by name**, exactly as the cursor does: a job that
+changed one file must not silently drop the marks on the others. Names that
+are gone fall out, names that are new arrive unmarked.
+
+Pattern selection uses `tc-core::glob` — `*` and `?`, case-insensitive, which
+is what Total Commander accepts and what a person types. It lives outside
+`listing` because phase 5's search needs the same matcher.

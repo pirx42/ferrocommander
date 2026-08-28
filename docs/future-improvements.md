@@ -8,14 +8,6 @@ in what shipped.
 
 ## Engine
 
-**A vanished entry fails the whole listing.**
-If a file disappears between `read_dir` enumerating it and `stat` reading its
-metadata, `LocalFs` returns `NotFound` for the entire directory instead of
-omitting the entry that is gone. Skipping it cleanly needs an injection seam
-to be testable at all, so the version with no untested code shipped.
-*Home:* the refresh logic in design phase 3.
-*From:* [vfs.md](vfs.md), walking-skeleton sub-phase A.
-
 **A copy loses the original's permission bits.**
 `Entry` carries no mode, so an executable script copied through the operation
 engine arrives without its `+x`. Modelling permissions portably — Unix mode

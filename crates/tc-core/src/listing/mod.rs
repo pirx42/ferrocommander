@@ -12,6 +12,9 @@ pub mod constants;
 mod name;
 mod sort;
 
+use std::collections::HashSet;
+
+use crate::glob;
 use crate::vfs::constants::PARENT;
 use crate::vfs::{Entry, EntryKind, VfsError, VfsPath, VirtualFs};
 
@@ -19,6 +22,13 @@ use constants::{DEFAULT_SHOW_HIDDEN, DEFAULT_SORT_KEY, DEFAULT_SORT_ORDER, PAREN
 
 pub use name::split_name;
 pub use sort::{Sort, SortKey, SortOrder};
+
+/// A count of rows and the bytes they hold.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Selection {
+    pub count: usize,
+    pub bytes: u64,
+}
 
 /// One directory as the UI sees it.
 pub struct Listing {
@@ -32,6 +42,16 @@ pub struct Listing {
     /// Indices into `entries`, sorted and filtered — the visible rows after
     /// `parent`.
     view: Vec<usize>,
+    /// Which entries are marked, parallel to `entries` rather than keyed by
+    /// name.
+    ///
+    /// Selecting everything is then a fill and reading the selection is a
+    /// scan, and neither sorting nor filtering costs anything, because
+    /// neither touches `entries`. A set of names would allocate a string per
+    /// marked file for a question the pane asks on every redraw
+    /// (`docs/performance.md`). The `..` row is not in `entries`, so it
+    /// cannot be marked by any route.
+    selected: Vec<bool>,
     cursor: usize,
     sort: Sort,
     show_hidden: bool,
@@ -76,6 +96,7 @@ impl Listing {
             hidden: false,
         });
         let mut listing = Listing {
+            selected: vec![false; entries.len()],
             dir,
             entries,
             parent,
@@ -92,7 +113,23 @@ impl Listing {
     /// still exists.
     pub fn reload(&mut self, fs: &dyn VirtualFs) -> Result<(), VfsError> {
         let focused = self.current().map(|entry| entry.name.clone());
+        // Marks survive by name, exactly as the cursor does: a job that
+        // changed one file must not silently drop the marks on the others.
+        // Names that are gone fall out; names that are new arrive unmarked.
+        let marked: HashSet<String> = self
+            .entries
+            .iter()
+            .zip(&self.selected)
+            .filter(|(_, &selected)| selected)
+            .map(|(entry, _)| entry.name.clone())
+            .collect();
+
         self.entries = fs.read_dir(&self.dir)?;
+        self.selected = self
+            .entries
+            .iter()
+            .map(|entry| marked.contains(&entry.name))
+            .collect();
         self.rebuild(focused);
         Ok(())
     }
@@ -167,6 +204,103 @@ impl Listing {
     pub fn focus_entry(&mut self, name: &str) {
         if let Some(index) = self.index_of(name) {
             self.cursor = index;
+        }
+    }
+
+    /// Whether the row at `index` is marked. The `..` row never is.
+    pub fn is_selected(&self, index: usize) -> bool {
+        self.entry_index(index)
+            .is_some_and(|position| self.selected[position])
+    }
+
+    /// Marks or unmarks the row at `index`. Does nothing on `..`.
+    pub fn set_selected(&mut self, index: usize, selected: bool) {
+        if let Some(position) = self.entry_index(index) {
+            self.selected[position] = selected;
+        }
+    }
+
+    /// Flips the row at `index`.
+    pub fn toggle_selected(&mut self, index: usize) {
+        self.set_selected(index, !self.is_selected(index));
+    }
+
+    /// Marks every **visible** row.
+    ///
+    /// Visible, not every loaded entry: what a filter or the hidden-file flag
+    /// is hiding is not something the user can see to have meant.
+    pub fn select_all(&mut self) {
+        self.set_visible(|_| true);
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.set_visible(|_| false);
+    }
+
+    /// Flips every visible row.
+    pub fn invert_selection(&mut self) {
+        for &position in &self.view {
+            self.selected[position] = !self.selected[position];
+        }
+    }
+
+    /// Marks or unmarks every visible row whose name matches `pattern`.
+    pub fn select_matching(&mut self, pattern: &str, selected: bool) {
+        let matching: Vec<usize> = self
+            .view
+            .iter()
+            .copied()
+            .filter(|&position| glob::matches(pattern, &self.entries[position].name))
+            .collect();
+        for position in matching {
+            self.selected[position] = selected;
+        }
+    }
+
+    /// The marked rows, in the order they are shown.
+    pub fn selected_paths(&self) -> Vec<VfsPath> {
+        self.view
+            .iter()
+            .filter(|&&position| self.selected[position])
+            .map(|&position| self.dir.child(&self.entries[position].name))
+            .collect()
+    }
+
+    /// How many rows are marked, and how many bytes they hold.
+    ///
+    /// What the status line under a pane shows, and what a person checks
+    /// before pressing F5.
+    pub fn selection_summary(&self) -> Selection {
+        let mut summary = Selection::default();
+        for &position in &self.view {
+            if self.selected[position] {
+                summary.count += 1;
+                summary.bytes += self.entries[position].size;
+            }
+        }
+        summary
+    }
+
+    /// Total of everything visible, for the "n of m" the status line pairs
+    /// the selection with.
+    pub fn visible_summary(&self) -> Selection {
+        Selection {
+            count: self.view.len(),
+            bytes: self.view.iter().map(|&p| self.entries[p].size).sum(),
+        }
+    }
+
+    /// The position in `entries` a visible row refers to, or `None` for `..`.
+    fn entry_index(&self, index: usize) -> Option<usize> {
+        if index < self.parent_rows() {
+            return None;
+        }
+        self.view.get(index - self.parent_rows()).copied()
+    }
+
+    fn set_visible(&mut self, decide: impl Fn(usize) -> bool) {
+        for &position in &self.view {
+            self.selected[position] = decide(position);
         }
     }
 

@@ -57,7 +57,15 @@ impl VirtualFs for LocalFs {
             // builds one: 50 000 entries cost 56 ms rather than 72 ms. Like
             // `symlink_metadata`, it does not follow a link. The path is
             // built only for the entries that turn out to be one.
-            let link_metadata = item.metadata()?;
+            let link_metadata = match item.metadata() {
+                Ok(metadata) => metadata,
+                // The entry was there when the directory was enumerated and
+                // is not there now. Leaving it out is the truth; failing the
+                // whole listing over one file that a job elsewhere deleted
+                // half a millisecond ago is not.
+                Err(error) if vanished(&error) => continue,
+                Err(error) => return Err(error.into()),
+            };
             entries.push(entry_from(name, link_metadata, || item.path())?);
         }
         // Deliberately unsorted — ordering is the listing layer's decision.
@@ -120,6 +128,17 @@ impl VirtualFs for LocalFs {
     }
 }
 
+/// Whether a per-entry failure means the entry disappeared mid-listing.
+///
+/// The distinction that matters: a vanished entry is dropped, while anything
+/// else — a permission problem, an I/O error — still fails the listing,
+/// because silently returning a short directory would be a lie about what is
+/// there. Separated out so the rule has a test; provoking the race itself
+/// would need a seam the standard library does not offer.
+fn vanished(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::NotFound
+}
+
 /// Builds an [`Entry`] for one native path.
 ///
 /// Symlinks are described by their target's kind and size — that is what the
@@ -169,4 +188,25 @@ fn entry_from(
         modified: link_metadata.modified()?,
         hidden,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use super::*;
+
+    #[test]
+    fn only_a_missing_entry_is_dropped_from_a_listing() {
+        assert!(vanished(&io::Error::from(io::ErrorKind::NotFound)));
+        // Everything else must still fail the listing rather than quietly
+        // shorten it.
+        for kind in [
+            io::ErrorKind::PermissionDenied,
+            io::ErrorKind::NotADirectory,
+            io::ErrorKind::OutOfMemory,
+        ] {
+            assert!(!vanished(&io::Error::from(kind)), "{kind:?}");
+        }
+    }
 }

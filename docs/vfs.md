@@ -90,6 +90,15 @@ type has no error case and needs no `Result`.
   `.gitignore` is an ordinary visible file on Windows, matching Total
   Commander. Filtering on the flag stays platform-agnostic.
 
+**An entry that disappears mid-listing is dropped, not fatal.** A file
+deleted between the directory being enumerated and its metadata being read is
+simply left out — failing the whole listing over one file that a job elsewhere
+removed half a millisecond ago would be worse than a listing that is one row
+short. Anything other than "not found" still fails the listing, because
+silently returning a short directory would be a lie about what is there. That
+rule is a named function with its own test; provoking the race itself would
+need a seam the standard library does not offer.
+
 `read_dir` stats every entry relative to the directory it already has open
 (`DirEntry::metadata`) rather than re-resolving each full path, which is the
 same answer for a third less work — see [performance.md](performance.md). A
@@ -175,12 +184,6 @@ branches at all. Verifying the Windows GTK build needs a real Windows or
 mingw toolchain.
 
 ## Known gaps
-
-**A vanished entry fails the whole listing.** If an entry disappears between
-`read_dir` enumerating it and `stat` reading its metadata, the listing fails
-with `NotFound` instead of omitting it. Every alternative was untestable
-without an injection seam, so the honest version shipped; the refresh logic in
-phase 3 is the right place to revisit it.
 
 **`set_modified` cannot stamp a directory.** Stamping needs a handle opened
 for writing, which no platform hands out for a directory, so a copied

@@ -5,6 +5,7 @@
 //! plain `cargo test` against tempdirs, which is what keeps the UI layer thin
 //! enough to be verified by hand.
 
+pub mod glob;
 pub mod listing;
 pub mod ops;
 pub mod vfs;

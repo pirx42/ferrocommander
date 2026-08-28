@@ -7,7 +7,7 @@
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-use tc_core::listing::{Listing, Sort, SortKey, SortOrder};
+use tc_core::listing::{Listing, Selection, Sort, SortKey, SortOrder};
 use tc_core::vfs::{Entry, EntryKind, LocalFs, VfsError, VfsPath, VirtualFs};
 
 const ALL_KEYS: [SortKey; 4] = [
@@ -510,4 +510,221 @@ fn the_cursor_keeps_its_entry_through_every_kind_of_rebuild() {
     fs::write(dir.path().join("b.txt"), "x").unwrap();
     listing.reload(&LocalFs).unwrap();
     assert_eq!(listing.current().unwrap().name, "m.txt", "after a reload");
+}
+
+/// Marking files, which is what every operation acts on once there is more
+/// than one of them.
+mod selection {
+    use super::*;
+
+    /// Four files and a directory, plus a hidden one, so every test has
+    /// something the view is leaving out.
+    fn listing() -> Listing {
+        Listing::new(
+            VfsPath::new("/home/pirx"),
+            vec![
+                dir_entry("projects", 10),
+                file_entry("a.txt", 100, 20),
+                file_entry("b.txt", 200, 30),
+                file_entry("notes.md", 400, 40),
+                file_entry(".secret", 800, 50),
+            ],
+        )
+    }
+
+    /// Every visible row, marked or not.
+    fn marks(listing: &Listing) -> Vec<bool> {
+        (0..listing.len()).map(|i| listing.is_selected(i)).collect()
+    }
+
+    #[test]
+    fn nothing_is_marked_to_begin_with() {
+        let listing = listing();
+        assert_eq!(listing.selection_summary(), Selection::default());
+        assert!(listing.selected_paths().is_empty());
+    }
+
+    #[test]
+    fn the_parent_row_cannot_be_marked_by_any_route() {
+        // It is a navigation control, and every operation would have to
+        // special-case it afterwards.
+        let mut listing = listing();
+        assert!(listing.is_parent(0));
+
+        listing.set_selected(0, true);
+        assert!(!listing.is_selected(0), "set_selected");
+
+        listing.toggle_selected(0);
+        assert!(!listing.is_selected(0), "toggle");
+
+        listing.select_all();
+        assert!(!listing.is_selected(0), "select_all");
+
+        listing.clear_selection();
+        listing.invert_selection();
+        assert!(!listing.is_selected(0), "invert");
+
+        listing.select_matching("*", true);
+        assert!(!listing.is_selected(0), "select_matching");
+    }
+
+    #[test]
+    fn selecting_everything_marks_every_visible_row() {
+        let mut listing = listing();
+        listing.select_all();
+
+        // Four visible entries; `.secret` is hidden and `..` is not an entry.
+        assert_eq!(listing.selection_summary().count, 4);
+        assert_eq!(listing.selection_summary().bytes, 100 + 200 + 400);
+        assert_eq!(listing.selection_summary().count, listing.len() - 1);
+    }
+
+    #[test]
+    fn what_is_hidden_is_not_something_the_user_can_have_meant() {
+        // select_all marks what is on screen. The hidden file is not.
+        let mut listing = listing();
+        listing.select_all();
+        let visible_marks = listing.selection_summary().count;
+
+        listing.toggle_hidden();
+
+        assert_eq!(
+            listing.selection_summary().count,
+            visible_marks,
+            "unhiding must not retroactively mark the hidden file"
+        );
+    }
+
+    #[test]
+    fn inverting_twice_is_the_identity() {
+        let mut listing = listing();
+        listing.focus_entry("b.txt");
+        listing.toggle_selected(listing.cursor());
+        let before = marks(&listing);
+
+        listing.invert_selection();
+        listing.invert_selection();
+
+        assert_eq!(marks(&listing), before);
+    }
+
+    #[test]
+    fn inverting_swaps_the_marked_and_the_unmarked() {
+        let mut listing = listing();
+        listing.focus_entry("a.txt");
+        listing.toggle_selected(listing.cursor());
+        let marked = listing.selection_summary().count;
+        let visible = listing.visible_summary().count;
+
+        listing.invert_selection();
+
+        assert_eq!(listing.selection_summary().count, visible - marked);
+    }
+
+    #[test]
+    fn selecting_all_and_clearing_leaves_nothing() {
+        let mut listing = listing();
+        listing.select_all();
+        listing.clear_selection();
+        assert_eq!(listing.selection_summary(), Selection::default());
+    }
+
+    #[test]
+    fn a_pattern_marks_exactly_what_it_matches() {
+        let mut listing = listing();
+        listing.select_matching("*.txt", true);
+
+        let names: Vec<String> = listing
+            .selected_paths()
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string())
+            .collect();
+        assert_eq!(names, ["a.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn a_pattern_can_take_marks_away_again() {
+        let mut listing = listing();
+        listing.select_all();
+        listing.select_matching("*.txt", false);
+
+        let names: Vec<String> = listing
+            .selected_paths()
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string())
+            .collect();
+        assert_eq!(names, ["projects", "notes.md"]);
+    }
+
+    #[test]
+    fn marks_are_reported_in_the_order_they_are_shown() {
+        let mut listing = listing();
+        listing.select_all();
+        let ascending: Vec<_> = listing.selected_paths();
+
+        listing.set_sort(Sort::new(SortKey::Name, SortOrder::Descending));
+        let descending: Vec<_> = listing.selected_paths();
+
+        assert_eq!(descending.len(), ascending.len());
+        assert_ne!(descending, ascending, "the order follows the view");
+        let mut sorted = descending.clone();
+        sorted.reverse();
+        assert_eq!(
+            sorted.len(),
+            ascending.len(),
+            "and it is the same set either way"
+        );
+    }
+
+    #[test]
+    fn sorting_and_filtering_never_change_what_is_marked() {
+        // The reason the marks live beside the entries rather than beside the
+        // view: neither reordering nor hiding is a change of intent.
+        let mut listing = listing();
+        listing.select_matching("*.txt", true);
+        let before = listing.selection_summary();
+
+        listing.set_sort(Sort::new(SortKey::Size, SortOrder::Descending));
+        assert_eq!(listing.selection_summary(), before, "after a sort");
+
+        listing.toggle_hidden();
+        assert_eq!(listing.selection_summary(), before, "after unhiding");
+    }
+
+    #[test]
+    fn a_reload_keeps_the_marks_on_the_names_that_survive() {
+        let dir = tempfile::TempDir::new().unwrap();
+        for name in ["keep.txt", "gone.txt", "other.txt"] {
+            fs::write(dir.path().join(name), "xx").unwrap();
+        }
+        let path = LocalFs::vfs_path(dir.path());
+        let mut listing = Listing::load(&LocalFs, path).unwrap();
+        listing.select_matching("keep.txt", true);
+        listing.select_matching("gone.txt", true);
+        assert_eq!(listing.selection_summary().count, 2);
+
+        fs::remove_file(dir.path().join("gone.txt")).unwrap();
+        fs::write(dir.path().join("new.txt"), "xx").unwrap();
+        listing.reload(&LocalFs).unwrap();
+
+        let names: Vec<String> = listing
+            .selected_paths()
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string())
+            .collect();
+        assert_eq!(names, ["keep.txt"], "gone drops out, new arrives unmarked");
+    }
+
+    #[test]
+    fn the_summary_counts_what_the_paths_list() {
+        // Two ways of asking the same question, which must not disagree —
+        // the status line and the job sources come from different calls.
+        let mut listing = listing();
+        listing.select_matching("*.txt", true);
+
+        assert_eq!(
+            listing.selection_summary().count,
+            listing.selected_paths().len()
+        );
+    }
 }
