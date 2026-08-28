@@ -32,6 +32,11 @@ const DIALOG_CONFLICT: &str = "Target already exists";
 const DIALOG_FAILURES: &str = "Some items were not processed";
 const DIALOG_PATTERN: &str = "Select by pattern";
 
+/// Where the settings file lands inside a test's private home. Spelled out
+/// rather than read from `tc-core`, for the same reason the dialog titles
+/// are: a test that asks the code where it saves can only agree with it.
+const SETTINGS_FILE: &str = ".config/ferrocommander/config.toml";
+
 /// A home with `src/` to work in and `dst/` to land in.
 fn arrange(home: &Path) {
     use std::fs;
@@ -601,14 +606,59 @@ fn the_panes_open_where_they_were_left() {
 }
 
 #[test]
+fn settings_survive_the_app_being_killed() {
+    // The reason settings are written as they change rather than on the way
+    // out: a kill, a crash and a lost session all skip the close handler, and
+    // a file manager that forgets where you were every time it dies is a file
+    // manager nobody trusts to remember anything.
+    let first = in_src_and_dst(arrange);
+
+    // Wait for the change to reach the disk before pulling the plug —
+    // the write is debounced, and killing inside that window is a test of
+    // the delay, not of the saving.
+    first.await_mentions(SETTINGS_FILE, "src");
+    let home = first.kill();
+
+    let app = App::relaunch(home);
+
+    // The left pane is back in src: the first row after `..` is a real entry
+    // there rather than one of the home directory's.
+    app.keys(&["Home", "Down"]);
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("survived");
+    app.key("Return");
+
+    app.await_exists("src/survived");
+}
+
+/// A size no default and no other test uses, so finding it in the file can
+/// only mean the resize was noticed.
+const RESIZED_WIDTH: u32 = 1003;
+const RESIZED_HEIGHT: u32 = 787;
+
+#[test]
+fn a_resized_window_is_remembered_without_being_closed() {
+    // The window's size changes outside the keymap, so nothing in `dispatch`
+    // would ever notice it. Killing rather than closing is what makes this a
+    // test of the size *notification* and not of the close handler.
+    let app = App::launch(arrange);
+    app.resize(RESIZED_WIDTH, RESIZED_HEIGHT);
+
+    app.await_mentions(SETTINGS_FILE, &format!("width = {RESIZED_WIDTH}"));
+    app.await_mentions(SETTINGS_FILE, &format!("height = {RESIZED_HEIGHT}"));
+    app.kill();
+}
+
+#[test]
 fn a_settings_file_that_is_nonsense_does_not_stop_the_program() {
     // A file manager that refuses to start over its own settings is worse
     // than one that forgets where you were.
     let app = App::launch(|home| {
         arrange(home);
-        let config = home.join(".config/ferrocommander");
-        std::fs::create_dir_all(&config).unwrap();
-        std::fs::write(config.join("config.toml"), "{{{ not toml at all").unwrap();
+        let settings = home.join(SETTINGS_FILE);
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(settings, "{{{ not toml at all").unwrap();
     });
 
     // It came up at all, and still works.

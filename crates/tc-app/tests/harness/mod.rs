@@ -205,6 +205,22 @@ impl App {
             }
             std::thread::sleep(POLL);
         }
+        self.reap()
+    }
+
+    /// Kills the app outright, the way a crash, a `kill -9` or a lost session
+    /// does: no close handler runs, so anything the app had not written yet
+    /// is gone.
+    ///
+    /// Takes the app by value for the same reason `close` does — the point is
+    /// to start a second one on the same home directory.
+    pub fn kill(mut self) -> TempDir {
+        let _ = self.app.kill();
+        self.reap()
+    }
+
+    /// Waits for both processes to go and hands back the home directory.
+    fn reap(&mut self) -> TempDir {
         let _ = self.app.wait();
         let _ = self.xvfb.kill();
         let _ = self.xvfb.wait();
@@ -387,6 +403,23 @@ impl App {
         });
     }
 
+    /// Waits until `relative` exists and mentions `needle`.
+    ///
+    /// What a test wants of the settings file: that a particular change has
+    /// reached the disk, without pinning the whole serialized form.
+    pub fn await_mentions(&self, relative: &str, needle: &str) {
+        let path = self.path(relative);
+        await_until(EFFECT_TIMEOUT, || {
+            std::fs::read_to_string(&path).is_ok_and(|found| found.contains(needle))
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "{relative} never mentioned {needle:?}; it holds {:?}",
+                std::fs::read_to_string(&path)
+            )
+        });
+    }
+
     /// Gives a job that should do nothing time to prove it.
     ///
     /// Needed only for negative assertions: waiting for something to *not*
@@ -445,6 +478,12 @@ impl App {
             .lines()
             .next()
             .map(str::to_string)
+    }
+
+    /// Resizes the main window, the way dragging its corner would.
+    pub fn resize(&self, width: u32, height: u32) {
+        let (width, height) = (width.to_string(), height.to_string());
+        self.xdotool(&["windowsize", &self.window, &width, &height]);
     }
 
     /// Runs xdotool and insists it worked. For key presses, which have no

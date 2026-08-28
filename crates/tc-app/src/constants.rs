@@ -7,6 +7,14 @@ pub const APP_NAME: &str = "Ferrocommander";
 /// Reverse-DNS application id GTK identifies the process by.
 pub const APP_ID: &str = "st.rose.Ferrocommander";
 
+/// How long the settings wait after a change before being written.
+///
+/// Not zero, because dragging a window edge changes the size continuously and
+/// each step would be a write. Not long either: the point of saving on change
+/// rather than only on exit is that a killed or crashed program keeps what you
+/// did, and anything longer than about a second stops being true in practice.
+pub const SETTINGS_SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+
 /// What a run with no readable settings reports, once, on stderr. The program
 /// starts either way.
 pub const SETTINGS_UNREADABLE: &str = "settings could not be read, using defaults";

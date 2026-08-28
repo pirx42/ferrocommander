@@ -28,9 +28,9 @@ use tc_core::vfs::{LocalFs, VfsPath};
 use constants::{
     APP_ID, APP_NAME, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, PANE_COUNT,
     PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
-    PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE,
-    STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN,
-    TITLE_MOVE, TITLE_UNMARK_PATTERN,
+    PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE,
+    SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_DELETE,
+    TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_UNMARK_PATTERN,
 };
 use keymap::Action;
 use pane::PaneView;
@@ -44,15 +44,33 @@ struct Shell {
     queue: JobQueue,
     /// Weak, or the window would own the shell that owns the window.
     window: glib::WeakRef<gtk::ApplicationWindow>,
+    /// Where the settings file goes, or `None` when the platform offers
+    /// nowhere to put one.
+    config_root: Option<VfsPath>,
+    /// What was last written. Compared against the current state so that
+    /// moving the cursor around does not rewrite an identical file.
+    saved: config::Settings,
+    /// Whether a write is already scheduled. One pending write picks up
+    /// whatever the settings are when it runs, so a burst of changes costs
+    /// one file write rather than one each.
+    save_queued: bool,
 }
 
 impl Shell {
-    fn new(panes: [PaneView; PANE_COUNT], window: &gtk::ApplicationWindow) -> Self {
+    fn new(
+        panes: [PaneView; PANE_COUNT],
+        window: &gtk::ApplicationWindow,
+        config_root: Option<VfsPath>,
+        saved: config::Settings,
+    ) -> Self {
         let mut shell = Shell {
             panes,
             active: 0,
             queue: JobQueue::new(),
             window: window.downgrade(),
+            config_root,
+            saved,
+            save_queued: false,
         };
         shell.update_active();
         shell
@@ -72,6 +90,52 @@ impl Shell {
             pane.set_active(index == self.active);
         }
         self.panes[self.active].grab_focus();
+    }
+
+    /// What the settings file would say if it were written right now.
+    fn current_settings(&self) -> config::Settings {
+        let mut settings = config::Settings {
+            // A window that has already gone keeps the size last written,
+            // rather than reporting zero on the way out.
+            window: match self.window.upgrade() {
+                Some(window) => config::WindowSettings {
+                    width: window.width(),
+                    height: window.height(),
+                },
+                None => self.saved.window,
+            },
+            ..config::Settings::default()
+        };
+        settings.active_pane = self.active;
+        for (index, pane) in self.panes.iter().enumerate() {
+            let (directory, sort, show_hidden) = pane.state();
+            let mut pane_settings = config::PaneSettings {
+                directory: directory.to_string(),
+                show_hidden,
+                ..config::PaneSettings::default()
+            };
+            pane_settings.set_sort(sort);
+            settings.set_pane(index, pane_settings);
+        }
+        settings
+    }
+
+    /// Writes the settings if they have actually changed.
+    ///
+    /// Failing to write is reported and otherwise ignored: settings are worth
+    /// less than the program continuing to work.
+    fn write_settings(&mut self) {
+        let Some(root) = self.config_root.clone() else {
+            return;
+        };
+        let current = self.current_settings();
+        if current == self.saved {
+            return;
+        }
+        match config::save(&LocalFs, &root, &current) {
+            Ok(()) => self.saved = current,
+            Err(reason) => eprintln!("{SETTINGS_UNWRITABLE}: {reason}"),
+        }
     }
 
     /// Both panes re-read the filesystem: a copy changed the target side, a
@@ -128,6 +192,9 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::DeletePermanently => start_delete(shell, DeleteMode::Permanent),
         Action::Quit => {}
     }
+    // One place, rather than at the end of every arm: a keystroke that
+    // changed nothing worth saving costs a comparison and no more.
+    remember(shell);
 }
 
 /// F5 and F6: ask where, then hand it to the queue.
@@ -347,6 +414,9 @@ fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle) {
             return;
         };
         finishing.borrow_mut().reload_all();
+        // A job can move the ground a pane is standing on, so where it ends
+        // up is worth remembering too.
+        remember(&finishing);
         // Everything that went wrong, once, after the panes show the truth —
         // not one dialog per file while the job is still running.
         if !report.failures.is_empty() {
@@ -429,14 +499,20 @@ fn build_window(app: &gtk::Application) {
         .child(&layout)
         .build();
 
-    let shell = Rc::new(RefCell::new(Shell::new([left, right], &window)));
+    let shell = Rc::new(RefCell::new(Shell::new(
+        [left, right],
+        &window,
+        config_root,
+        settings.clone(),
+    )));
     shell.borrow_mut().active = settings.active_pane.min(PANE_COUNT - 1);
     shell.borrow_mut().update_active();
     for index in 0..PANE_COUNT {
         wire_filter_bar(&shell, index);
     }
     fill_drive_bar(&drives, &shell);
-    remember_on_close(&window, &shell, config_root);
+    remember_on_close(&window, &shell);
+    remember_window_size(&window, &shell);
     window.add_controller(key_controller(&window, shell));
     window.present();
 }
@@ -460,50 +536,56 @@ fn fill_drive_bar(bar: &gtk::Box, shell: &Rc<RefCell<Shell>>) {
         let path = mount.path.clone();
         button.connect_clicked(move |_| {
             shell.borrow_mut().active_pane().go_to(path.clone());
+            remember(&shell);
         });
         bar.append(&button);
     }
 }
 
-/// Writes the settings out when the window closes.
+/// Notes that something worth remembering may have changed.
 ///
-/// Failing to save is reported and does not stop the program from closing:
-/// refusing to quit because a settings file could not be written would be a
-/// worse bargain than starting up in the wrong directory next time.
-fn remember_on_close(
-    window: &gtk::ApplicationWindow,
-    shell: &Rc<RefCell<Shell>>,
-    config_root: Option<VfsPath>,
-) {
-    let shell = shell.clone();
-    window.connect_close_request(move |window| {
-        if let Some(root) = &config_root {
-            let mut settings = config::Settings {
-                window: config::WindowSettings {
-                    width: window.width(),
-                    height: window.height(),
-                },
-                ..config::Settings::default()
-            };
-            let state = shell.borrow();
-            settings.active_pane = state.active;
-            for (index, pane) in state.panes.iter().enumerate() {
-                let (directory, sort, show_hidden) = pane.state();
-                let mut pane_settings = config::PaneSettings {
-                    directory: directory.to_string(),
-                    show_hidden,
-                    ..config::PaneSettings::default()
-                };
-                pane_settings.set_sort(sort);
-                settings.set_pane(index, pane_settings);
-            }
-            drop(state);
-            if let Err(reason) = config::save(&LocalFs, root, &settings) {
-                eprintln!("{SETTINGS_UNWRITABLE}: {reason}");
-            }
+/// Saving on change rather than only on exit is what makes the settings
+/// survive a kill, a crash or a lost session — none of which run a close
+/// handler. The write is delayed slightly so that a burst of changes (a
+/// window being dragged to a new size) costs one file write rather than one
+/// per step, and skipped entirely when nothing actually differs, so moving
+/// the cursor around never touches the disk.
+fn remember(shell: &Rc<RefCell<Shell>>) {
+    {
+        let mut state = shell.borrow_mut();
+        if state.save_queued || state.config_root.is_none() {
+            return;
         }
+        if state.current_settings() == state.saved {
+            return;
+        }
+        state.save_queued = true;
+    }
+
+    let shell = shell.clone();
+    glib::timeout_add_local_once(SETTINGS_SAVE_DELAY, move || {
+        let mut state = shell.borrow_mut();
+        state.save_queued = false;
+        state.write_settings();
+    });
+}
+
+/// Writes the settings out when the window closes, so a change made in the
+/// last half-second is not lost to the delay.
+fn remember_on_close(window: &gtk::ApplicationWindow, shell: &Rc<RefCell<Shell>>) {
+    let shell = shell.clone();
+    window.connect_close_request(move |_| {
+        shell.borrow_mut().write_settings();
         glib::Propagation::Proceed
     });
+}
+
+/// Watches the things that change outside the keymap: the window's own size.
+fn remember_window_size(window: &gtk::ApplicationWindow, shell: &Rc<RefCell<Shell>>) {
+    let width = shell.clone();
+    window.connect_default_width_notify(move |_| remember(&width));
+    let height = shell.clone();
+    window.connect_default_height_notify(move |_| remember(&height));
 }
 
 /// Connects one pane's quick-filter field: typing narrows, Escape stops,

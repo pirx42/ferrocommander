@@ -19,8 +19,9 @@ cross-references instead of duplication.
   not undo.
 - [keymap.md](keymap.md) — what each key does, how bindings are looked up,
   and what happens when a directory cannot be entered.
-- [config.md](config.md) — the settings file: where it lives, why the write
-  is atomic, and why nothing about it may stop the program starting.
+- [config.md](config.md) — the settings file: where it lives, why it is
+  written as it changes rather than on exit, why the write is atomic, and why
+  nothing about it may stop the program starting.
 - [reliability.md](reliability.md) — the standing reliability requirement for
   file operations, and where the tests live.
 - [performance.md](performance.md) — the standing speed requirement, the
