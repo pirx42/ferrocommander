@@ -10,6 +10,7 @@ mod jobs;
 mod keymap;
 mod navigation;
 mod pane;
+mod progress;
 mod row;
 
 use std::cell::RefCell;
@@ -24,7 +25,7 @@ use tc_core::ops::{DeleteMode, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
-    APP_ID, APP_NAME, CONFLICT_PROMPT, PANE_COUNT, PANE_SPLIT_RATIO, PROMPT_COPY,
+    APP_ID, APP_NAME, CONFLICT_PROMPT, PANE_COUNT, PANE_SPLIT_RATIO, PROGRESS_DELAY, PROMPT_COPY,
     PROMPT_CREATE_DIR, PROMPT_MOVE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR,
     TITLE_DELETE, TITLE_MOVE, WINDOW_HEIGHT, WINDOW_WIDTH,
 };
@@ -235,13 +236,42 @@ fn submit(shell: &Rc<RefCell<Shell>>, job: Job) {
 
 /// Follows a running job on the main loop.
 ///
-/// Two futures rather than one, because conflicts and the report arrive on
-/// separate channels and neither should have to wait for the other. Both end
-/// on their own when the job does and its senders drop.
+/// Three futures rather than one, because progress, conflicts and the report
+/// arrive on separate channels and none should have to wait for another. Each
+/// ends on its own when the job does and its senders drop.
 fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle) {
     let JobHandle {
-        conflicts, report, ..
+        progress,
+        conflicts,
+        report,
+        cancel,
     } = handle;
+
+    let showing = shell.clone();
+    glib::spawn_future_local(async move {
+        let started = std::time::Instant::now();
+        let mut meter = progress::Meter::default();
+        let mut view: Option<dialogs::ProgressView> = None;
+        while let Ok(event) = progress.recv().await {
+            meter.apply(&event);
+            // The window appears only once a job has proved it is going to
+            // take a moment. Checked as events arrive rather than on a timer:
+            // a job that finishes first simply never opens one, and a job
+            // that moves no bytes at all never qualifies.
+            if view.is_none() && meter.has_work() && started.elapsed() >= PROGRESS_DELAY {
+                let Some(window) = showing.borrow().window.upgrade() else {
+                    return;
+                };
+                view = Some(dialogs::ProgressView::open(&window, cancel.clone()));
+            }
+            if let Some(view) = &view {
+                view.update(&meter);
+            }
+        }
+        if let Some(view) = view {
+            view.close();
+        }
+    });
 
     let asking = shell.clone();
     glib::spawn_future_local(async move {
@@ -266,8 +296,16 @@ fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle) {
 
     let finishing = shell.clone();
     glib::spawn_future_local(async move {
-        if report.recv().await.is_ok() {
-            finishing.borrow_mut().reload_all();
+        let Ok(report) = report.recv().await else {
+            return;
+        };
+        finishing.borrow_mut().reload_all();
+        // Everything that went wrong, once, after the panes show the truth —
+        // not one dialog per file while the job is still running.
+        if !report.failures.is_empty() {
+            if let Some(window) = finishing.borrow().window.upgrade() {
+                dialogs::show_failures(&window, &report.failures);
+            }
         }
     });
 }

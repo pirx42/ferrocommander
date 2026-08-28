@@ -40,6 +40,14 @@ pub struct Item {
     pub target: VfsPath,
     pub source_is_dir: bool,
     pub tasks: Vec<Task>,
+    /// Paths inside this item the scan could not turn into a task — an
+    /// unreadable subdirectory, a symlink that cannot be recreated.
+    ///
+    /// Collected rather than returned, because one bad entry deep inside a
+    /// tree must not cost the whole tree. The executor reports them and the
+    /// rest of the item still runs; a move treats the item as incomplete and
+    /// leaves the source alone.
+    pub failures: Vec<(VfsPath, VfsError)>,
     pub files: usize,
     pub bytes: u64,
 }
@@ -92,6 +100,7 @@ pub fn plan_removal(fs: &dyn VirtualFs, paths: &[VfsPath], to_trash: bool) -> Pl
                 target: path.clone(),
                 source_is_dir: entry.is_dir(),
                 tasks: vec![Task::Trash { path: path.clone() }],
+                failures: Vec::new(),
                 files: 1,
                 bytes: entry.size,
             })
@@ -114,10 +123,11 @@ fn scan_transfer(fs: &dyn VirtualFs, source: &VfsPath, target: &VfsPath) -> Resu
         target: target.clone(),
         source_is_dir: entry.kind == EntryKind::Dir,
         tasks: Vec::new(),
+        failures: Vec::new(),
         files: 0,
         bytes: 0,
     };
-    collect_transfer(fs, source, target, &entry, &mut item)?;
+    collect_transfer(fs, source, target, &entry, &mut item);
     Ok(item)
 }
 
@@ -127,17 +137,26 @@ fn collect_transfer(
     target: &VfsPath,
     entry: &Entry,
     item: &mut Item,
-) -> Result<(), VfsError> {
+) {
     match entry.kind {
         EntryKind::Dir => {
             item.tasks.push(Task::MakeDir {
                 source: source.clone(),
                 target: target.clone(),
             });
-            for child in fs.read_dir(source)? {
+            let children = match fs.read_dir(source) {
+                Ok(children) => children,
+                Err(error) => {
+                    // The directory itself is still created; only what is
+                    // inside it is lost, and the rest of the tree is not.
+                    item.failures.push((source.clone(), error));
+                    return;
+                }
+            };
+            for child in children {
                 let child_source = source.child(&child.name);
                 let child_target = target.child(&child.name);
-                collect_transfer(fs, &child_source, &child_target, &child, item)?;
+                collect_transfer(fs, &child_source, &child_target, &child, item);
             }
         }
         // A link to a file is copied as the file it points at, which is what
@@ -154,13 +173,11 @@ fn collect_transfer(
                 modified: entry.modified,
             });
         }
-        EntryKind::Symlink(SymlinkTarget::Dir | SymlinkTarget::Broken) => {
-            return Err(VfsError::Io(
-                super::constants::SYMLINK_NOT_COPIED.to_string(),
-            ))
-        }
+        EntryKind::Symlink(SymlinkTarget::Dir | SymlinkTarget::Broken) => item.failures.push((
+            source.clone(),
+            VfsError::Io(super::constants::SYMLINK_NOT_COPIED.to_string()),
+        )),
     }
-    Ok(())
 }
 
 /// Walks one path into removal tasks, children before parents.
@@ -175,29 +192,31 @@ fn scan_removal(fs: &dyn VirtualFs, path: &VfsPath) -> Result<Item, VfsError> {
         target: path.clone(),
         source_is_dir: entry.kind == EntryKind::Dir,
         tasks: Vec::new(),
+        failures: Vec::new(),
         files: 0,
         bytes: 0,
     };
-    collect_removal(fs, path, &entry, &mut item)?;
+    collect_removal(fs, path, &entry, &mut item);
     Ok(item)
 }
 
-fn collect_removal(
-    fs: &dyn VirtualFs,
-    path: &VfsPath,
-    entry: &Entry,
-    item: &mut Item,
-) -> Result<(), VfsError> {
+fn collect_removal(fs: &dyn VirtualFs, path: &VfsPath, entry: &Entry, item: &mut Item) {
     if entry.kind == EntryKind::Dir {
-        for child in fs.read_dir(path)? {
-            let child_path = path.child(&child.name);
-            collect_removal(fs, &child_path, &child, item)?;
+        match fs.read_dir(path) {
+            Ok(children) => {
+                for child in children {
+                    let child_path = path.child(&child.name);
+                    collect_removal(fs, &child_path, &child, item);
+                }
+                item.tasks.push(Task::RemoveDir { path: path.clone() });
+            }
+            // Without knowing what is inside, the directory cannot be
+            // emptied, so removing it would fail anyway. Say so here.
+            Err(error) => item.failures.push((path.clone(), error)),
         }
-        item.tasks.push(Task::RemoveDir { path: path.clone() });
-        return Ok(());
+        return;
     }
     item.files += 1;
     item.bytes += entry.size;
     item.tasks.push(Task::RemoveFile { path: path.clone() });
-    Ok(())
 }

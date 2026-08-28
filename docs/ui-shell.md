@@ -60,6 +60,25 @@ into dialogs, one waiting for the report — because the two arrive on separate
 channels and neither should wait for the other. Both end on their own when the
 job does.
 
+**A progress window appears only once a job has proved it will take a
+moment.** The check is against elapsed time as events arrive rather than on a
+timer, so a job that finishes first never opens one and a job that moves no
+bytes — `mkdir` — never qualifies. Cancel pulls the same token the engine
+checks between tasks and inside the copy loop, and the window closes on the
+click rather than waiting for the worker to notice, because a dialog that
+lingers after a click looks broken.
+
+The arithmetic behind the bar is in `progress.rs` and is pure: `Meter` folds
+the event stream into a fraction, a caption and the current path. `Advanced`
+carries a delta, so summing it is the window's job, not the engine's.
+
+**Failures are shown once, at the end**, after the panes have been reloaded —
+not one dialog per file while the job is still running. A long list is cut off
+with a count, because four hundred identical permission errors are not
+information. The list grows with its content and stops at a screenful; a
+minimum height instead opened a window mostly full of empty space to report a
+single failure, which is what the first version did.
+
 **Both panes reload when a job finishes.** A copy changed the target side, a
 move changed both, and a delete may have removed the directory a pane was
 standing in — which is why the reload goes through `Listing::load_nearest`

@@ -1,6 +1,6 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: In Progress — sub-phases 0, A, B, C, D done
+Status: In Progress — sub-phases 0, A, B, C, D, E done
 
 *2026-08-28 — implements phase 2 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -499,8 +499,24 @@ move · [ui-shell.md](../ui-shell.md) — the dialogs and the refresh rule ·
 - Events are consumed with `glib::spawn_future_local` on the main loop, so
   the UI thread still owns GTK and no widget is touched from a worker.
 
-*Tests:* progress formatting (bytes → a human string, percentage from
-delta sums) is pure and tested; the dialog wiring joins the manual pass.
+*Tests:* the whole meter is pure and tested — delta sums into a fraction, the
+clamp at both ends, a job with nothing to move being complete rather than
+divided by zero, byte formatting including the largest-unit bound, and the
+failure list's cut-off.
+
+*Found by running it, not by a test:* copying a tree that contains a symlink
+to a directory copied **nothing at all**. The scan returned the refusal as an
+error for the whole source, discarding every task already collected. The unit
+test missed it because it copies such a link on its own; the smoke run showed
+an empty target directory. A scan failure is now collected per path and the
+walk carries on, an item that collected one counts as incomplete so a move
+will not delete a source it could not fully copy, and two regression tests
+cover both halves. Probed: without the per-item reporting, all three symlink
+tests go red.
+
+*Also found by running it:* the failure summary opened as a window mostly full
+of empty space to report a single failure. It now grows with its content and
+stops at a screenful.
 
 *Docs:* [ui-shell.md](../ui-shell.md) — the progress window, the conflict
 dialog, and where the event loop is attached.

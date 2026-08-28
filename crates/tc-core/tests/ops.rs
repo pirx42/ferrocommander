@@ -814,6 +814,85 @@ mod symlinks {
     }
 
     #[test]
+    fn a_link_inside_a_tree_costs_only_itself() {
+        // Regression. The scan used to return the refusal as an error for the
+        // whole source, so one symlink anywhere inside a tree discarded every
+        // task already collected and copied nothing at all. The unit test
+        // below missed it because it copies the link on its own; only a real
+        // run against a real tree showed an empty target directory.
+        let (_dir, root) = fixture();
+        let target_dir = root.child("into");
+        let outside = root.child("outside");
+        for path in [&target_dir, &outside] {
+            LocalFs.create_dir(path).unwrap();
+        }
+        // Pointed away from the copy target: a link into it would make the
+        // snapshot walk follow the copy back into itself.
+        std::os::unix::fs::symlink(
+            outside.as_str(),
+            format!("{}/link-to-dir", root.child("tree")),
+        )
+        .unwrap();
+
+        let report = ops::run(
+            &Job::Copy {
+                sources: vec![root.child("tree")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1, "the link, and nothing else");
+        let copied = snapshot(&LocalFs, &target_dir.child("tree"));
+        assert!(
+            copied.contains_key("/a.txt") && copied.contains_key("/sub/b.bin"),
+            "everything the link is not must still arrive: {copied:?}"
+        );
+        assert_eq!(
+            file_count(&copied),
+            file_count(&snapshot(&LocalFs, &root.child("tree")))
+        );
+    }
+
+    #[test]
+    fn a_move_whose_tree_holds_a_link_keeps_the_source() {
+        // The other half: an item that could not be copied in full is not
+        // one a move may delete.
+        let (_dir, root) = fixture();
+        let source = root.child("tree");
+        let target_dir = root.child("into");
+        let outside = root.child("outside");
+        for path in [&target_dir, &outside] {
+            LocalFs.create_dir(path).unwrap();
+        }
+        std::os::unix::fs::symlink(outside.as_str(), format!("{source}/link-to-dir")).unwrap();
+        let before = snapshot(&LocalFs, &source);
+
+        // The decorator has to sit on the *target* side too: the fast path
+        // asks the target backend to rename, and on one real filesystem that
+        // succeeds and moves the link along with everything else — which is
+        // correct, and not the path this test is about.
+        let fs = AlwaysCrossDevice { inner: &LocalFs };
+        ops::run(
+            &Job::Move {
+                sources: vec![source.clone()],
+                destination: Destination::Into(target_dir),
+            },
+            &fs,
+            &fs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(snapshot(&LocalFs, &source), before);
+    }
+
+    #[test]
     fn copying_a_link_to_a_directory_is_refused_rather_than_followed() {
         // Following it loops forever on a cycle, and the interface cannot
         // recreate the link instead. Refusing says so out loud.

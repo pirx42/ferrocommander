@@ -14,12 +14,14 @@ use gtk::gdk::Key;
 use gtk::glib;
 use gtk::prelude::*;
 
-use tc_core::ops::{Answer, Resolution};
+use tc_core::ops::{Answer, CancelToken, Resolution};
 
 use crate::constants::{
-    BUTTON_ABORT, BUTTON_CANCEL, BUTTON_KEEP_BOTH, BUTTON_OK, BUTTON_OVERWRITE, BUTTON_SKIP,
-    CHECK_APPLY_TO_ALL, DIALOG_MARGIN, DIALOG_SPACING, DIALOG_WIDTH, ENTRY_WIDTH_CHARS,
+    BUTTON_ABORT, BUTTON_CANCEL, BUTTON_CLOSE, BUTTON_KEEP_BOTH, BUTTON_OK, BUTTON_OVERWRITE,
+    BUTTON_SKIP, CHECK_APPLY_TO_ALL, DIALOG_MARGIN, DIALOG_SPACING, DIALOG_WIDTH,
+    ENTRY_WIDTH_CHARS, FAILURE_LIST_HEIGHT, TITLE_FAILURES, TITLE_PROGRESS,
 };
+use crate::progress::{failure_lines, Meter};
 
 /// Style class GTK renders as the affirmative button.
 const CLASS_SUGGESTED: &str = "suggested-action";
@@ -239,4 +241,109 @@ pub fn ask_conflict(
     if let Some(button) = safe_default {
         button.grab_focus();
     }
+}
+
+/// The window a running job puts up.
+///
+/// Held by the caller for as long as the job runs; dropping it is not enough,
+/// [`ProgressView::close`] is, because the window belongs to GTK once it is
+/// presented.
+pub struct ProgressView {
+    window: gtk::Window,
+    path: gtk::Label,
+    bar: gtk::ProgressBar,
+}
+
+impl ProgressView {
+    /// Opens the window. Cancel pulls `cancel`, which is the same token the
+    /// engine checks between tasks and inside the copy loop.
+    pub fn open(parent: &impl IsA<gtk::Window>, cancel: CancelToken) -> Self {
+        let (window, content) = shell(parent, TITLE_PROGRESS);
+        let path = gtk::Label::builder()
+            .xalign(0.0)
+            .ellipsize(gtk::pango::EllipsizeMode::Start)
+            .build();
+        let bar = gtk::ProgressBar::builder().show_text(true).build();
+
+        content.append(&path);
+        content.append(&bar);
+
+        let row = button_row();
+        let button = gtk::Button::with_label(BUTTON_CANCEL);
+        row.append(&button);
+        content.append(&row);
+
+        let closing = window.clone();
+        button.connect_clicked(move |_| {
+            cancel.cancel();
+            // The window goes now rather than when the worker notices: the
+            // job stops at its next checkpoint, and a dialog that lingers
+            // after a click looks broken.
+            closing.close();
+        });
+
+        window.present();
+        button.grab_focus();
+        ProgressView { window, path, bar }
+    }
+
+    pub fn update(&self, meter: &Meter) {
+        self.path.set_text(meter.current());
+        self.bar.set_fraction(meter.fraction());
+        self.bar.set_text(Some(&meter.caption()));
+    }
+
+    pub fn close(self) {
+        self.window.close();
+    }
+}
+
+/// Lists what a finished job could not do.
+///
+/// One window at the end rather than one dialog per file: a batch that hit
+/// six unreadable files should cost one acknowledgement, not six.
+pub fn show_failures(
+    parent: &impl IsA<gtk::Window>,
+    failures: &[(tc_core::vfs::VfsPath, tc_core::vfs::VfsError)],
+) {
+    let (window, content) = shell(parent, TITLE_FAILURES);
+    let list = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(DIALOG_SPACING / 2)
+        .build();
+    for line in failure_lines(failures) {
+        list.append(
+            &gtk::Label::builder()
+                .label(line)
+                .xalign(0.0)
+                .selectable(true)
+                // Paths are long and the reason is at the end of the line,
+                // which is the half worth reading.
+                .wrap(true)
+                .wrap_mode(gtk::pango::WrapMode::WordChar)
+                .build(),
+        );
+    }
+    let scroller = gtk::ScrolledWindow::builder()
+        .child(&list)
+        // Grows with the list and stops at a screenful. A minimum height
+        // instead would open a window mostly full of empty space to report a
+        // single failure, which is what the first version did.
+        .propagate_natural_height(true)
+        .max_content_height(FAILURE_LIST_HEIGHT)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .build();
+    content.append(&scroller);
+
+    let row = button_row();
+    let close = gtk::Button::with_label(BUTTON_CLOSE);
+    close.add_css_class(CLASS_SUGGESTED);
+    row.append(&close);
+    content.append(&row);
+
+    let closing = window.clone();
+    close.connect_clicked(move |_| closing.close());
+
+    window.present();
+    close.grab_focus();
 }

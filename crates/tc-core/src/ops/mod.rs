@@ -193,6 +193,9 @@ impl Run<'_> {
     fn remove(&mut self, plan: Plan) {
         self.announce(&plan);
         for item in &plan.items {
+            for (path, error) in &item.failures {
+                self.fail(path, error.clone());
+            }
             for task in &item.tasks {
                 if self.stopped() || self.task(task) == Flow::Stop {
                     return;
@@ -220,6 +223,12 @@ impl Run<'_> {
 
         let failures_before = self.failures.len();
         let skips_before = self.skips;
+        // What the scan could not turn into a task is reported here rather
+        // than at scan time, so it counts against this item's completeness
+        // and a move will not delete a source it could not fully copy.
+        for (path, error) in &item.failures {
+            self.fail(path, error.clone());
+        }
         for task in &item.tasks {
             if self.task(task) == Flow::Stop {
                 return Flow::Stop;

@@ -62,6 +62,16 @@ entry in `Report::failures`, and the job carries on. A batch that stops at the
 first unreadable file is worse than useless on a big tree, and six failures
 should cost one summary rather than six dialogs.
 
+**That holds inside the scan too, and it is easy to get wrong.** A path the
+scan cannot turn into a task — an unreadable subdirectory, a symlink it
+cannot recreate — is collected into `Item::failures` and the walk carries on.
+The first version returned it as an error for the whole source instead, so one
+symlink anywhere inside a tree discarded every task already collected and
+copied nothing at all. The unit tests missed it because they copied such a
+link on its own; a real run against a real tree showed an empty target
+directory. An item that collected scan failures also counts as incomplete, so
+a move will not delete a source it could not fully copy.
+
 ## Conflicts
 
 A conflict is raised when something is already at the destination. The answer

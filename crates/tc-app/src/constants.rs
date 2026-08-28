@@ -125,3 +125,45 @@ pub const ENTRY_WIDTH_CHARS: i32 = 48;
 
 /// What the conflict dialog says above the buttons.
 pub const CONFLICT_PROMPT: &str = "{name} already exists in the target.";
+
+/// Titles of the windows a running job puts up.
+pub const TITLE_PROGRESS: &str = "Working";
+pub const TITLE_FAILURES: &str = "Some items were not processed";
+
+pub const BUTTON_CLOSE: &str = "Close";
+
+/// Shown while a job is still scanning and no total exists yet.
+pub const PROGRESS_SCANNING: &str = "Scanning\u{2026}";
+
+/// How the progress window reports where a job has got to.
+pub const PROGRESS_FORMAT: &str = "{done} of {total}";
+
+/// Units byte counts are rendered in. Binary, because file managers count in
+/// what the filesystem allocates rather than in what a marketing department
+/// prints on a box.
+pub const BYTE_UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+
+/// Step between two byte units.
+pub const BYTE_STEP: f64 = 1024.0;
+
+/// Decimals shown once a size has left plain bytes behind.
+pub const BYTE_DECIMALS: usize = 1;
+
+/// How long a job may run before it gets a progress window.
+///
+/// Below this it would flash up and vanish, which is more distracting than no
+/// window at all. Measured from the job's start and checked as events arrive,
+/// so no timer is needed.
+pub const PROGRESS_DELAY: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// How a single failure is written in the summary.
+pub const FAILURE_FORMAT: &str = "{path}: {reason}";
+
+/// Failures listed before the summary stops and counts the rest.
+pub const FAILURES_SHOWN: usize = 12;
+
+/// How the summary reports the ones it did not list.
+pub const FAILURES_MORE: &str = "\u{2026} and {count} more";
+
+/// Height the failure list grows to before it starts scrolling.
+pub const FAILURE_LIST_HEIGHT: i32 = 240;
