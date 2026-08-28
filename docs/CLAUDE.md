@@ -16,6 +16,8 @@ cross-references instead of duplication.
   columns, active-pane marking, and the GTK version floor.
 - [keymap.md](keymap.md) — what each key does, how bindings are looked up,
   and what happens when a directory cannot be entered.
+- [future-improvements.md](future-improvements.md) — gaps deliberately left
+  open, each with its reason and the phase it belongs to.
 - [good-development-practices.md](good-development-practices.md) —
   working rules, workflow, and the four-phase cycle (adopted from the
   Chimera project); read before starting non-trivial work.
@@ -25,10 +27,11 @@ cross-references instead of duplication.
 - [plans/](plans/2026-08-28-tc-clone-design.md) — active plan documents;
   finished plans move to `plans/archive/`. Currently active:
   [2026-08-28-tc-clone-design.md](plans/2026-08-28-tc-clone-design.md)
-  (v1 design: scope, architecture tc-core + tc-app, data flow, phases) and
-  [2026-08-28-phase1-walking-skeleton.md](plans/2026-08-28-phase1-walking-skeleton.md)
-  (implementation plan for design phase 1: workspace, read-only VFS,
-  listing model, dual-pane window, keyboard navigation).
+  (v1 design: scope, architecture tc-core + tc-app, data flow, phases).
+  Implemented and archived:
+  [archive/2026-08-28-phase1-walking-skeleton.md](plans/archive/2026-08-28-phase1-walking-skeleton.md)
+  (design phase 1: workspace, read-only VFS, listing model, dual-pane window,
+  keyboard navigation).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
   (trigger table in the root CLAUDE.md).
 

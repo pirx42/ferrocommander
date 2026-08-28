@@ -1,15 +1,20 @@
 # Phase 1 Implementation Plan — Walking Skeleton
 
-Status: In Progress — sub-phases 0, A, B, C, D done; E (audit) outstanding
+Status: Implemented — substance extracted to [vfs.md](../../vfs.md),
+[listing.md](../../listing.md), [ui-shell.md](../../ui-shell.md),
+[keymap.md](../../keymap.md); open points to
+[future-improvements.md](../../future-improvements.md).
+Commits 525b96b (0) / dfd4cbc (A) / 2c8bc2d (B) / 57a7660 (C) / c09aaf0 (D) /
+64780ac (E).
 
 *2026-08-28 — implements phase 1 of
-[2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
+[2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md).*
 
-> Process: [good-development-practices.md](../good-development-practices.md),
-> skill triggers in the root [CLAUDE.md](../../CLAUDE.md). Every sub-phase
+> Process: [good-development-practices.md](../../good-development-practices.md),
+> skill triggers in the root [CLAUDE.md](../../../CLAUDE.md). Every sub-phase
 > below is one commit series, green before it lands
-> (skills [11](../skills/11-multi-phase-commits.md),
-> [25](../skills/25-green-suite-before-commit.md)).
+> (skills [11](../../skills/11-multi-phase-commits.md),
+> [25](../../skills/25-green-suite-before-commit.md)).
 
 ## 1. Scope
 
@@ -42,12 +47,12 @@ is strictly read-only.
 no code path that creates, renames or deletes anything; that keeps the first
 runnable build harmless to test against a real home directory.
 
-## 2. Coverage pre-check (skill [43](../skills/43-coverage-before-implementation.md))
+## 2. Coverage pre-check (skill [43](../../skills/43-coverage-before-implementation.md))
 
 Not applicable — greenfield, there is no existing behavior to characterize.
 The substitute contract: every sub-phase A–D lands its own behavioral tests
-in the same commit (skills [23](../skills/23-tests-accompany-commits.md),
-[26](../skills/26-behavioral-tests.md)), and `tc-core` sub-phases A/B must be
+in the same commit (skills [23](../../skills/23-tests-accompany-commits.md),
+[26](../../skills/26-behavioral-tests.md)), and `tc-core` sub-phases A/B must be
 fully testable without a display server.
 
 ## 3. Environment gate (blocking, before phase 0)
@@ -73,7 +78,7 @@ Verification: `cargo --version && pkg-config --modversion gtk4` both succeed.
 Each sub-phase is independently green (`cargo fmt --all -- --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`, `cargo build --release`) and ends in a
-conventional commit (skill [31](../skills/31-conventional-commit.md)).
+conventional commit (skill [31](../../skills/31-conventional-commit.md)).
 
 **Both platforms are build targets** (owner spec, 2026-08-28). Since a Linux
 build never compiles the `cfg(windows)` half, the gate carries a fifth
@@ -100,7 +105,7 @@ A real Windows or mingw toolchain is what would verify the GTK build.
 - Root `Cargo.toml` with `[workspace]`, `resolver = "2"`, shared
   `[workspace.package]` (edition, rust-version, license) and
   `[workspace.dependencies]` so crate versions are declared once
-  (skill [17](../skills/17-centralize-constants.md) applied to dependencies).
+  (skill [17](../../skills/17-centralize-constants.md) applied to dependencies).
 - `rust-toolchain.toml` pinning the stable channel + `rustfmt`, `clippy`
   components, so the green gate means the same thing on every machine.
 - `crates/tc-core/` (lib) and `crates/tc-app/` (bin) with placeholder
@@ -147,10 +152,10 @@ itself.
 The design doc lists `open/read/write, rename, mkdir, remove` on
 `VirtualFs`. Phase 1 adds none of them: unimplemented trait methods are dead
 code with no test and no caller, and `todo!()` stubs are exactly the kind of
-scaffolding skill [20](../skills/20-no-backward-compat-shims.md) tells us to
+scaffolding skill [20](../../skills/20-no-backward-compat-shims.md) tells us to
 avoid. The mutating half of the trait arrives in phase 2 together with its
 implementation and its conservation-invariant tests
-([52](../skills/52-test-conservation-invariants.md)).
+([52](../../skills/52-test-conservation-invariants.md)).
 
 *Tests* (tempdir fixtures, headless):
 - `read_dir` returns exactly the files created — count and name set
@@ -163,10 +168,10 @@ implementation and its conservation-invariant tests
 - Symlink to a file, symlink to a directory, broken symlink.
 - Unicode and space-containing names survive the round trip.
 
-*Docs:* [docs/vfs.md](../vfs.md) — the trait contract, the `VfsPath`
+*Docs:* [docs/vfs.md](../../vfs.md) — the trait contract, the `VfsPath`
 invariant, the platform table, and the "why" of the read-only phase-1 surface
-(skills [29](../skills/29-one-topic-per-doc.md),
-[30](../skills/30-document-the-why.md)).
+(skills [29](../../skills/29-one-topic-per-doc.md),
+[30](../../skills/30-document-the-why.md)).
 
 **Done.** 28 tests green on Linux; the Windows branch clippy-clean via the
 cross-target check.
@@ -210,7 +215,7 @@ untested code shipped; phase 3's refresh logic is where this belongs.
   filter toggle or a reload (that clamp is the invariant the tests pin).
 - Constants (`listing::constants`): the `..` display name, the parent-entry
   sentinel — no string literals scattered through the module
-  (skills [16](../skills/16-no-magic-values.md)/[17](../skills/17-centralize-constants.md)).
+  (skills [16](../../skills/16-no-magic-values.md)/[17](../../skills/17-centralize-constants.md)).
 
 *Tests* (table-driven where the input is a rule set, skill 26):
 - Sort table: for each `SortKey` × `SortOrder`, a fixture of mixed
@@ -226,7 +231,7 @@ untested code shipped; phase 3's refresh logic is where this belongs.
 - Reload of a changed directory keeps the cursor on the same *name* when that
   name still exists, falls back to a clamped index when it does not.
 
-*Docs:* [docs/listing.md](../listing.md) — sort rules, the `..` and
+*Docs:* [docs/listing.md](../../listing.md) — sort rules, the `..` and
 hidden-file semantics, cursor behavior.
 
 **Done.** 50 tests green across the workspace; Windows branch clippy-clean.
@@ -265,7 +270,7 @@ unchanged.
 `PaneEntry` mapping are unit-tested headlessly; window construction is
 covered by a manual smoke run, per the design doc's testing section.
 
-*Docs:* [docs/ui-shell.md](../ui-shell.md) — widget tree, row rendering,
+*Docs:* [docs/ui-shell.md](../../ui-shell.md) — widget tree, row rendering,
 columns, active-pane marking, the GTK version floor.
 
 **Done.** 62 tests green; the binary runs and holds a window open.
@@ -291,7 +296,7 @@ The real window replaces them, and `row.rs` now carries the crate's tests.
 
 - `app::keymap` — a single table mapping (key, modifiers) → `Action`, so the
   key bindings live in one place and phase 3's configurable keymap has an
-  obvious seam (skill [53](../skills/53-generate-instead-of-duplicating.md):
+  obvious seam (skill [53](../../skills/53-generate-instead-of-duplicating.md):
   the GTK controller is generated from the table, not written per key).
 - Actions: `SwitchPane`, `CursorUp/Down/First/Last`, `Activate` (Enter),
   `GoParent` (Backspace), `Quit`.
@@ -306,7 +311,7 @@ tested headlessly (key + modifier → expected `Action`, including "unbound key
 yields no action"); the reload-on-activate path is tested through
 `tc-core::listing` against a tempdir.
 
-*Docs:* [docs/keymap.md](../keymap.md) — the binding table, the capture
+*Docs:* [docs/keymap.md](../../keymap.md) — the binding table, the capture
 phase, and the failed-navigation behavior.
 
 **Done.** 74 tests green; the binary runs clean with no GTK warnings.
@@ -327,7 +332,7 @@ keypress through the GTK controller to the pane has no automated coverage —
 this session has no way to synthesize keystrokes. It needs a human at the
 keyboard.
 
-### E — Refactoring audit + correction (skill [49](../skills/49-final-phase-refactoring-audit.md))
+### E — Refactoring audit + correction (skill [49](../../skills/49-final-phase-refactoring-audit.md))
 
 *Commit:* `refactor(core,app): audit corrections for the walking skeleton`
 
@@ -377,7 +382,7 @@ tests need the same shapes.
 
 ## 5. Effort
 
-Calibrated per skill [45](../skills/45-calibrate-effort-estimates.md)
+Calibrated per skill [45](../../skills/45-calibrate-effort-estimates.md)
 (feature plan, factor ×0.25):
 
 | Sub-phase | Calibrated |
@@ -409,7 +414,7 @@ environment gate (section 3), which is owner-side setup.
   covers `tc-core` only — GTK's `-sys` crates cannot be cross-compiled without
   a mingw libgtk-4 — so **the Windows GTK build is entirely unverified** and
   needs a Windows or mingw toolchain to confirm.
-- **Branch workflow.** Skill [10](../skills/10-plan-lifecycle.md) prescribes a
+- **Branch workflow.** Skill [10](../../skills/10-plan-lifecycle.md) prescribes a
   topic branch on `dev`, but skill 64 is marked Chimera-only and this repo has
   only `main`. Decide before sub-phase 0 whether to adopt `dev` + topic
   branches here; until then the phases land on `main`.
@@ -424,7 +429,7 @@ environment gate (section 3), which is owner-side setup.
 - `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -D warnings`,
   `cargo test --workspace`, `cargo build --release` all green.
 - `docs/vfs.md`, `docs/listing.md`, `docs/ui-shell.md`, `docs/keymap.md`
-  exist and are linked from [docs/CLAUDE.md](../CLAUDE.md).
+  exist and are linked from [docs/CLAUDE.md](../../CLAUDE.md).
 - The Windows cross-target clippy check is green alongside the Linux gate.
 - Sub-phase E is done, and this document's Status becomes `Implemented`
-  with the commit hashes, per skill [10](../skills/10-plan-lifecycle.md).
+  with the commit hashes, per skill [10](../../skills/10-plan-lifecycle.md).

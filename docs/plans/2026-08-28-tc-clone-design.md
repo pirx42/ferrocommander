@@ -1,6 +1,6 @@
 # Design: Total Commander Clone for Linux
 
-Status: Draft
+Status: In Progress — phase 1 implemented
 
 *2026-08-28 — working name: "Ferrocommander" (pick whatever you like)*
 
@@ -107,9 +107,11 @@ every phase ships its tests alongside the code (skill
 [23](../skills/23-tests-accompany-commits.md)).
 
 1. **Walking skeleton** — workspace, local VFS, one window with two panes listing
-   directories, Tab/cursor navigation. *(calibrated effort: ~1 day)* —
-   implementation plan:
-   [2026-08-28-phase1-walking-skeleton.md](2026-08-28-phase1-walking-skeleton.md)
+   directories, Tab/cursor navigation. ✅ **Implemented** (commits
+   525b96b…64780ac); plan archived at
+   [archive/2026-08-28-phase1-walking-skeleton.md](archive/2026-08-28-phase1-walking-skeleton.md).
+   Subsystem docs: [vfs.md](../vfs.md), [listing.md](../listing.md),
+   [ui-shell.md](../ui-shell.md), [keymap.md](../keymap.md).
 2. **Core ops** — F5/F6/F7/F8 synchronous first, then the job queue + progress +
    conflicts (background operations). Conservation-invariant tests for
    copy/move/delete (byte sums, file counts, rollback on cancel — skill
