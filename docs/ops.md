@@ -128,6 +128,22 @@ not exist before: each holds either a complete copy or nothing.
 skipped or failed, the source tree is left alone. The copy is the entire
 reason the original is expendable, and a skip is not an arrival.
 
+## Refusals
+
+Two destinations are refused before anything touches the disk, because both
+destroy data rather than merely failing:
+
+- **The destination is the source.** Copying a file onto itself opens the
+  destination for writing while the source handle is still open, so the copy
+  reads back an empty file and the job reports success over what it just
+  emptied. Not contrived: both panes can be showing one directory, and then
+  the prefilled target *is* the source.
+- **The destination is inside the source.** The walk would keep finding what
+  it had just written.
+
+"Inside" compares whole path components, so `/x/treeish` is not inside
+`/x/tree` however alike the strings look.
+
 ## Symlinks
 
 Deleting and copying treat them differently, and both are deliberate:

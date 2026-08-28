@@ -40,6 +40,12 @@ audience is hard-core Total Commander users. This outranks the scope list
 above: a feature that cannot be made fast is a feature that waits.
 Details and the measured baseline: [performance.md](../performance.md).
 
+### Non-functional requirement: reliable operations (owner spec, 2026-08-28)
+
+The operations must be very reliable — rather more tests than too few. The
+failure that matters is not a crash but a job that reports success over a file
+it destroyed. Details: [reliability.md](../reliability.md).
+
 ### Explicitly out of v1
 
 Tabs, FTP/SFTP, plugins, directory sync, internal editor, thumbnails view,

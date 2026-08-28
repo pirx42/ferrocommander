@@ -29,6 +29,7 @@ const DIALOG_MOVE: &str = "Move / Rename";
 const DIALOG_NEW_DIR: &str = "New directory";
 const DIALOG_DELETE: &str = "Confirm delete";
 const DIALOG_CONFLICT: &str = "Target already exists";
+const DIALOG_FAILURES: &str = "Some items were not processed";
 
 /// A home with `src/` to work in and `dst/` to land in.
 fn arrange(home: &Path) {
@@ -320,4 +321,25 @@ fn the_parent_row_is_not_something_an_operation_acts_on() {
         "the parent row must not offer to be deleted"
     );
     assert!(app.path("src").exists());
+}
+
+#[test]
+fn f5_with_both_panes_in_one_directory_will_not_copy_a_file_onto_itself() {
+    // Both panes open at the home directory, so the prefilled target is the
+    // directory the file is already in — no editing, no unusual input, just
+    // F5 and Enter. This destroyed the file before it was caught: the
+    // destination was opened for writing while the source handle was still
+    // open, so the copy read back nothing and reported success.
+    let app = App::launch(|home| {
+        std::fs::write(home.join("precious.txt"), SOURCE_TEXT).unwrap();
+    });
+    app.keys(&["Home", "Down"]);
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    // The refusal has to reach the user, not just the log.
+    app.focus_dialog(DIALOG_FAILURES);
+    app.await_contents("precious.txt", SOURCE_TEXT);
 }

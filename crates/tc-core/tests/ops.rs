@@ -114,6 +114,36 @@ impl Read for CancelAfterFirstChunk {
     }
 }
 
+/// Fails a read partway through, to exercise the rollback that a cancel is
+/// not the only way to reach.
+struct FailsMidRead<'a> {
+    inner: &'a dyn VirtualFs,
+    /// Bytes handed over before the error.
+    good: usize,
+}
+
+struct FailAfter {
+    inner: Box<dyn Read + Send>,
+    left: usize,
+}
+
+impl Read for FailAfter {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if self.left == 0 {
+            return Err(std::io::Error::other("the disk gave up"));
+        }
+        let room = buffer.len().min(self.left);
+        let read = self.inner.read(&mut buffer[..room])?;
+        self.left -= read;
+        Ok(read)
+    }
+}
+
+/// Refuses every trash request, so the failure path has a test.
+struct TrashRefuses<'a> {
+    inner: &'a dyn VirtualFs,
+}
+
 /// Records what was handed to the trash instead of really trashing it.
 struct RecordingTrash<'a> {
     inner: &'a dyn VirtualFs,
@@ -207,6 +237,39 @@ impl CancelsMidFile<'_> {
     }
 }
 
+impl FailsMidRead<'_> {
+    fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
+        self.inner.read_dir(path)
+    }
+    fn rename_impl(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
+        self.inner.rename(from, to)
+    }
+    fn open_read_impl(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
+        Ok(Box::new(FailAfter {
+            inner: self.inner.open_read(path)?,
+            left: self.good,
+        }))
+    }
+    fn trash_impl(&self, path: &VfsPath) -> Result<(), VfsError> {
+        self.inner.trash(path)
+    }
+}
+
+impl TrashRefuses<'_> {
+    fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
+        self.inner.read_dir(path)
+    }
+    fn rename_impl(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
+        self.inner.rename(from, to)
+    }
+    fn open_read_impl(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
+        self.inner.open_read(path)
+    }
+    fn trash_impl(&self, _path: &VfsPath) -> Result<(), VfsError> {
+        Err(VfsError::PermissionDenied)
+    }
+}
+
 impl RecordingTrash<'_> {
     fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         self.inner.read_dir(path)
@@ -226,6 +289,8 @@ impl RecordingTrash<'_> {
 delegate!(Counting<'_>);
 delegate!(AlwaysCrossDevice<'_>);
 delegate!(CancelsMidFile<'_>);
+delegate!(FailsMidRead<'_>);
+delegate!(TrashRefuses<'_>);
 delegate!(RecordingTrash<'_>);
 
 // ------------------------------------------------------------------ driver
@@ -860,5 +925,441 @@ mod symlinks {
         );
 
         assert_eq!(report.failures.len(), 1);
+    }
+}
+
+/// Cases that are unlikely right up until the moment they cost someone their
+/// files. Operations have to be reliable before they are anything else, so
+/// the awkward corners get tests rather than the benefit of the doubt.
+mod awkward_corners {
+    use super::*;
+
+    /// A file with contents worth noticing the loss of.
+    fn lone_file(name: &str, contents: &[u8]) -> (TempDir, VfsPath, VfsPath) {
+        let dir = TempDir::new().unwrap();
+        let root = LocalFs::vfs_path(dir.path());
+        let file = root.child(name);
+        LocalFs
+            .create_file(&file)
+            .unwrap()
+            .write_all(contents)
+            .unwrap();
+        (dir, root, file)
+    }
+
+    #[test]
+    fn copying_a_file_onto_itself_is_refused_and_the_file_survives() {
+        // This destroyed the file before it was caught: the destination is
+        // opened for writing while the source handle is still open, so the
+        // copy read back an empty file and reported success. Reachable with
+        // both panes in one directory and the prefilled target accepted.
+        let (_dir, _root, file) = lone_file("precious.txt", b"seventeen bytes!!");
+
+        let report = ops::run(
+            &Job::Copy {
+                sources: vec![file.clone()],
+                destination: Destination::Exact(file.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut Scripted::always(Answer::once(Resolution::Overwrite)),
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1, "it must say why, not just cope");
+        assert_eq!(LocalFs.stat(&file).unwrap().size, 17);
+    }
+
+    #[test]
+    fn copying_into_the_directory_a_file_is_already_in_is_refused() {
+        // The same thing by the route a user actually takes: F5 with both
+        // panes showing one directory.
+        let (_dir, root, file) = lone_file("precious.txt", b"seventeen bytes!!");
+
+        let report = ops::run(
+            &Job::Copy {
+                sources: vec![file.clone()],
+                destination: Destination::Into(root),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut Scripted::always(Answer::once(Resolution::Overwrite)),
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(LocalFs.stat(&file).unwrap().size, 17);
+    }
+
+    #[test]
+    fn moving_a_file_onto_itself_is_refused_and_the_file_survives() {
+        let (_dir, _root, file) = lone_file("precious.txt", b"seventeen bytes!!");
+
+        let report = ops::run(
+            &Job::Move {
+                sources: vec![file.clone()],
+                destination: Destination::Exact(file.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(LocalFs.stat(&file).unwrap().size, 17);
+    }
+
+    #[test]
+    fn copying_a_directory_into_its_own_subtree_is_refused() {
+        // Following this would never terminate: the walk keeps finding what
+        // it has just written.
+        let (_dir, root) = fixture();
+        let source = root.child("tree");
+        let before = snapshot(&LocalFs, &source);
+
+        let report = ops::run(
+            &Job::Copy {
+                sources: vec![source.clone()],
+                destination: Destination::Into(source.child("sub")),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(snapshot(&LocalFs, &source), before, "nothing may be added");
+    }
+
+    #[test]
+    fn moving_a_directory_into_its_own_subtree_is_refused() {
+        let (_dir, root) = fixture();
+        let source = root.child("tree");
+        let before = snapshot(&LocalFs, &source);
+
+        let report = ops::run(
+            &Job::Move {
+                sources: vec![source.clone()],
+                destination: Destination::Into(source.child("sub")),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(snapshot(&LocalFs, &source), before);
+    }
+
+    #[test]
+    fn a_sibling_directory_with_a_similar_name_is_not_inside_anything() {
+        // The refusal compares whole components. `/x/treeish` starts with the
+        // characters of `/x/tree` and is not inside it; a prefix test on the
+        // raw string would refuse a perfectly ordinary copy.
+        let (_dir, root) = fixture();
+        let alongside = root.child("treeish");
+        LocalFs.create_dir(&alongside).unwrap();
+
+        run_clean(
+            &Job::Copy {
+                sources: vec![root.child("tree")],
+                destination: Destination::Into(alongside.clone()),
+            },
+            &LocalFs,
+        );
+
+        assert_eq!(
+            snapshot(&LocalFs, &alongside.child("tree")),
+            snapshot(&LocalFs, &root.child("tree"))
+        );
+    }
+
+    #[test]
+    fn a_refused_source_does_not_stop_the_others() {
+        let (_dir, root) = fixture();
+        let target_dir = root.child("into");
+
+        let report = ops::run(
+            &Job::Copy {
+                // The first would copy into itself; the second is ordinary.
+                sources: vec![target_dir.clone(), root.child("tree")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(
+            snapshot(&LocalFs, &target_dir.child("tree")),
+            snapshot(&LocalFs, &root.child("tree"))
+        );
+    }
+
+    #[test]
+    fn overwriting_a_large_file_with_a_small_one_leaves_no_tail() {
+        // A destination opened without truncation would keep the tail of what
+        // was there, and the result would look like a successful copy.
+        let (dir, root) = fixture();
+        let target_dir = root.child("into");
+        std::fs::create_dir(dir.path().join("into/tree")).unwrap();
+        std::fs::write(dir.path().join("into/tree/a.txt"), vec![b'Z'; 5000]).unwrap();
+
+        ops::run(
+            &Job::Copy {
+                sources: vec![root.child("tree")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut Scripted::always(Answer::always(Resolution::Overwrite)),
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(
+            snapshot(&LocalFs, &target_dir.child("tree")),
+            snapshot(&LocalFs, &root.child("tree")),
+            "an overwritten file must be the source, not a mixture"
+        );
+    }
+
+    #[test]
+    fn keep_both_walks_past_an_alternative_name_that_is_taken() {
+        let (dir, root) = fixture();
+        let target_dir = root.child("into");
+        std::fs::create_dir(dir.path().join("into/tree")).unwrap();
+        std::fs::write(dir.path().join("into/tree/a.txt"), "old").unwrap();
+        std::fs::write(dir.path().join("into/tree/a (2).txt"), "older").unwrap();
+
+        ops::run(
+            &Job::Copy {
+                sources: vec![root.child("tree/a.txt")],
+                destination: Destination::Into(target_dir.child("tree")),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut Scripted::always(Answer::once(Resolution::KeepBoth)),
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        let landed = snapshot(&LocalFs, &target_dir.child("tree"));
+        assert_eq!(
+            landed.get("/a (3).txt"),
+            Some(&Some(b"hello world".to_vec()))
+        );
+        assert_eq!(landed.get("/a.txt"), Some(&Some(b"old".to_vec())));
+        assert_eq!(landed.get("/a (2).txt"), Some(&Some(b"older".to_vec())));
+    }
+
+    #[test]
+    fn a_read_error_partway_through_leaves_no_truncated_file() {
+        // Cancelling is not the only way to stop mid-file, and the invariant
+        // has to hold for the other way too: a destination that did not exist
+        // holds a whole copy or nothing.
+        let (_dir, root) = fixture();
+        let target_dir = root.child("into");
+        let fs = FailsMidRead {
+            inner: &LocalFs,
+            good: 1024,
+        };
+
+        let report = ops::run(
+            &Job::Copy {
+                sources: vec![root.child("tree/sub/b.bin")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &fs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1, "the error must be reported");
+        assert!(
+            !exists(&LocalFs, &target_dir.child("b.bin")),
+            "a half-written file was left behind"
+        );
+    }
+
+    #[test]
+    fn overwriting_a_directory_with_a_file_fails_only_that_path() {
+        let (dir, root) = fixture();
+        let target_dir = root.child("into");
+        std::fs::create_dir(dir.path().join("into/tree")).unwrap();
+        // A directory standing exactly where a file wants to go.
+        std::fs::create_dir(dir.path().join("into/tree/a.txt")).unwrap();
+
+        let report = ops::run(
+            &Job::Copy {
+                sources: vec![root.child("tree")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut Scripted::always(Answer::always(Resolution::Overwrite)),
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.outcome, Outcome::Completed);
+        assert_eq!(report.failures.len(), 1);
+        // Everything that was not in the way still arrived.
+        assert_eq!(
+            snapshot(&LocalFs, &target_dir.child("tree").child("sub")),
+            snapshot(&LocalFs, &root.child("tree").child("sub"))
+        );
+    }
+
+    #[test]
+    fn aborting_on_the_first_of_two_sources_never_reaches_the_second() {
+        let (dir, root) = fixture();
+        let target_dir = root.child("into");
+        std::fs::write(dir.path().join("into/a.txt"), "old").unwrap();
+
+        let report = ops::run(
+            &Job::Copy {
+                // Order is kept, so the second source is provably untouched.
+                sources: vec![root.child("tree/a.txt"), root.child("tree/sub")],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut Scripted::always(Answer::once(Resolution::Abort)),
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.outcome, Outcome::Aborted);
+        assert_eq!(
+            snapshot(&LocalFs, &target_dir),
+            Snapshot::from([("/a.txt".to_string(), Some(b"old".to_vec()))])
+        );
+    }
+
+    #[test]
+    fn the_same_source_listed_twice_arrives_once_and_asks_once() {
+        // The second copy collides with what the first one just wrote, which
+        // is a conflict like any other rather than a surprise.
+        let (_dir, root) = fixture();
+        let target_dir = root.child("into");
+        let source = root.child("tree/a.txt");
+        let mut resolver = Scripted::always(Answer::once(Resolution::Skip));
+
+        ops::run(
+            &Job::Copy {
+                sources: vec![source.clone(), source.clone()],
+                destination: Destination::Into(target_dir.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut resolver,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(resolver.asked.len(), 1);
+        assert_eq!(
+            snapshot(&LocalFs, &target_dir),
+            Snapshot::from([("/a.txt".to_string(), Some(b"hello world".to_vec()))])
+        );
+    }
+
+    #[test]
+    fn deleting_the_same_path_twice_reports_the_second_and_carries_on() {
+        let (_dir, root) = fixture();
+        let doomed = root.child("tree/a.txt");
+
+        let report = ops::run(
+            &Job::Delete {
+                paths: vec![doomed.clone(), doomed.clone()],
+                mode: DeleteMode::Permanent,
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.outcome, Outcome::Completed);
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(report.failures[0].1, VfsError::NotFound);
+        assert!(!exists(&LocalFs, &doomed));
+    }
+
+    #[test]
+    fn copying_into_a_directory_that_is_not_there_fails_without_creating_it() {
+        let (_dir, root) = fixture();
+        let missing = root.child("nowhere");
+
+        let report = ops::run(
+            &Job::Copy {
+                sources: vec![root.child("tree/a.txt")],
+                destination: Destination::Into(missing.clone()),
+            },
+            &LocalFs,
+            &LocalFs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+        assert!(!exists(&LocalFs, &missing), "it must not invent the parent");
+    }
+
+    #[test]
+    fn a_trash_that_refuses_reports_it_and_keeps_the_file() {
+        // A delete that quietly fails is the worst possible outcome: the user
+        // believes the file is gone and stops looking after it.
+        let (_dir, root) = fixture();
+        let fs = TrashRefuses { inner: &LocalFs };
+        let doomed = root.child("tree/a.txt");
+
+        let report = ops::run(
+            &Job::Delete {
+                paths: vec![doomed.clone()],
+                mode: DeleteMode::Trash,
+            },
+            &fs,
+            &fs,
+            &mut NoConflictsExpected,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(report.failures[0].1, VfsError::PermissionDenied);
+        assert!(exists(&LocalFs, &doomed));
+    }
+
+    #[test]
+    fn a_job_with_no_sources_finishes_cleanly_and_changes_nothing() {
+        let (_dir, root) = fixture();
+        let before = snapshot(&LocalFs, &root);
+
+        run_clean(
+            &Job::Copy {
+                sources: Vec::new(),
+                destination: Destination::Into(root.child("into")),
+            },
+            &LocalFs,
+        );
+
+        assert_eq!(snapshot(&LocalFs, &root), before);
     }
 }

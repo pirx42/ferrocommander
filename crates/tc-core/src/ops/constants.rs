@@ -27,3 +27,17 @@ pub const EXTENSION_SEPARATOR: char = '.';
 /// have. Deleting one is unaffected: a link is removed as a file, never
 /// followed.
 pub const SYMLINK_NOT_COPIED: &str = "symbolic links to directories are not copied";
+
+/// Why an operation whose destination is its own source is refused.
+///
+/// Copying a file onto itself truncates it before it is read: the engine
+/// opens the destination for writing while the source handle is still open,
+/// so the job would report success over an emptied file. This is not a
+/// contrived case — both panes can be showing the same directory, and then
+/// the prefilled target *is* the source.
+pub const ONTO_ITSELF: &str = "source and destination are the same";
+
+/// Why an operation into its own subtree is refused.
+///
+/// The walk would keep finding what it had just written.
+pub const INTO_ITSELF: &str = "the destination is inside the source";

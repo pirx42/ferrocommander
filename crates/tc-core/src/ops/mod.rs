@@ -25,7 +25,7 @@ pub use progress::{Outcome, Progress, ProgressSink, Report, Silent};
 pub use queue::{ConflictRequest, JobHandle, JobQueue};
 
 use conflict::{conflict_at, free_name_beside};
-use constants::COPY_BUFFER_BYTES;
+use constants::{COPY_BUFFER_BYTES, INTO_ITSELF, ONTO_ITSELF};
 
 /// Where a deleted entry goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +118,16 @@ pub fn run(
     }
 }
 
+/// Whether `path` lies below `directory`.
+///
+/// Compared on whole components — `/a/bc` is not inside `/a/b`, however much
+/// the strings look alike.
+fn is_inside(path: &VfsPath, directory: &VfsPath) -> bool {
+    path.as_str()
+        .strip_prefix(directory.as_str())
+        .is_some_and(|rest| rest.starts_with(crate::vfs::constants::SEPARATOR))
+}
+
 /// Whether the job carries on after a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Flow {
@@ -163,8 +173,9 @@ impl Run<'_> {
                 sources,
                 destination,
             } => {
+                let sources = self.refuse_self_targets(sources, destination);
                 let plan =
-                    plan::plan_transfer(self.source_fs, sources, |source| destination.of(source));
+                    plan::plan_transfer(self.source_fs, &sources, |source| destination.of(source));
                 self.transfer(plan, false);
             }
             Job::Move {
@@ -175,7 +186,8 @@ impl Run<'_> {
                 // whole tree in one call, so walking that tree first would be
                 // the entire cost of an operation that is otherwise instant —
                 // and on a large tree the walk is what the user would feel.
-                let remaining = self.rename_what_it_can(sources, destination);
+                let sources = self.refuse_self_targets(sources, destination);
+                let remaining = self.rename_what_it_can(&sources, destination);
                 if remaining.is_empty() {
                     return;
                 }
@@ -234,6 +246,40 @@ impl Run<'_> {
         for (path, error) in &plan.failures {
             self.fail(path, error.clone());
         }
+    }
+
+    /// Drops the sources whose destination is themselves, or inside
+    /// themselves, reporting each as a failure.
+    ///
+    /// Checked before anything else touches the disk, because both cases
+    /// destroy data rather than merely failing. Copying a file onto itself
+    /// truncates it before it is read, and the job would report success over
+    /// an empty file; copying a directory into its own subtree never
+    /// terminates, because the walk keeps finding what it just wrote.
+    ///
+    /// Neither is contrived. Both panes may be showing the same directory,
+    /// and then the prefilled target *is* the source.
+    fn refuse_self_targets(
+        &mut self,
+        sources: &[VfsPath],
+        destination: &Destination,
+    ) -> Vec<VfsPath> {
+        let mut allowed = Vec::new();
+        for source in sources {
+            let target = destination.of(source);
+            let refusal = if target == *source {
+                Some(ONTO_ITSELF)
+            } else if is_inside(&target, source) {
+                Some(INTO_ITSELF)
+            } else {
+                None
+            };
+            match refusal {
+                Some(reason) => self.fail(source, VfsError::Io(reason.to_string())),
+                None => allowed.push(source.clone()),
+            }
+        }
+        allowed
     }
 
     /// Moves what a single `rename` can move, and reports what is left.

@@ -24,6 +24,15 @@ test that pins the property rather than the timing. Rules, measured baseline
 and the parts that are deliberately still slow:
 [docs/performance.md](docs/performance.md).
 
+## Reliability of operations (owner spec, 2026-08-28)
+
+The operations must be very reliable — **rather more tests than too few**. A
+file manager is trusted with the only copy of things, and the failure that
+matters is not a crash but a job that reports success over a file it
+destroyed. The awkward corner gets a test, not the benefit of the doubt, and
+every invariant is checked against its own bug.
+Details: [docs/reliability.md](docs/reliability.md).
+
 ## Build & Run
 
 ```bash
@@ -73,6 +82,7 @@ The project is in its build-up phase; this table grows with the code.
 | What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 (phases 1 and 2 done; phase 3 next) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
 | How fast things are, and what is still slow | [docs/performance.md](docs/performance.md) |
+| What "reliable" means, and where the tests live | [docs/reliability.md](docs/reliability.md) |
 | Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
 | Verify a keystroke really works end to end | `crates/tc-app/tests/ui.rs` (see [docs/ui-shell.md](docs/ui-shell.md)) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |
@@ -140,6 +150,7 @@ files.
 | New plan doc | [10](docs/skills/10-plan-lifecycle.md) `YYYY-MM-DD-`, status, archive + [43](docs/skills/43-coverage-before-implementation.md) phase 0 coverage pre-check + [45](docs/skills/45-calibrate-effort-estimates.md) apply effort factor |
 | Major dependency upgrade | [12](docs/skills/12-major-upgrades-isolated.md) own branch/commit |
 | Decision trades speed for polish, features or tidiness | [docs/performance.md](docs/performance.md) — speed wins, with a measurement |
+| Touching a file operation, or wondering if a corner needs a test | [docs/reliability.md](docs/reliability.md) — it does |
 | Refactor with a "quick hack vs clean" choice | [41](docs/skills/41-more-correct-variant.md) the more correct variant |
 | New file vs extending an existing one | [13](docs/skills/13-prefer-existing-files.md) edit existing |
 | Number/string hardcoded in code | [16](docs/skills/16-no-magic-values.md) named constant + [17](docs/skills/17-centralize-constants.md) centralize |

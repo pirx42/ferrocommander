@@ -19,6 +19,8 @@ cross-references instead of duplication.
   not undo.
 - [keymap.md](keymap.md) — what each key does, how bindings are looked up,
   and what happens when a directory cannot be entered.
+- [reliability.md](reliability.md) — the standing reliability requirement for
+  file operations, and where the tests live.
 - [performance.md](performance.md) — the standing speed requirement, the
   measured baseline, and what is deliberately still slow.
 - [future-improvements.md](future-improvements.md) — gaps deliberately left
