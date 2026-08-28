@@ -384,6 +384,139 @@ fn with_recording_editor(home: &Path) {
 }
 
 #[test]
+fn a_pane_notices_a_file_another_process_created() {
+    // No key pressed at all: the pane is watching its directory and re-reads
+    // itself when it settles.
+    let app = in_src_and_dst(arrange);
+    std::fs::write(app.path("src/appeared.txt"), "from outside").unwrap();
+
+    // Sorted: `..`, nested, appeared.txt, data.bin, notes.txt. Until the pane
+    // has re-read, the third row is still data.bin — so waiting for the
+    // *right* file to arrive in dst is the whole assertion.
+    app.settle();
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/appeared.txt", "from outside");
+}
+
+#[test]
+fn a_watched_pane_follows_the_directory_it_moves_to() {
+    // The watch is about one directory, so navigating leaves it behind. A
+    // pane that kept the old one would go quiet the first time you stepped
+    // into a folder — which is most of the time.
+    let app = in_src_and_dst(arrange);
+    // Into src/nested, which nothing has watched yet.
+    app.keys(&["Home", "Down", "Return"]);
+
+    std::fs::write(app.path("src/nested/late.txt"), "arrived late").unwrap();
+    app.settle();
+
+    // `..`, inner.txt, late.txt — the third row exists only after a re-read.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/late.txt", "arrived late");
+}
+
+#[test]
+fn ctrl_r_picks_up_a_file_another_process_created() {
+    // Nothing tells the pane that a file appeared, so until this key existed
+    // the only way to see it was to navigate away and back.
+    let app = in_src_and_dst(arrange);
+    std::fs::write(app.path("src/appeared.txt"), "from outside").unwrap();
+
+    app.key("ctrl+r");
+
+    // Sorted: `..`, nested, then appeared.txt, data.bin, notes.txt. Without
+    // the re-read the third row is data.bin, so which file lands in dst says
+    // whether the pane saw it.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/appeared.txt", "from outside");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "the pane did not re-read and copied the row that used to be third"
+    );
+}
+
+#[test]
+fn a_re_read_keeps_the_marks() {
+    // The reason this goes through Listing::reload rather than a fresh load:
+    // dropping a selection somebody spent a minute building would be worse
+    // than not re-reading at all.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — mark data.bin and then step off it.
+    // The cursor must not be on the marked row: the cursor survives a re-read
+    // either way, so with it there, losing the mark is invisible — F5 falls
+    // back to the same file and the test passes over the bug.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("space");
+    app.key("Down");
+
+    std::fs::write(app.path("src/appeared.txt"), "from outside").unwrap();
+    app.key("ctrl+r");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.settle();
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "the mark was lost and F5 fell back to the cursor row"
+    );
+}
+
+#[test]
+fn a_re_read_keeps_the_cursor_on_the_same_entry() {
+    // Not on the same row *number*: a file appearing above it shifts every
+    // index below, and a cursor restored by index would quietly move.
+    let app = in_src_and_dst(arrange);
+    // Cursor on notes.txt, the last row.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    std::fs::write(app.path("src/aaa-first.txt"), "sorts above everything").unwrap();
+    app.key("ctrl+r");
+
+    // notes.txt is one row further down now. F5 with nothing marked copies
+    // the cursor row, which must still be notes.txt.
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/notes.txt", SOURCE_TEXT);
+}
+
+#[test]
+fn a_re_read_of_a_directory_that_has_gone_lands_somewhere_real() {
+    // Showing an error where a listing belongs strands the user somewhere
+    // they cannot navigate out of.
+    let app = in_src_and_dst(arrange);
+    std::fs::remove_dir_all(app.path("src")).unwrap();
+
+    app.key("ctrl+r");
+
+    // The pane fell back to the home directory, where dst still is: F7 lands
+    // there rather than nowhere.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("still-usable");
+    app.key("Return");
+
+    app.await_exists("still-usable");
+}
+
+#[test]
 fn shift_f4_creates_a_file_and_opens_it() {
     let app = in_src_and_dst(with_recording_editor);
 

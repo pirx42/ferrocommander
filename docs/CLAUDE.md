@@ -20,6 +20,8 @@ cross-references instead of duplication.
   not undo.
 - [keymap.md](keymap.md) — what each key does, how bindings are looked up,
   and what happens when a directory cannot be entered.
+- [watching.md](watching.md) — how a pane notices what another program did:
+  the directory watcher, `Ctrl+R`, and what survives a re-read.
 - [command-line.md](command-line.md) — the command line at the bottom: how a
   typed line is run, why `cd` is read rather than spawned, and when output is
   shown.

@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 async-channel.workspace = true
+notify.workspace = true
 serde.workspace = true
 toml.workspace = true
 toml_edit.workspace = true

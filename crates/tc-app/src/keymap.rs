@@ -37,6 +37,8 @@ pub enum Action {
     Copy,
     /// F6 — move it, or rename it in place.
     Move,
+    /// Ctrl+R — re-read the directory, keeping marks, cursor and position.
+    Reread,
     /// Shift+F4 — create an empty file and open it in the editor.
     CreateFile,
     /// Shift+F6 — rename the row under the cursor, in the list itself.
@@ -401,6 +403,11 @@ static BINDINGS: &[Binding] = &[
         action: Action::ExchangePanes,
     },
     Binding {
+        key: Key::r,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::Reread,
+    },
+    Binding {
         key: Key::h,
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::ToggleHidden,
@@ -443,6 +450,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("go_parent", Action::GoParent),
     ("copy", Action::Copy),
     ("move", Action::Move),
+    ("reread", Action::Reread),
     ("create_file", Action::CreateFile),
     ("rename_inline", Action::RenameInline),
     ("create_dir", Action::CreateDir),
@@ -783,6 +791,7 @@ mod tests {
             (Key::Right, ModifierType::CONTROL_MASK, Action::CloneToRight),
             (Key::Left, ModifierType::CONTROL_MASK, Action::CloneToLeft),
             (Key::u, ModifierType::CONTROL_MASK, Action::ExchangePanes),
+            (Key::r, ModifierType::CONTROL_MASK, Action::Reread),
             (Key::h, ModifierType::CONTROL_MASK, Action::ToggleHidden),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
         ];

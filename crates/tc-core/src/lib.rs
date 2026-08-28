@@ -11,3 +11,4 @@ pub mod glob;
 pub mod listing;
 pub mod ops;
 pub mod vfs;
+pub mod watch;

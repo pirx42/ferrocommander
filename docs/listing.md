@@ -115,6 +115,12 @@ something the user can see to have meant.
 changed one file must not silently drop the marks on the others. Names that
 are gone fall out, names that are new arrive unmarked.
 
+That is `Listing::reload`, and it is what `Ctrl+R` and the directory watcher
+both go through — see [watching.md](watching.md). Navigation and the re-read
+after a job use `Listing::load` instead and start with nothing marked, which is
+right: those are a different directory, or a directory whose marks the job just
+spent.
+
 Pattern selection uses `tc-core::glob` — `*` and `?`, case-insensitive, which
 is what Total Commander accepts and what a person types. It lives outside
 `listing` because phase 5's search needs the same matcher.

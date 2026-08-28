@@ -1,0 +1,61 @@
+# Watching — noticing what another program did
+
+← Parent: [CLAUDE.md](CLAUDE.md)
+
+A pane shows what it read. Something else adding or deleting a file used to be
+invisible until you navigated away and back — there was not even a key to ask.
+Now there are two ways in: the pane watches its own directory, and `Ctrl+R`
+re-reads on demand.
+
+## Both go through the same re-read
+
+`PaneView::reread` uses `Listing::reload`, which is the one that keeps the
+**marks by name** ([listing.md](listing.md)). A refresh that silently dropped a
+selection somebody spent a minute building would be worse than not refreshing at
+all. The cursor follows the same way — by name, not by row number, because a
+file appearing above it shifts every index below.
+
+**The scroll offset is put back** around it, in pixels rather than rows: a
+change elsewhere in the directory must not move what is being looked at. Rows
+above the viewport coming and going will shift the view, which is the rarer
+case and the one where "the same position" has no better answer.
+
+A directory that has gone falls back to the nearest ancestor that can still be
+read, the same as after a job.
+
+## The watcher is coalesced, not streamed
+
+`tc-core::watch` holds one `notify` watcher per pane — inotify on Linux,
+`ReadDirectoryChangesW` on Windows, behind one interface, which is the shape
+every platform difference in this project takes. It is in `tc-core` because
+watching a directory is a filesystem concern and the UI does not reach past its
+own layer.
+
+**One nudge per quiet period**, and the nudge says nothing about what changed.
+An unpacking archive fires an event per file, and re-reading a fifty-thousand
+entry directory per event would make the program unusable exactly when it is
+busiest ([performance.md](performance.md)). The pane re-reads everything
+anyway, so which file moved is not information it can use. The timer restarts
+on every event, so a directory under continuous change is re-read when it
+settles rather than never.
+
+## What it deliberately does not do
+
+- **It does not watch a subtree.** A pane shows one directory; waking it for
+  changes it is not displaying would be work for nothing.
+- **It does not re-read under an open rename.** Rebuilding the rows would take
+  the editor away mid-word.
+- **It does not fail.** A directory that cannot be watched — a network mount, a
+  filesystem the platform does not cover, a permission that is not there — is a
+  pane that does not refresh itself, not a pane that fails to open. `Ctrl+R`
+  still works, which is most of why that key exists.
+- **A watch is replaced on navigation**, and a nudge that crosses a navigation
+  is dropped: it is about a directory nobody is looking at any more.
+
+## What is not covered by a test
+
+**The scroll offset.** The end-to-end harness drives the app through X and
+asserts on the filesystem; there is no way for it to read where a pane is
+scrolled to. The marks, the cursor and the re-read itself all have tests — and
+each has a probe that breaks them — but the scroll restore is verified by hand.
+Said here rather than left to look like coverage it is not.

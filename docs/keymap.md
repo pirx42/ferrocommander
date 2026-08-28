@@ -36,6 +36,7 @@
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
 | `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
 | `Ctrl+U` | Exchange the two panes |
+| `Ctrl+R` | Re-read the directory — see [watching.md](watching.md) |
 | `Ctrl+F3` … `Ctrl+F6` | Sort by name / ext / date / size |
 | `Ctrl+H` | Show or hide the dot-files |
 | `Ctrl+S` | Narrow the pane as you type |

@@ -274,6 +274,7 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::RenameInline => shell.borrow_mut().active_pane().begin_rename(),
         Action::CreateDir => start_create_dir(shell),
         Action::CreateFile => start_create_file(shell),
+        Action::Reread => shell.borrow_mut().active_pane().reread(),
         Action::Delete => start_delete(shell, DeleteMode::Trash),
         Action::DeletePermanently => start_delete(shell, DeleteMode::Permanent),
         Action::Quit => {}
@@ -283,6 +284,8 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     // command line's prompt is the same story — navigation moves it, and
     // there is no arm that could not have.
     shell.borrow().follow_active();
+    // A pane that moved is a pane watching the wrong directory.
+    resync_watches(shell);
     remember(shell);
 }
 
@@ -423,6 +426,7 @@ fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &VfsPath) {
         state.panes[target].go_to(mount.clone());
     }
     drop(state);
+    resync_watches(shell);
     remember(shell);
 }
 
@@ -707,7 +711,8 @@ fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl FnOnce() + 's
         };
         finishing.borrow_mut().reload_all();
         // A job can move the ground a pane is standing on, so where it ends
-        // up is worth remembering too.
+        // up is worth remembering — and worth watching.
+        resync_watches(&finishing);
         remember(&finishing);
         // Everything that went wrong, once, after the panes show the truth —
         // not one dialog per file while the job is still running.
@@ -821,6 +826,7 @@ fn build_window(app: &gtk::Application) {
     wire_command_line(&shell);
     for index in 0..PANE_COUNT {
         wire_inline_rename(&shell, index);
+        watch_pane(&shell, index);
     }
     remember_on_close(&window, &shell);
     remember_window_size(&window, &shell);
@@ -969,6 +975,55 @@ fn start_create_file(shell: &Rc<RefCell<Shell>>) {
             });
         },
     );
+}
+
+/// Points every pane's watch at the directory it is showing now.
+///
+/// Called wherever a pane may have moved. Cheap when nothing did: it is two
+/// path comparisons, and a watch is only torn down and rebuilt when the pane
+/// really has gone somewhere else.
+fn resync_watches(shell: &Rc<RefCell<Shell>>) {
+    for index in 0..PANE_COUNT {
+        if shell.borrow().panes[index].watch_is_stale() {
+            watch_pane(shell, index);
+        }
+    }
+}
+
+/// Starts watching a pane's directory, and keeps re-reading it as it changes.
+///
+/// Restarted on every navigation: the old watch is about a directory nobody is
+/// looking at any more. Each nudge is checked against the directory the pane
+/// is showing *now*, because a navigation and a nudge can cross.
+fn watch_pane(shell: &Rc<RefCell<Shell>>, index: usize) {
+    let (changes, watched) = {
+        let mut state = shell.borrow_mut();
+        let pane = &mut state.panes[index];
+        (pane.rewatch(), pane.directory())
+    };
+    // A directory that cannot be watched is a pane that does not refresh
+    // itself. `Ctrl+R` still works, which is most of why it exists.
+    let Some(changes) = changes else {
+        return;
+    };
+
+    let shell = shell.clone();
+    glib::spawn_future_local(async move {
+        while changes.recv().await.is_ok() {
+            let mut state = shell.borrow_mut();
+            // The pane has navigated since; its new watch is the live one and
+            // this nudge is about somewhere else.
+            if state.panes[index].directory() != watched {
+                return;
+            }
+            // Not while a name is being typed into the list: rebuilding the
+            // rows would take the editor away mid-word.
+            if state.panes[index].renaming().is_some() {
+                continue;
+            }
+            state.panes[index].reread();
+        }
+    });
 }
 
 /// Connects one pane's inline rename to the job that carries it out.

@@ -29,6 +29,12 @@ async-channel = "2"
 # startup, so the speed requirement is not in tension.
 serde = { version = "1", features = ["derive"] }
 toml = "0.9"
+# Telling a pane its directory changed under it. inotify on Linux and
+# ReadDirectoryChangesW on Windows behind one interface, which is exactly the
+# shape of every other platform difference in this project. In tc-core rather
+# than tc-app because watching a directory is a filesystem concern and the UI
+# does not reach past its own layer (docs/listing.md).
+notify = { version = "8", default-features = false, features = ["macos_kqueue"] }
 # Writing that same file back without destroying it. `toml` serializes a
 # struct and reproduces the data and nothing else; the user hand-writes a
 # [keys] table with comments into this file, and a save half a second later

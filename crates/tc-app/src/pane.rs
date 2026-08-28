@@ -196,6 +196,16 @@ pub struct PaneView {
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
     listing: Listing,
+    /// Watches the directory this pane is showing, so a change made by
+    /// anything else reaches it without being asked.
+    ///
+    /// Replaced on every navigation, and `None` when the directory cannot be
+    /// watched at all — a pane that does not refresh itself, not one that
+    /// fails to open.
+    watch: Option<tc_core::watch::Watch>,
+    /// Which directory [`watch`](Self::watch) is about, so the shell can tell
+    /// when navigation has left it behind.
+    watched: Option<VfsPath>,
     /// The full name of the row being renamed in place, if any.
     ///
     /// By name rather than by index, like everything else that has to survive
@@ -299,6 +309,8 @@ impl PaneView {
             column_view,
             listing,
             scroller,
+            watch: None,
+            watched: None,
             renaming: None,
             rename_hook,
             remembered_marks: Vec::new(),
@@ -343,6 +355,58 @@ impl PaneView {
         self.listing = listing;
         self.error = None;
         self.refresh();
+    }
+
+    /// Starts watching whatever directory this pane is now showing.
+    ///
+    /// Called after every navigation, because the old watch is about a
+    /// directory nobody is looking at any more. Returns where the nudges will
+    /// arrive, for the shell to await on the main loop.
+    pub fn rewatch(&mut self) -> Option<tc_core::watch::Changes> {
+        // Set even when the watch could not be started, so a directory that
+        // cannot be watched is not retried on every keystroke.
+        self.watched = Some(self.listing.dir().clone());
+        self.watch = tc_core::watch::Watch::start(self.listing.dir());
+        self.watch.as_ref().map(|watch| watch.changes())
+    }
+
+    /// Whether the watch is about somewhere this pane has since left.
+    pub fn watch_is_stale(&self) -> bool {
+        self.watched.as_ref() != Some(self.listing.dir())
+    }
+
+    /// The directory this pane is showing, for a watcher to check it is still
+    /// the one it was started for.
+    pub fn directory(&self) -> VfsPath {
+        self.listing.dir().clone()
+    }
+
+    /// Re-reads the directory, keeping everything the user put there.
+    ///
+    /// `Ctrl+R`, and what a directory watcher calls. Through
+    /// [`Listing::reload`] rather than a fresh load, because that is the one
+    /// that keeps the **marks** by name — a re-read that silently dropped a
+    /// selection somebody spent a minute building would be worse than not
+    /// re-reading at all. The cursor follows the same way, and the scroll
+    /// offset is put back around it.
+    ///
+    /// A directory that has gone falls back to the nearest ancestor that can
+    /// still be read, the same as after a job: showing an error where a
+    /// listing belongs strands the user somewhere they cannot navigate out of.
+    pub fn reread(&mut self) {
+        // The pixel offset, not the row: a change elsewhere in the directory
+        // must not move what is being looked at, and rows above the viewport
+        // coming and going is the rarer case.
+        let scroll = self.scroller.vadjustment().value();
+        if self.listing.reload(self.fs.as_ref()).is_err() {
+            self.reload_after_job();
+            return;
+        }
+        self.error = None;
+        self.refresh();
+        // After `refresh`, which scrolls to the cursor: this is the one that
+        // has to win.
+        self.scroller.vadjustment().set_value(scroll);
     }
 
     /// Rebuilds the rows from the listing and puts the selection back on the
