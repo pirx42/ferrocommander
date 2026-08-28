@@ -1,6 +1,6 @@
 # Phase 3c — the command line, and `Ctrl+↓` for its history
 
-**Status:** In progress
+**Status:** Implemented
 **Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) —
 inserted after phase 3b. The design doc lists no command line at all; this
 adds one, on the owner's ruling.
@@ -95,6 +95,38 @@ Also `Ctrl+Enter`, which inserts the name under the cursor — the one shortcut
 that makes a command line in a file manager worth having.
 
 ### E. Docs and refactoring audit
+
+**What changed against the plan**, and why:
+
+- **§D was folded into §B.** The plan had the widget ship first and typing
+  reach it later, which would have left a commit where nothing focuses the
+  entry — a keyboard-first program with a command line nobody can reach has
+  not shipped one.
+- **The stand-down inside text fields needed an exception.** Not foreseen:
+  `Ctrl+Enter` and `Ctrl+↓` are for use *while typing a command*, which is
+  exactly when the entry has the focus, so the shell standing down there made
+  them unreachable at the only moment they are wanted. Modified keys the
+  keymap claims are now dispatched from inside the command line; a plain
+  letter is still text.
+
+**What the audit found:**
+
+- **A redundant guard, found by a probe that did not bite.** An `if commanding
+  { Proceed }` in the unbound-key path was unreachable in effect: `commanding`
+  is only true for a Ctrl or Alt key, and those are the first thing
+  `typed_into_command_line` turns away. Deleted.
+- **A test too weak to see its own subject.** The one asserting an inserted
+  name is a separate word only checked that *some* output window opened — and
+  a failing command opens one too, so gluing the name on passed it. It now
+  runs `cat notes.txt > out.txt` and asserts the contents, because the
+  redirection creates the file either way and only what is in it tells the two
+  apart.
+- **A harness limitation, fixed rather than worked around.** `xdotool type`
+  read a leading dash as a flag, so a test could not append `-again` to a
+  command line and failed with no hint that the text was the problem. It
+  passes `--` now.
+- **`choose_place` became `choose_one`** when the history needed the same
+  chooser. It was never about places.
 
 [keymap.md](../keymap.md), [config.md](../config.md), a new
 [command-line.md](../command-line.md), and the audit per skill 49.

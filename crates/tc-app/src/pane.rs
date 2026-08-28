@@ -488,6 +488,11 @@ impl PaneView {
         self.filter_bar.set_visible(!filter.is_empty());
     }
 
+    /// The name of the row under the cursor.
+    pub fn current_name(&self) -> Option<String> {
+        self.listing.current().map(|entry| entry.name.clone())
+    }
+
     /// Whether the last navigation failed and left the pane where it was.
     pub fn went_wrong(&self) -> bool {
         self.error.is_some()

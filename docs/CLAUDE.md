@@ -55,8 +55,8 @@ cross-references instead of duplication.
   [archive/2026-08-28-phase3b-keys-and-keymap.md](plans/archive/2026-08-28-phase3b-keys-and-keymap.md)
   (inserted between design phases 3 and 4: the rest of Total Commander's
   selection keys, the pane commands, and a configurable keymap).
-  Also active:
-  [2026-08-28-phase3c-command-line.md](plans/2026-08-28-phase3c-command-line.md)
+  and
+  [archive/2026-08-28-phase3c-command-line.md](plans/archive/2026-08-28-phase3c-command-line.md)
   (the command line and `Ctrl+↓` for its history — `Ctrl+↑` needs tabs, which
   stay out of v1).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files

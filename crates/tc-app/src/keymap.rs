@@ -84,6 +84,8 @@ pub enum Action {
     SortBy(SortKey),
     /// Ctrl+↓ / Alt+F8 — the command lines that were run, to pick one from.
     CommandHistory,
+    /// Ctrl+Enter — put the name under the cursor into the command line.
+    InsertName,
     /// Alt+F1 — offer the left pane a list of places to go.
     SelectDriveLeft,
     /// Alt+F2 — the same for the right pane.
@@ -330,6 +332,18 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::SortBy(SortKey::Size),
     },
+    // The one shortcut that makes a command line in a file manager worth
+    // having: the name you are looking at, without typing it.
+    Binding {
+        key: Key::Return,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::InsertName,
+    },
+    Binding {
+        key: Key::KP_Enter,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::InsertName,
+    },
     // Total Commander's two ways to the same list, and both are muscle memory.
     Binding {
         key: Key::Down,
@@ -444,6 +458,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("sort_by_size", Action::SortBy(SortKey::Size)),
     ("sort_by_date", Action::SortBy(SortKey::Modified)),
     ("command_history", Action::CommandHistory),
+    ("insert_name", Action::InsertName),
     ("select_drive_left", Action::SelectDriveLeft),
     ("select_drive_right", Action::SelectDriveRight),
     ("clone_to_right", Action::CloneToRight),
@@ -739,6 +754,12 @@ mod tests {
                 Action::CommandHistory,
             ),
             (Key::F8, ModifierType::ALT_MASK, Action::CommandHistory),
+            (Key::Return, ModifierType::CONTROL_MASK, Action::InsertName),
+            (
+                Key::KP_Enter,
+                ModifierType::CONTROL_MASK,
+                Action::InsertName,
+            ),
             (Key::F1, ModifierType::ALT_MASK, Action::SelectDriveLeft),
             (Key::F2, ModifierType::ALT_MASK, Action::SelectDriveRight),
             (Key::Right, ModifierType::CONTROL_MASK, Action::CloneToRight),

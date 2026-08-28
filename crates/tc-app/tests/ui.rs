@@ -1563,6 +1563,71 @@ fn the_history_survives_a_restart() {
 }
 
 #[test]
+fn ctrl_enter_puts_the_name_under_the_cursor_into_the_command_line() {
+    // The one shortcut that makes a command line in a file manager worth
+    // having: act on the file you are looking at without typing its name.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — cursor on notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.type_text("cp");
+    app.key("ctrl+Return");
+    app.type_text(" copied.txt");
+    app.key("Return");
+
+    app.await_exists("src/copied.txt");
+    app.await_contents("src/copied.txt", SOURCE_TEXT);
+}
+
+#[test]
+fn an_inserted_name_is_a_separate_word() {
+    // The difference between `lsnotes.txt` and `ls notes.txt`. Having to
+    // reach for the space bar first would make the shortcut not worth using,
+    // and a missing space turns a command into a typo that runs.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.type_text("cat");
+    app.key("ctrl+Return");
+    app.type_text(" > out.txt");
+    app.key("Return");
+
+    // `cat notes.txt > out.txt` copies the file. Glued together it is not a
+    // command at all — and the redirection still creates `out.txt`, empty, so
+    // only the *contents* tell the two apart. Asserting that a window opened
+    // would not: a failing command opens one too.
+    app.await_contents("src/out.txt", SOURCE_TEXT);
+}
+
+#[test]
+fn the_history_is_reachable_while_a_command_is_being_typed() {
+    // The moment it is actually wanted. Typing moves the focus into the
+    // entry, and the shell otherwise keeps its hands off a text field — so
+    // without an exception for modified keys, Ctrl+Down would be unreachable
+    // at the only time anybody reaches for it.
+    let app = in_src_and_dst(arrange);
+    app.type_text("touch from-history");
+    app.key("Return");
+    app.await_exists("src/from-history");
+
+    // Start typing something else, then go looking for the old line.
+    app.type_text("touch abandoned");
+    app.key("ctrl+Down");
+    app.focus_dialog(DIALOG_HISTORY);
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_HISTORY);
+    app.type_text("-2");
+    app.key("Return");
+
+    app.await_exists("src/from-history-2");
+    app.settle();
+    assert!(
+        !app.path("src/abandoned").exists(),
+        "the half-typed line was run as well"
+    );
+}
+
+#[test]
 fn a_shortcut_this_program_does_not_have_types_nothing() {
     // Ctrl+J and Alt+J still report the letter J. Somebody reaching for a
     // shortcut meant a shortcut, and silently typing `j` into the command

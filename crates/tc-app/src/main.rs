@@ -245,6 +245,15 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::ClearFilter => shell.borrow_mut().active_pane().reset_filter(),
         Action::SortBy(key) => shell.borrow_mut().active_pane().sort_by(key),
         Action::CommandHistory => show_command_history(shell),
+        Action::InsertName => {
+            let mut state = shell.borrow_mut();
+            state.active_pane().adopt_selection();
+            // The row under the cursor, `..` included: `cd ..` is a perfectly
+            // good thing to build this way, and there is no harm in the name.
+            if let Some(name) = state.active_pane().current_name() {
+                state.command_line.append_word(&name);
+            }
+        }
         Action::SelectDriveLeft => start_drive_selection(shell, LEFT_PANE),
         Action::SelectDriveRight => start_drive_selection(shell, RIGHT_PANE),
         Action::CloneToRight => clone_pane(shell, RIGHT_PANE),
@@ -967,16 +976,37 @@ fn wire_filter_bar(shell: &Rc<RefCell<Shell>>, index: usize) {
     entry.add_controller(controller);
 }
 
+/// The widget that currently holds the keyboard focus, if any.
+fn focused(controller: &gtk::EventControllerKey) -> Option<gtk::Widget> {
+    controller
+        .widget()
+        .and_downcast::<gtk::Window>()
+        .and_then(|window| gtk::prelude::GtkWindowExt::focus(&window))
+}
+
 /// Whether the keyboard focus is inside a text field.
 ///
 /// `gtk::Text` is the widget inside a `gtk::Entry` that actually holds the
 /// focus, so that is what this looks for rather than the entry itself.
 fn typing(controller: &gtk::EventControllerKey) -> bool {
-    controller
-        .widget()
-        .and_downcast::<gtk::Window>()
-        .and_then(|window| gtk::prelude::GtkWindowExt::focus(&window))
-        .is_some_and(|focused| focused.is::<gtk::Text>())
+    focused(controller).is_some_and(|focused| focused.is::<gtk::Text>())
+}
+
+/// Whether the focus is in the command line rather than some other field.
+fn typing_a_command(controller: &gtk::EventControllerKey, shell: &Rc<RefCell<Shell>>) -> bool {
+    let Some(focused) = focused(controller) else {
+        return false;
+    };
+    // The `gtk::Text` inside the entry is what holds the focus, so the entry
+    // is its parent.
+    focused.parent().is_some_and(|entry| {
+        entry
+            == *shell
+                .borrow()
+                .command_line
+                .entry()
+                .upcast_ref::<gtk::Widget>()
+    })
 }
 
 /// Routes keystrokes through the keymap.
@@ -998,10 +1028,25 @@ fn key_controller(
         // filter's entry, where every letter would become a shell command and
         // Enter would open a directory instead of accepting the filter — so
         // while a text field has the focus, the shell keeps its hands off.
-        if typing(controller) {
+        // While a text field has the focus the shell keeps its hands off — with
+        // one exception, and it earns itself. The command line's own
+        // shortcuts (`Ctrl+Enter` to insert the name under the cursor,
+        // `Ctrl+↓` for the history) are for use *while typing a command*,
+        // which is exactly when the entry has the focus. Standing down there
+        // would make them unreachable at the only moment they are wanted.
+        //
+        // Only modified keys, and only ones the keymap claims: a plain letter
+        // is text, and `Ctrl+C` is the entry's own and stays hers.
+        let commanding = typing_a_command(controller, &shell)
+            && modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK);
+        if typing(controller) && !commanding {
             return glib::Propagation::Proceed;
         }
         let Some(action) = shell.borrow().keymap.action_for(key, modifiers) else {
+            // No guard for `commanding` here: it is only ever true for a Ctrl
+            // or Alt key, and those are the first thing the call below turns
+            // away. A probe deleting the guard changed nothing, which is how
+            // it was found.
             return typed_into_command_line(&shell, key, modifiers);
         };
         if action == Action::Quit {

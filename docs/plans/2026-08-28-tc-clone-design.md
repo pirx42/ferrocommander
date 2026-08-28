@@ -150,6 +150,13 @@ every phase ships its tests alongside the code (skill
    Subsystem docs: the marking half of [keymap.md](../keymap.md), the
    selection primitives in [listing.md](../listing.md), and the `[keys]` table
    in [config.md](../config.md).
+3c. **Command line** — an entry at the bottom running `$SHELL -c` in the
+   active pane's directory, with `Ctrl+↓` / `Alt+F8` for its history and
+   `Ctrl+Enter` to insert the name under the cursor. Not in the original
+   scope; added because `Ctrl+↓` could not be built without it. ✅
+   **Implemented**; plan archived at
+   [archive/2026-08-28-phase3c-command-line.md](archive/2026-08-28-phase3c-command-line.md),
+   subsystem doc [command-line.md](../command-line.md).
 4. **Viewer** — F3 text/hex viewer, F4 external editor hook. *(~1 day)*
 5. **Search & multi-rename** — Alt+F7 dialog + streaming results; Ctrl+M tool
    with table-driven rename-engine tests. *(~1–2 days)*

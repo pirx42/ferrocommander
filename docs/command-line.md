@@ -55,6 +55,26 @@ at all.
 The list is the same chooser the drive selector uses (`dialogs::choose_one`),
 which is why it was renamed from `choose_place` — it was never about places.
 
+## `Ctrl+Enter` inserts the name under the cursor
+
+The one shortcut that makes a command line in a file manager worth having:
+act on the file you are looking at without typing its name. Appended as a
+**separate word** — the difference between `lsnotes.txt` and `ls notes.txt` —
+unless the line already ends in a space, because reaching for the space bar
+first would make the shortcut not worth using.
+
+## The shell keeps its hands off a text field — with one exception
+
+While a text field has the focus the shell dispatches nothing, or every letter
+would become a command. The command line's own shortcuts are the exception,
+and they earn it: `Ctrl+Enter` and `Ctrl+↓` are for use **while typing a
+command**, which is exactly when the entry has the focus. Standing down there
+would make them unreachable at the only moment anybody wants them.
+
+Only modified keys, and only ones the keymap claims. A plain letter is text,
+and `Ctrl+C` is the entry's own — the keymap does not bind it, so it never
+leaves her.
+
 ## The prompt says which directory
 
 The line follows the active pane, so which directory it means changes under

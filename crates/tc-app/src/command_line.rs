@@ -128,6 +128,24 @@ impl CommandLine {
         self.entry.set_position(-1);
     }
 
+    /// Appends a word, with a space before it when there is already
+    /// something there.
+    ///
+    /// The space is the difference between `lstouch` and `ls touch`: a name
+    /// inserted after a command has to be an argument, and having to reach for
+    /// the space bar first would make the shortcut not worth using.
+    pub fn append_word(&self, word: &str) {
+        let current = self.text();
+        let separator = if current.is_empty() || current.ends_with(' ') {
+            ""
+        } else {
+            " "
+        };
+        self.set_text(&format!("{current}{separator}{word}"));
+        self.entry.grab_focus();
+        self.entry.set_position(-1);
+    }
+
     pub fn grab_focus(&self) {
         self.entry.grab_focus();
         self.entry.set_position(-1);
