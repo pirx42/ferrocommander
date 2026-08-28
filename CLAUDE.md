@@ -47,7 +47,7 @@ The project is in its build-up phase; this table grows with the code.
 | Widgets, row rendering, GTK version floor | [docs/ui-shell.md](docs/ui-shell.md) |
 | Key bindings, navigation actions | [docs/keymap.md](docs/keymap.md) |
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
-| What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 Phases (phase 1 done) |
+| What is being built right now | [docs/plans/2026-08-28-phase2-core-ops.md](docs/plans/2026-08-28-phase2-core-ops.md) (phase 2, drafted; phase 1 done) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
 | Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |

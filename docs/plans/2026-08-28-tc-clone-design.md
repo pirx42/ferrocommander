@@ -116,6 +116,8 @@ every phase ships its tests alongside the code (skill
    conflicts (background operations). Conservation-invariant tests for
    copy/move/delete (byte sums, file counts, rollback on cancel — skill
    [52](../skills/52-test-conservation-invariants.md)). *(~2–3 days)*
+   📋 **Planned** —
+   [2026-08-28-phase2-core-ops.md](2026-08-28-phase2-core-ops.md).
 3. **Polish browsing** — sorting, selection commands, Ctrl+S filter, drive/mount
    bar, hidden files, config persistence. *(~1–2 days)*
 4. **Viewer** — F3 text/hex viewer, F4 external editor hook. *(~1 day)*
