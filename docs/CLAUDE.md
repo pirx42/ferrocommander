@@ -66,6 +66,10 @@ cross-references instead of duplication.
   and
   [archive/2026-08-28-phase4-viewer.md](plans/archive/2026-08-28-phase4-viewer.md)
   (design phase 4: the F3 viewer and the F4 editor hook).
+  Also active:
+  [2026-08-28-phase5-search-and-rename.md](plans/2026-08-28-phase5-search-and-rename.md)
+  (design phase 5: Alt+F7 search with streaming results, and the Ctrl+M
+  multi-rename tool).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
   (trigger table in the root CLAUDE.md).
 
