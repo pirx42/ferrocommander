@@ -371,6 +371,59 @@ fn insert_marks_a_file_and_f5_copies_what_is_marked() {
 }
 
 #[test]
+fn space_marks_the_cursor_row_and_leaves_the_cursor_on_it() {
+    // Space is the other half of Insert: it marks without moving, which is
+    // how one file is picked out of a list. Marking then stepping *back* onto
+    // the row would prove nothing about the cursor, so this presses F5 with
+    // the cursor still where Space left it and checks that only the marked
+    // row travelled.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — Space on data.bin.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("space");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.settle();
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "the cursor moved off the row Space marked"
+    );
+}
+
+#[test]
+fn pressing_the_mark_key_twice_takes_the_mark_back() {
+    // A toggle, not a set. Space twice on one row leaves nothing marked, so
+    // F5 falls back to the row under the cursor — which is still that row,
+    // and nothing else comes with it.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt. Space twice on data.bin.
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["space", "space"]);
+    // Insert marks `nested` and steps down, so taking that mark back means
+    // stepping back up first — a second Insert where it landed would mark the
+    // next row instead. It lands back on data.bin, the row the fallback wants.
+    app.keys(&["Home", "Down", "Insert", "Up", "Insert"]);
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    // Nothing was marked, so the copy is the cursor row alone.
+    app.await_exists("dst/data.bin");
+    app.settle();
+    for stayed in ["dst/notes.txt", "dst/nested"] {
+        assert!(
+            !app.path(stayed).exists(),
+            "a mark that was taken back still travelled: {stayed}"
+        );
+    }
+}
+
+#[test]
 fn insert_steps_down_so_it_can_be_held() {
     // Two presses mark two consecutive rows, which is how a run of files gets
     // selected in Total Commander.

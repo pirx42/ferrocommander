@@ -547,6 +547,23 @@ mod selection {
     }
 
     #[test]
+    fn marking_the_same_row_twice_leaves_it_unmarked() {
+        // Space and Insert are a *toggle*, not a set: pressing either again
+        // on the same row is how a mark is taken back, and it is the only way
+        // to unmark one row out of many.
+        let mut listing = listing();
+        listing.focus_entry("b.txt");
+        let clear = marks(&listing);
+
+        listing.toggle_selected(listing.cursor());
+        assert!(listing.is_selected(listing.cursor()), "first press");
+
+        listing.toggle_selected(listing.cursor());
+        assert!(!listing.is_selected(listing.cursor()), "second press");
+        assert_eq!(marks(&listing), clear, "no other row moved");
+    }
+
+    #[test]
     fn the_parent_row_cannot_be_marked_by_any_route() {
         // It is a navigation control, and every operation would have to
         // special-case it afterwards.

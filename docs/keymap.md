@@ -47,6 +47,11 @@ files gets selected; `Space` leaves the cursor where it is, for picking one
 out of a list. The keypad keys have ordinary twins (`+`, `−`) because not
 every keyboard has a numeric block.
 
+**Both are a toggle, not a set**: pressing either again on a marked row takes
+the mark back, which is the only way to unmark one row out of many. Tested at
+both layers — `toggle_selected` twice in `tc-core`, and both keys twice
+through the real binary.
+
 Marking acts on what is **visible**: what the hidden-file flag or a filter is
 holding back is not something the user can see to have meant. Details of the
 model in [listing.md](listing.md).
