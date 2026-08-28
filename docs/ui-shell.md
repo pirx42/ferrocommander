@@ -200,6 +200,15 @@ Raising it is not free elsewhere: from 4.12 a `SignalListItemFactory` hands
 its callbacks a plain `Object` rather than a `ListItem`, because a factory
 can also produce header and cell items, so the column factory downcasts.
 
+## The drive selector is a window, not a popover
+
+`Alt+F1`/`Alt+F2` open a modal window listing the mount points, where Total
+Commander drops a list down under its drive button. The reason is testability:
+a GTK popover is not an X window the end-to-end harness can find by name or
+send key events to, and a chooser that can only be driven by hand is one that
+ships broken. Every other chooser in this shell is already a modal window, so
+this costs no new pattern either.
+
 ## Testing
 
 `row.rs` is unit-tested headlessly, including the date formatter, which is

@@ -13,6 +13,7 @@ mod harness;
 use std::path::Path;
 
 use harness::App;
+use tc_core::vfs::{LocalFs, VfsPath};
 
 /// Contents of the file most tests move around, so an assertion can tell the
 /// copy apart from whatever was at the destination.
@@ -31,6 +32,7 @@ const DIALOG_DELETE: &str = "Confirm delete";
 const DIALOG_CONFLICT: &str = "Target already exists";
 const DIALOG_FAILURES: &str = "Some items were not processed";
 const DIALOG_PATTERN: &str = "Select by pattern";
+const DIALOG_DRIVES: &str = "Drives";
 
 /// Where the settings file lands inside a test's private home. Spelled out
 /// rather than read from `tc-core`, for the same reason the dialog titles
@@ -699,6 +701,107 @@ fn shift_num_star_takes_the_directories_with_it() {
     assert!(
         !app.path("dst/nested").exists(),
         "the directory kept its mark through an inversion that includes them"
+    );
+}
+
+/// Where the app recorded each pane, read back the way the app wrote it.
+///
+/// The pane directory is the one part of a drive change that is observable
+/// from outside: the destination is a real mount point, and a test must not
+/// go writing files into `/` to prove it got there.
+fn recorded_directories(home: &Path) -> Vec<String> {
+    let config = VfsPath::new(home.join(".config").to_str().unwrap());
+    let (settings, complaint) = tc_core::config::load(&LocalFs, &config);
+    assert_eq!(complaint, None, "the settings could not be read back");
+    (0..2).map(|index| settings.pane(index).directory).collect()
+}
+
+/// The place the drive selector offers at `index`, in the order it lists
+/// them — the same call the app itself makes.
+fn drive_at(index: usize) -> String {
+    tc_core::vfs::mount_points()
+        .get(index)
+        .unwrap_or_else(|| panic!("the machine has no mount point {index}"))
+        .path
+        .as_str()
+        .to_string()
+}
+
+#[test]
+fn alt_f1_sends_the_left_pane_to_a_drive() {
+    let app = in_src_and_dst(arrange);
+
+    app.key("alt+F1");
+    app.focus_dialog(DIALOG_DRIVES);
+    // The list opens focused with the first row selected, so Enter takes it
+    // without a click first.
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_DRIVES);
+
+    app.await_mentions(SETTINGS_FILE, "directory");
+    let home = app.kill();
+    assert_eq!(recorded_directories(home.path())[0], drive_at(0));
+}
+
+#[test]
+fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
+    // Absolute, as in Total Commander: Alt+F2 names the right pane even when
+    // the keyboard is in the left one. This is the opposite rule to
+    // Ctrl+arrow, and pressing it from the "wrong" side is the only way to
+    // tell the two apart.
+    let app = in_src_and_dst(arrange);
+    // The left pane has the keyboard after `in_src_and_dst`.
+    app.key("alt+F2");
+    app.focus_dialog(DIALOG_DRIVES);
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_DRIVES);
+
+    app.await_mentions(SETTINGS_FILE, "directory");
+    let home = app.kill();
+    let recorded = recorded_directories(home.path());
+    assert_eq!(recorded[1], drive_at(0), "the right pane did not move");
+    assert!(
+        recorded[0].ends_with("/src"),
+        "the left pane moved too: {}",
+        recorded[0]
+    );
+}
+
+#[test]
+fn the_drive_list_opens_focused_so_the_arrows_work_without_a_click() {
+    // What the explicit focus and first-row selection are *for*. Enter alone
+    // would land on the first row anyway, so only reaching the second one
+    // says whether the list has the keyboard.
+    let app = in_src_and_dst(arrange);
+
+    app.key("alt+F1");
+    app.focus_dialog(DIALOG_DRIVES);
+    app.key("Down");
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_DRIVES);
+
+    app.await_mentions(SETTINGS_FILE, "directory");
+    let home = app.kill();
+    assert_eq!(recorded_directories(home.path())[0], drive_at(1));
+}
+
+#[test]
+fn escape_leaves_the_drive_selector_without_going_anywhere() {
+    // A chooser with no way out but the mouse is a trap in a keyboard-first
+    // program, and this one has no Cancel button to fall back on.
+    let app = in_src_and_dst(arrange);
+
+    app.key("alt+F1");
+    app.focus_dialog(DIALOG_DRIVES);
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_DRIVES);
+
+    app.focus_main();
+    app.await_mentions(SETTINGS_FILE, "directory");
+    let home = app.kill();
+    assert!(
+        recorded_directories(home.path())[0].ends_with("/src"),
+        "escaping the drive list still moved the pane"
     );
 }
 

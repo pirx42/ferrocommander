@@ -30,7 +30,8 @@ use constants::{
     PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
     PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY,
     SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
-    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_UNMARK_PATTERN,
+    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_DRIVES, TITLE_MARK_PATTERN, TITLE_MOVE,
+    TITLE_UNMARK_PATTERN,
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
@@ -209,6 +210,8 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         }
         Action::ClearFilter => shell.borrow_mut().active_pane().reset_filter(),
         Action::SortBy(key) => shell.borrow_mut().active_pane().sort_by(key),
+        Action::SelectDriveLeft => start_drive_selection(shell, LEFT_PANE),
+        Action::SelectDriveRight => start_drive_selection(shell, RIGHT_PANE),
         Action::CloneToRight => clone_pane(shell, RIGHT_PANE),
         Action::CloneToLeft => clone_pane(shell, LEFT_PANE),
         Action::ExchangePanes => {
@@ -227,6 +230,31 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     // One place, rather than at the end of every arm: a keystroke that
     // changed nothing worth saving costs a comparison and no more.
     remember(shell);
+}
+
+/// Alt+F1 / Alt+F2: offer `target` a list of places to go.
+///
+/// The pane is named by the key, not by which one has the keyboard — the F-key
+/// number *is* the pane number, exactly as in Total Commander. That is the
+/// opposite rule to `Ctrl+←/→` above, and deliberately so: an arrow has a
+/// direction to be relative to and a number does not.
+fn start_drive_selection(shell: &Rc<RefCell<Shell>>, target: usize) {
+    let Some(window) = shell.borrow().window.upgrade() else {
+        return;
+    };
+    let places: Vec<(String, String)> = tc_core::vfs::mount_points()
+        .into_iter()
+        .map(|mount| (mount.label, mount.path.as_str().to_string()))
+        .collect();
+
+    let shell = shell.clone();
+    dialogs::choose_place(&window, TITLE_DRIVES, &places, move |path| {
+        shell.borrow_mut().panes[target].go_to(VfsPath::new(&path));
+        // The pane moved, which is worth remembering — and the keystroke that
+        // opened the dialog returned long before this answer arrived, so the
+        // one call at the end of `dispatch` has already been and gone.
+        remember(&shell);
+    });
 }
 
 /// Ctrl+← / Ctrl+→: the active pane's directory, shown in `target`.

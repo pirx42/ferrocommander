@@ -142,6 +142,10 @@ pub const STYLESHEET: &str = "
 .drive-bar {
     padding: 2px 4px;
 }
+.dim {
+    opacity: 0.55;
+    font-family: monospace;
+}
 .drive-bar button {
     padding: 1px 8px;
     min-height: 0;
@@ -188,6 +192,10 @@ pub const CLASS_MARKED: &str = "marked";
 pub const CLASS_STATUS_LINE: &str = "status-line";
 pub const CLASS_FILTER_BAR: &str = "filter-bar";
 pub const CLASS_DRIVE_BAR: &str = "drive-bar";
+
+/// Secondary text that should not compete with what it sits beside — the
+/// mount path behind a drive's label.
+pub const CLASS_DIM: &str = "dim";
 
 /// What the quick-filter field says when it is empty.
 pub const FILTER_PLACEHOLDER: &str = "Filter\u{2026}  (Esc to clear)";
@@ -240,6 +248,9 @@ pub const CONFLICT_PROMPT: &str = "{name} already exists in the target.";
 pub const TITLE_PROGRESS: &str = "Working";
 pub const TITLE_FAILURES: &str = "Some items were not processed";
 
+/// Title of the drive selector Alt+F1 / Alt+F2 open.
+pub const TITLE_DRIVES: &str = "Drives";
+
 pub const BUTTON_CLOSE: &str = "Close";
 
 /// Shown while a job is still scanning and no total exists yet.
@@ -277,3 +288,8 @@ pub const FAILURES_MORE: &str = "\u{2026} and {count} more";
 
 /// Height the failure list grows to before it starts scrolling.
 pub const FAILURE_LIST_HEIGHT: i32 = 240;
+
+/// How tall the drive list may grow before it scrolls. Like the failure list
+/// it grows with its contents, so two mount points do not open a window mostly
+/// full of nothing.
+pub const DRIVE_LIST_HEIGHT: i32 = 320;

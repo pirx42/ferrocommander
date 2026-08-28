@@ -18,9 +18,9 @@ use tc_core::ops::{Answer, CancelToken, Resolution};
 
 use crate::constants::{
     BUTTON_ABORT, BUTTON_CANCEL, BUTTON_CLOSE, BUTTON_KEEP_BOTH, BUTTON_OK, BUTTON_OVERWRITE,
-    BUTTON_SKIP, CHECK_APPLY_TO_ALL, CLASS_DESTRUCTIVE, CLASS_SUGGESTED, DIALOG_MARGIN,
-    DIALOG_SPACING, DIALOG_WIDTH, ENTRY_WIDTH_CHARS, FAILURE_LIST_HEIGHT, TITLE_FAILURES,
-    TITLE_PROGRESS,
+    BUTTON_SKIP, CHECK_APPLY_TO_ALL, CLASS_DESTRUCTIVE, CLASS_DIM, CLASS_SUGGESTED, DIALOG_MARGIN,
+    DIALOG_SPACING, DIALOG_WIDTH, DRIVE_LIST_HEIGHT, ENTRY_WIDTH_CHARS, FAILURE_LIST_HEIGHT,
+    TITLE_FAILURES, TITLE_PROGRESS, XALIGN_LEFT,
 };
 use crate::progress::{failure_lines, Meter};
 
@@ -133,6 +133,82 @@ pub fn ask_text(
     // select-all to reach for first. Every one of these dialogs offers a
     // starting point the user is as likely to overwrite as to accept.
     entry.select_region(0, -1);
+}
+
+/// Offers a list of places to go, and calls back with the one chosen.
+///
+/// Total Commander's `Alt+F1`/`Alt+F2`. Its version is a dropdown under the
+/// drive button; this is a modal window like every other chooser here, for a
+/// reason worth writing down: a GTK popover is not a window the end-to-end
+/// suite can find or send keys to, and a drive selector that cannot be tested
+/// through a real key press is exactly the kind of thing that ships broken
+/// ([`docs/ui-shell.md`]).
+///
+/// Keyboard-first, since that is the whole point of having the key at all:
+/// the list opens focused with the first row selected, the arrows walk it,
+/// Enter takes it and Escape leaves without going anywhere.
+pub fn choose_place(
+    parent: &impl IsA<gtk::Window>,
+    title: &str,
+    places: &[(String, String)],
+    accept: impl Fn(String) + 'static,
+) {
+    let (window, content) = shell(parent, title);
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Browse);
+    for (label, detail) in places {
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(DIALOG_SPACING)
+            .build();
+        row.append(
+            &gtk::Label::builder()
+                .label(label)
+                .xalign(XALIGN_LEFT)
+                .build(),
+        );
+        // The path beside the label, dimmed: two mounts can share a last
+        // component, and then the label alone does not say which is which.
+        let path = gtk::Label::builder()
+            .label(detail)
+            .xalign(XALIGN_LEFT)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::Start)
+            .build();
+        path.add_css_class(CLASS_DIM);
+        row.append(&path);
+        list.append(&row);
+    }
+
+    let scroller = gtk::ScrolledWindow::builder()
+        .child(&list)
+        .propagate_natural_height(true)
+        .max_content_height(DRIVE_LIST_HEIGHT)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .build();
+    content.append(&scroller);
+
+    // By index rather than by widget: the row carries a label, and two mounts
+    // may share one. The index is what actually identifies the choice.
+    let chosen: Vec<String> = places.iter().map(|(_, path)| path.clone()).collect();
+    let closing = window.clone();
+    list.connect_row_activated(move |_, row| {
+        let Some(path) = chosen.get(row.index() as usize).cloned() else {
+            return;
+        };
+        closing.close();
+        accept(path);
+    });
+
+    window.present();
+    // Nothing selects or focuses the first row here, because GTK already
+    // does: the list is the window's first focusable child, and
+    // `SelectionMode::Browse` selects whatever the focus lands on. Code to
+    // repeat that was written first and removed when a probe showed the
+    // tests could not tell the difference. A UI test presses Down and Enter
+    // and has to reach the *second* place, so if a GTK release ever stops
+    // doing it, that fails rather than the first Enter quietly dying.
 }
 
 /// Asks a yes/no question.

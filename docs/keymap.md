@@ -29,6 +29,7 @@
 | `Num /` | The selection from before the last operation |
 | `Ctrl+A`, `Ctrl+Num +` | Mark everything visible |
 | `Ctrl+Num −` | Unmark everything visible |
+| `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
 | `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
 | `Ctrl+U` | Exchange the two panes |
 | `Ctrl+F3` … `Ctrl+F6` | Sort by name / ext / date / size |
@@ -108,6 +109,24 @@ entry, and copying or deleting "the parent directory" from inside it is never
 what the user means. It cannot be marked, and with nothing else marked, F5–F8
 on it do nothing. A mark elsewhere in the pane still counts — the `..` rule is
 about the fallback, not about the marks.
+
+## The drive selector
+
+`Alt+F1` and `Alt+F2` open a list of mount points and send a pane to the one
+chosen. The list opens focused on its first row, so the arrows walk it, Enter
+takes it and Escape leaves without going anywhere — there is no Cancel button
+to fall back on, which makes Escape load-bearing and it has a test.
+
+**The F-key number *is* the pane number**, exactly as in Total Commander:
+`Alt+F1` is the left pane whichever one has the keyboard. That is the opposite
+rule to `Ctrl+←/→` below, and deliberately — an arrow has a direction to be
+relative to, and a number does not. The test presses `Alt+F2` from the left
+pane, since that is the only way to tell the two rules apart.
+
+**It is a modal window, where TC has a dropdown.** A GTK popover is not a
+window the end-to-end suite can find or send keys to, and a drive selector
+that cannot be tested through a real key press is the kind of thing that ships
+broken. The drive bar's buttons still do the same job with the mouse.
 
 ## The two-pane commands
 
@@ -306,6 +325,8 @@ how the harness closes the app.
 
 - `Backspace`, and `Ctrl+F3`/`F4`/`F5` — covered headlessly, and reaching them
   through a real window would say nothing the unit tests do not.
+- The **second** drive key: `Alt+F1` and `Alt+F2` differ only in which pane
+  they name, and the test that presses `Alt+F2` covers exactly that.
 - The **aliases**: `Ctrl+Num +` for `Ctrl+A`, keypad `Enter` for `Enter`,
   `Delete` for `F8`. They resolve to the same action as a key that *is*
   pressed for real, so the second press only tests the lookup, which the

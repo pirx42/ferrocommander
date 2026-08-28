@@ -82,6 +82,10 @@ pub enum Action {
     /// Ctrl+F3…Ctrl+F6 — sort by a column, or flip it if it is already the
     /// one in force.
     SortBy(SortKey),
+    /// Alt+F1 — offer the left pane a list of places to go.
+    SelectDriveLeft,
+    /// Alt+F2 — the same for the right pane.
+    SelectDriveRight,
     /// Ctrl+→ — show the left pane's directory in the right one.
     CloneToRight,
     /// Ctrl+← — the other way round.
@@ -324,6 +328,19 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::SortBy(SortKey::Size),
     },
+    // Absolute, as in Total Commander: the F-key number *is* the pane number,
+    // so which pane has the keyboard makes no difference. Unlike Ctrl+arrow
+    // below, there is nothing relative for these to be consistent with.
+    Binding {
+        key: Key::F1,
+        modifiers: ModifierType::ALT_MASK,
+        action: Action::SelectDriveLeft,
+    },
+    Binding {
+        key: Key::F2,
+        modifiers: ModifierType::ALT_MASK,
+        action: Action::SelectDriveRight,
+    },
     // Relative to the active pane, as in Total Commander: the arrow points at
     // the pane being *written*, so pressing it toward the pane the keyboard is
     // already in does nothing rather than guessing.
@@ -413,6 +430,8 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("sort_by_ext", Action::SortBy(SortKey::Ext)),
     ("sort_by_size", Action::SortBy(SortKey::Size)),
     ("sort_by_date", Action::SortBy(SortKey::Modified)),
+    ("select_drive_left", Action::SelectDriveLeft),
+    ("select_drive_right", Action::SelectDriveRight),
     ("clone_to_right", Action::CloneToRight),
     ("clone_to_left", Action::CloneToLeft),
     ("exchange_panes", Action::ExchangePanes),
@@ -700,6 +719,8 @@ mod tests {
                 ModifierType::CONTROL_MASK,
                 Action::SortBy(SortKey::Size),
             ),
+            (Key::F1, ModifierType::ALT_MASK, Action::SelectDriveLeft),
+            (Key::F2, ModifierType::ALT_MASK, Action::SelectDriveRight),
             (Key::Right, ModifierType::CONTROL_MASK, Action::CloneToRight),
             (Key::Left, ModifierType::CONTROL_MASK, Action::CloneToLeft),
             (Key::u, ModifierType::CONTROL_MASK, Action::ExchangePanes),
