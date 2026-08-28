@@ -12,6 +12,18 @@ supported build targets; platform differences are confined to dedicated
 **Language:** everything in this repository is English — docs, code,
 comments, commit messages.
 
+## Prime directive: speed (owner spec, 2026-08-28)
+
+The app must be fast. Where a decision trades speed against something else —
+a prettier surface, a larger feature set, a tidier-looking abstraction —
+**speed wins**. The audience is hard-core Total Commander users, and what
+they come for is a file manager that never makes them wait.
+
+A performance claim here carries a measurement, and an optimisation carries a
+test that pins the property rather than the timing. Rules, measured baseline
+and the parts that are deliberately still slow:
+[docs/performance.md](docs/performance.md).
+
 ## Build & Run
 
 ```bash
@@ -60,6 +72,7 @@ The project is in its build-up phase; this table grows with the code.
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
 | What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 (phases 1 and 2 done; phase 3 next) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
+| How fast things are, and what is still slow | [docs/performance.md](docs/performance.md) |
 | Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
 | Verify a keystroke really works end to end | `crates/tc-app/tests/ui.rs` (see [docs/ui-shell.md](docs/ui-shell.md)) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |
@@ -126,6 +139,7 @@ files.
 | Building an expensive artifact yourself (fixture/setup/data) | [51](docs/skills/51-ask-before-expensive-setup.md) first ask whether the user can prepare it faster |
 | New plan doc | [10](docs/skills/10-plan-lifecycle.md) `YYYY-MM-DD-`, status, archive + [43](docs/skills/43-coverage-before-implementation.md) phase 0 coverage pre-check + [45](docs/skills/45-calibrate-effort-estimates.md) apply effort factor |
 | Major dependency upgrade | [12](docs/skills/12-major-upgrades-isolated.md) own branch/commit |
+| Decision trades speed for polish, features or tidiness | [docs/performance.md](docs/performance.md) — speed wins, with a measurement |
 | Refactor with a "quick hack vs clean" choice | [41](docs/skills/41-more-correct-variant.md) the more correct variant |
 | New file vs extending an existing one | [13](docs/skills/13-prefer-existing-files.md) edit existing |
 | Number/string hardcoded in code | [16](docs/skills/16-no-magic-values.md) named constant + [17](docs/skills/17-centralize-constants.md) centralize |

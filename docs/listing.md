@@ -83,3 +83,12 @@ listing belongs would strand the user somewhere they cannot navigate out of,
 so the pane lands on the nearest surviving ancestor instead. It always returns
 a listing — the root is the last stop, and a root that cannot be read yields
 an empty one rather than no pane at all.
+
+## Sorting is the expensive part
+
+Ordering a directory runs the name comparison O(n log n) times — about
+780 000 times for 50 000 entries — which makes it, not the disk, the
+bottleneck in opening a large directory. It takes an ASCII path where that is
+provably equivalent to comparing characters, which is what brought sorting
+50 000 entries down from 153 ms to 22 ms. See
+[performance.md](performance.md).

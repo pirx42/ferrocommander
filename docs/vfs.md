@@ -90,6 +90,12 @@ type has no error case and needs no `Result`.
   `.gitignore` is an ordinary visible file on Windows, matching Total
   Commander. Filtering on the flag stays platform-agnostic.
 
+`read_dir` stats every entry relative to the directory it already has open
+(`DirEntry::metadata`) rather than re-resolving each full path, which is the
+same answer for a third less work — see [performance.md](performance.md). A
+path is built only for the entries that turn out to be symlinks, whose target
+needs a second look.
+
 `read_dir` returns entries **unsorted** — ordering is the listing layer's
 decision — and never filters. Hidden entries are listed and flagged.
 

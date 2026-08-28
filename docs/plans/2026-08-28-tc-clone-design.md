@@ -32,6 +32,14 @@ A keyboard-first, dual-pane orthodox file manager for Linux, built in **Rust + G
 - **Simple internal viewer (F3)** — text with encoding detection + hex mode; F4
   launches a configurable external editor.
 
+### Non-functional requirement: speed (owner spec, 2026-08-28)
+
+The app must be fast, and where a decision trades speed against a prettier
+surface, a larger feature set or a tidier abstraction, speed wins — the
+audience is hard-core Total Commander users. This outranks the scope list
+above: a feature that cannot be made fast is a feature that waits.
+Details and the measured baseline: [performance.md](../performance.md).
+
 ### Explicitly out of v1
 
 Tabs, FTP/SFTP, plugins, directory sync, internal editor, thumbnails view,

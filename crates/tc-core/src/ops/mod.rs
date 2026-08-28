@@ -171,8 +171,17 @@ impl Run<'_> {
                 sources,
                 destination,
             } => {
-                let plan =
-                    plan::plan_transfer(self.source_fs, sources, |source| destination.of(source));
+                // Try the rename before scanning anything. A rename moves a
+                // whole tree in one call, so walking that tree first would be
+                // the entire cost of an operation that is otherwise instant —
+                // and on a large tree the walk is what the user would feel.
+                let remaining = self.rename_what_it_can(sources, destination);
+                if remaining.is_empty() {
+                    return;
+                }
+                let plan = plan::plan_transfer(self.source_fs, &remaining, |source| {
+                    destination.of(source)
+                });
                 self.transfer(plan, true);
             }
             Job::Delete { paths, mode } => {
@@ -227,12 +236,44 @@ impl Run<'_> {
         }
     }
 
+    /// Moves what a single `rename` can move, and reports what is left.
+    ///
+    /// Only where the destination is free: a rename cannot merge into an
+    /// existing directory, and it would silently replace an existing file
+    /// without asking. Everything it declines — an occupied destination, or a
+    /// [`VfsError::CrossDevice`] that says "possible, just not in one
+    /// step" — comes back to be scanned and copied.
+    fn rename_what_it_can(
+        &mut self,
+        sources: &[VfsPath],
+        destination: &Destination,
+    ) -> Vec<VfsPath> {
+        let mut remaining = Vec::new();
+        for source in sources {
+            if self.stopped() {
+                break;
+            }
+            let target = destination.of(source);
+            if self.target_fs.stat(&target) != Err(VfsError::NotFound) {
+                remaining.push(source.clone());
+                continue;
+            }
+            self.progress.emit(Progress::Started {
+                path: source.clone(),
+            });
+            match self.target_fs.rename(source, &target) {
+                Ok(()) => self.progress.emit(Progress::Finished {
+                    path: source.clone(),
+                }),
+                Err(VfsError::CrossDevice) => remaining.push(source.clone()),
+                Err(error) => self.fail(source, error),
+            }
+        }
+        remaining
+    }
+
     /// One top-level source, copied or moved.
     fn item(&mut self, item: &Item, moving: bool) -> Flow {
-        if moving && self.renamed_whole(item) {
-            return Flow::Continue;
-        }
-
         let failures_before = self.failures.len();
         let skips_before = self.skips;
         // What the scan could not turn into a task is reported here rather
@@ -261,36 +302,6 @@ impl Run<'_> {
             }
         }
         Flow::Continue
-    }
-
-    /// Tries to move a whole tree with one `rename`, returning whether the
-    /// item is now dealt with.
-    ///
-    /// Only attempted when the destination is free: a rename cannot merge
-    /// into an existing directory, and it would silently replace an existing
-    /// file without asking.
-    fn renamed_whole(&mut self, item: &Item) -> bool {
-        if self.target_fs.stat(&item.target) != Err(VfsError::NotFound) {
-            return false;
-        }
-        self.progress.emit(Progress::Started {
-            path: item.source.clone(),
-        });
-        match self.target_fs.rename(&item.source, &item.target) {
-            Ok(()) => {
-                self.progress.emit(Progress::Advanced { bytes: item.bytes });
-                self.progress.emit(Progress::Finished {
-                    path: item.source.clone(),
-                });
-                true
-            }
-            // The one error that means "possible, just not in one step".
-            Err(VfsError::CrossDevice) => false,
-            Err(error) => {
-                self.fail(&item.source, error);
-                true
-            }
-        }
     }
 
     fn task(&mut self, task: &Task) -> Flow {

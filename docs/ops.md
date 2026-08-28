@@ -40,10 +40,14 @@ Tasks are ordered so that they can simply be run in sequence: `MakeDir` before
 the contents that go into it, and removals children-before-parents, so
 `remove_dir` always meets an empty directory.
 
-**Grouping by item is what makes a fast move possible.** A `Move` whose
-destination is free tries a single `rename` for the whole tree; when that
-works, the item's tasks are skipped and its bytes are counted as done in one
-event.
+**A move tries the rename before it scans anything.** A rename moves a whole
+tree in one syscall, so walking that tree first would be the entire cost of an
+operation that is otherwise instant — 57 ms against 6 µs on 20 000 files.
+Only what the rename declines is scanned: an occupied destination, where the
+files inside have to meet each other one at a time, or a `CrossDevice` error,
+which means "possible, just not in one step". A test pins it by asserting
+that such a move performs no directory walk at all; see
+[performance.md](performance.md).
 
 ## Progress
 
