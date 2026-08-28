@@ -30,6 +30,7 @@ const DIALOG_NEW_DIR: &str = "New directory";
 const DIALOG_DELETE: &str = "Confirm delete";
 const DIALOG_CONFLICT: &str = "Target already exists";
 const DIALOG_FAILURES: &str = "Some items were not processed";
+const DIALOG_PATTERN: &str = "Select by pattern";
 
 /// A home with `src/` to work in and `dst/` to land in.
 fn arrange(home: &Path) {
@@ -342,4 +343,81 @@ fn f5_with_both_panes_in_one_directory_will_not_copy_a_file_onto_itself() {
     // The refusal has to reach the user, not just the log.
     app.focus_dialog(DIALOG_FAILURES);
     app.await_contents("precious.txt", SOURCE_TEXT);
+}
+
+#[test]
+fn insert_marks_a_file_and_f5_copies_what_is_marked() {
+    // The whole point of marks: press F5 once, move several files. The cursor
+    // is deliberately left somewhere else afterwards, so a copy of the cursor
+    // row rather than the marks would produce the wrong file.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — mark data.bin, then step past it.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Insert");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.settle();
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "the cursor row was copied instead of the mark"
+    );
+}
+
+#[test]
+fn insert_steps_down_so_it_can_be_held() {
+    // Two presses mark two consecutive rows, which is how a run of files gets
+    // selected in Total Commander.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+}
+
+#[test]
+fn ctrl_a_then_f8_deletes_everything_in_the_pane() {
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+a");
+    app.key("F8");
+    app.focus_dialog(DIALOG_DELETE);
+    app.key("space");
+
+    app.await_gone("src/notes.txt");
+    app.await_gone("src/data.bin");
+    app.await_gone("src/nested");
+    // The directory the pane is standing in is not one of its own entries.
+    assert!(app.path("src").exists());
+}
+
+#[test]
+fn a_wildcard_marks_only_what_it_matches() {
+    let app = in_src_and_dst(arrange);
+
+    app.key("KP_Add");
+    app.focus_dialog(DIALOG_PATTERN);
+    app.key("ctrl+a");
+    app.type_text("*.txt");
+    app.key("Return");
+
+    app.focus_main();
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "the pattern marked a file it should not have"
+    );
 }

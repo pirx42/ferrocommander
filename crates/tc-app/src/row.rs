@@ -20,11 +20,13 @@ pub struct Row {
     pub size: String,
     pub modified: String,
     pub is_dir: bool,
+    /// Whether the user has marked this row. Rendered, not decided, here.
+    pub selected: bool,
 }
 
 impl Row {
     /// Renders an entry. `is_parent` marks the synthetic `..` row.
-    pub fn from_entry(entry: &Entry, is_parent: bool) -> Self {
+    pub fn from_entry(entry: &Entry, is_parent: bool, selected: bool) -> Self {
         // A directory called `archive.tar.gz` is not a `.gz` file, so only
         // files get their name split across the name and ext columns.
         let (name, ext) = if entry.is_dir() {
@@ -49,6 +51,7 @@ impl Row {
                 format_modified(entry.modified)
             },
             is_dir: entry.is_dir(),
+            selected,
         }
     }
 }
@@ -117,28 +120,31 @@ mod tests {
 
     #[test]
     fn a_file_name_is_split_across_the_name_and_ext_columns() {
-        let row = Row::from_entry(&file("report.txt", 0), false);
+        let row = Row::from_entry(&file("report.txt", 0), false, false);
         assert_eq!(row.name, "report");
         assert_eq!(row.ext, "txt");
     }
 
     #[test]
     fn a_directory_keeps_its_whole_name_even_when_it_looks_like_a_file() {
-        let row = Row::from_entry(&directory("archive.tar.gz"), false);
+        let row = Row::from_entry(&directory("archive.tar.gz"), false, false);
         assert_eq!(row.name, "archive.tar.gz");
         assert_eq!(row.ext, "");
     }
 
     #[test]
     fn directories_show_a_dir_marker_instead_of_a_byte_count() {
-        assert_eq!(Row::from_entry(&directory("sub"), false).size, "<DIR>");
+        assert_eq!(
+            Row::from_entry(&directory("sub"), false, false).size,
+            "<DIR>"
+        );
     }
 
     #[test]
     fn a_symlink_to_a_directory_is_rendered_as_a_directory() {
         let mut entry = file("link", 4096);
         entry.kind = EntryKind::Symlink(SymlinkTarget::Dir);
-        let row = Row::from_entry(&entry, false);
+        let row = Row::from_entry(&entry, false, false);
         assert_eq!(row.size, "<DIR>");
         assert!(row.is_dir);
     }
@@ -155,13 +161,16 @@ mod tests {
             (u64::MAX, "18 446 744 073 709 551 615"),
         ];
         for (size, expected) in cases {
-            assert_eq!(Row::from_entry(&file("f", size), false).size, expected);
+            assert_eq!(
+                Row::from_entry(&file("f", size), false, false).size,
+                expected
+            );
         }
     }
 
     #[test]
     fn the_parent_row_shows_no_timestamp() {
-        let row = Row::from_entry(&directory(".."), true);
+        let row = Row::from_entry(&directory(".."), true, false);
         assert_eq!(row.name, "..");
         assert_eq!(row.modified, "");
         assert_eq!(row.size, "<DIR>");
@@ -180,6 +189,27 @@ mod tests {
     fn an_ordinary_file_gets_a_timestamp() {
         let mut entry = file("f", 1);
         entry.modified = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
-        assert!(!Row::from_entry(&entry, false).modified.is_empty());
+        assert!(!Row::from_entry(&entry, false, false).modified.is_empty());
+    }
+
+    #[test]
+    fn a_row_carries_whether_it_is_marked() {
+        // Rendered here, decided in the listing: the cell factory reads this
+        // to colour the row, and nothing else in the shell knows the rule.
+        let entry = file("report.txt", 10);
+        assert!(!Row::from_entry(&entry, false, false).selected);
+        assert!(Row::from_entry(&entry, false, true).selected);
+    }
+
+    #[test]
+    fn marking_changes_nothing_a_column_shows() {
+        let entry = file("report.txt", 1234);
+        let plain = Row::from_entry(&entry, false, false);
+        let marked = Row::from_entry(&entry, false, true);
+
+        assert_eq!(marked.name, plain.name);
+        assert_eq!(marked.ext, plain.ext);
+        assert_eq!(marked.size, plain.size);
+        assert_eq!(marked.modified, plain.modified);
     }
 }

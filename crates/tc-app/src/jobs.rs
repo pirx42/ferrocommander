@@ -11,20 +11,27 @@ use tc_core::vfs::VfsPath;
 
 use crate::constants::{
     DELETE_PROMPT_PERMANENT, DELETE_PROMPT_TRASH, KIND_DIRECTORY, KIND_FILE, QUOTE_CLOSE,
-    QUOTE_OPEN,
+    QUOTE_OPEN, SELECTION_STATUS, SUBJECT_MANY,
 };
+use crate::progress::human_bytes;
 
-/// The path an operation would act on, or `None` when the cursor is
-/// somewhere no operation makes sense.
+/// What an operation would act on: everything marked, or the row under the
+/// cursor when nothing is marked.
 ///
-/// The `..` row is the case that matters: it is a navigation control, not an
-/// entry, and copying or deleting "the parent directory" from inside it is
-/// never what the user means.
-pub fn operable(listing: &Listing) -> Option<VfsPath> {
-    if listing.is_parent(listing.cursor()) {
-        return None;
+/// The fallback is what makes the marks optional rather than a mode — press
+/// F5 on a file and it copies, mark ten and it copies ten, and there is no
+/// third thing to learn. Empty when neither applies, which is the `..` row on
+/// its own: a navigation control, not an entry, and copying or deleting "the
+/// parent directory" from inside it is never what the user means.
+pub fn sources(listing: &Listing) -> Vec<VfsPath> {
+    let marked = listing.selected_paths();
+    if !marked.is_empty() {
+        return marked;
     }
-    listing.current_path()
+    if listing.is_parent(listing.cursor()) {
+        return Vec::new();
+    }
+    listing.current_path().into_iter().collect()
 }
 
 /// How the F5/F6 target field is prefilled.
@@ -60,20 +67,49 @@ pub fn parse_destination(input: &str, source_dir: &VfsPath) -> Option<Destinatio
     Some(Destination::Exact(source_dir.child(trimmed)))
 }
 
+/// What the delete confirmation calls the things at stake.
+///
+/// One entry is named, because the name is the thing worth checking. Several
+/// are counted, because a list of forty names is not a question anyone reads.
+pub fn subject(listing: &Listing, count: usize) -> String {
+    if count == 1 {
+        let named = listing
+            .selected_paths()
+            .first()
+            .and_then(|path| path.file_name().map(str::to_string))
+            .or_else(|| listing.current().map(|entry| entry.name.clone()))
+            .unwrap_or_default();
+        let kind = match listing.current().is_some_and(|entry| entry.is_dir()) {
+            true => KIND_DIRECTORY,
+            false => KIND_FILE,
+        };
+        return format!("{kind} {QUOTE_OPEN}{named}{QUOTE_CLOSE}");
+    }
+    SUBJECT_MANY.replace("{count}", &count.to_string())
+}
+
 /// The question the delete confirmation asks.
 ///
 /// Trash and permanent are different questions, not the same question with a
 /// different flag, so they get different wording rather than a shared one
 /// with a word swapped in.
-pub fn delete_prompt(name: &str, is_dir: bool, mode: DeleteMode) -> String {
-    let kind = if is_dir { KIND_DIRECTORY } else { KIND_FILE };
+pub fn delete_prompt(subject: &str, mode: DeleteMode) -> String {
     let template = match mode {
         DeleteMode::Trash => DELETE_PROMPT_TRASH,
         DeleteMode::Permanent => DELETE_PROMPT_PERMANENT,
     };
-    template
-        .replace("{kind}", kind)
-        .replace("{name}", &format!("{QUOTE_OPEN}{name}{QUOTE_CLOSE}"))
+    template.replace("{subject}", subject)
+}
+
+/// What a pane's status line says about the marks.
+pub fn selection_status(listing: &Listing) -> String {
+    let marked = listing.selection_summary();
+    let visible = listing.visible_summary();
+    SELECTION_STATUS
+        .replace("{marked}", &marked.count.to_string())
+        .replace("{total}", &visible.count.to_string())
+        .replace("{marked_bytes}", &human_bytes(marked.bytes))
+        .replace("{total_bytes}", &human_bytes(visible.bytes))
 }
 
 #[cfg(test)]
@@ -106,18 +142,54 @@ mod tests {
 
     #[test]
     fn an_entry_under_the_cursor_is_what_an_operation_acts_on() {
+        // The fallback that keeps marks optional rather than a mode.
         let listing = listing_with_cursor_on("notes.txt");
+        assert_eq!(sources(&listing), [VfsPath::new("/home/pirx/notes.txt")]);
+    }
+
+    #[test]
+    fn marks_win_over_the_cursor_wherever_the_cursor_is() {
+        let mut listing = listing_with_cursor_on("notes.txt");
+        listing.focus_entry("photos");
+        listing.toggle_selected(listing.cursor());
+        // Put the cursor back on the unmarked entry.
+        listing.focus_entry("notes.txt");
+
+        assert_eq!(sources(&listing), [VfsPath::new("/home/pirx/photos")]);
+    }
+
+    #[test]
+    fn every_marked_entry_is_a_source() {
+        let mut listing = listing_with_cursor_on("notes.txt");
+        listing.select_all();
+
         assert_eq!(
-            operable(&listing),
-            Some(VfsPath::new("/home/pirx/notes.txt"))
+            sources(&listing),
+            [
+                VfsPath::new("/home/pirx/photos"),
+                VfsPath::new("/home/pirx/notes.txt"),
+            ],
+            "in the order they are shown"
         );
     }
 
     #[test]
-    fn the_parent_row_is_not_something_to_copy_or_delete() {
-        // Cursor starts on `..`, which is where a freshly loaded pane sits.
+    fn the_parent_row_alone_is_not_something_to_copy_or_delete() {
+        // Cursor starts on `..`, which is where a freshly loaded pane sits,
+        // and nothing is marked.
         let listing = Listing::new(VfsPath::new("/home/pirx"), Vec::new());
-        assert_eq!(operable(&listing), None);
+        assert!(sources(&listing).is_empty());
+    }
+
+    #[test]
+    fn a_marked_entry_is_still_a_source_while_the_cursor_sits_on_the_parent_row() {
+        // The `..` rule is about the *fallback*, not about the marks.
+        let mut listing = listing_with_cursor_on("notes.txt");
+        listing.toggle_selected(listing.cursor());
+        listing.move_cursor_to_first();
+        assert!(listing.is_parent(listing.cursor()));
+
+        assert_eq!(sources(&listing), [VfsPath::new("/home/pirx/notes.txt")]);
     }
 
     #[test]
@@ -180,9 +252,30 @@ mod tests {
     }
 
     #[test]
+    fn every_prompt_is_fully_rendered() {
+        // The templates and the `.replace` calls name their placeholders
+        // separately, so a rename on one side would leave `{subject}` sitting
+        // in a dialog. Checking for a leftover brace catches all of them at
+        // once rather than one assertion per placeholder.
+        let listing = listing_with_cursor_on("notes.txt");
+        for count in [1, 7] {
+            for mode in [DeleteMode::Trash, DeleteMode::Permanent] {
+                let rendered = delete_prompt(&subject(&listing, count), mode);
+                assert!(
+                    !rendered.contains('{'),
+                    "unsubstituted placeholder in {rendered:?}"
+                );
+            }
+        }
+        assert!(!selection_status(&listing).contains('{'));
+    }
+
+    #[test]
     fn trash_and_permanent_ask_visibly_different_questions() {
-        let trash = delete_prompt("notes.txt", false, DeleteMode::Trash);
-        let permanent = delete_prompt("notes.txt", false, DeleteMode::Permanent);
+        let listing = listing_with_cursor_on("notes.txt");
+        let named = subject(&listing, 1);
+        let trash = delete_prompt(&named, DeleteMode::Trash);
+        let permanent = delete_prompt(&named, DeleteMode::Permanent);
 
         assert_ne!(trash, permanent);
         assert!(trash.contains("notes.txt") && permanent.contains("notes.txt"));
@@ -191,27 +284,31 @@ mod tests {
     }
 
     #[test]
-    fn every_prompt_is_fully_rendered() {
-        // The templates and the `.replace` calls name their placeholders
-        // separately, so a rename on one side would leave `{kind}` sitting in
-        // a dialog. Checking for a leftover brace catches all of them at once
-        // rather than one assertion per placeholder.
-        for is_dir in [true, false] {
-            for mode in [DeleteMode::Trash, DeleteMode::Permanent] {
-                let rendered = delete_prompt("x.txt", is_dir, mode);
-                assert!(
-                    !rendered.contains('{'),
-                    "unsubstituted placeholder in {rendered:?}"
-                );
-            }
-        }
+    fn one_entry_is_named_and_several_are_counted() {
+        // A list of forty names is not a question anyone reads.
+        let listing = listing_with_cursor_on("notes.txt");
+
+        assert!(subject(&listing, 1).contains("notes.txt"));
+
+        let many = subject(&listing, 40);
+        assert!(many.contains("40"), "{many}");
+        assert!(!many.contains("notes.txt"), "{many}");
     }
 
     #[test]
     fn the_question_says_whether_a_directory_is_at_stake() {
-        let file = delete_prompt("x", false, DeleteMode::Trash);
-        let dir = delete_prompt("x", true, DeleteMode::Trash);
+        let file = subject(&listing_with_cursor_on("notes.txt"), 1);
+        let dir = subject(&listing_with_cursor_on("photos"), 1);
         assert_ne!(file, dir);
         assert!(dir.contains(KIND_DIRECTORY));
+    }
+
+    #[test]
+    fn the_status_line_counts_the_marks_against_what_is_visible() {
+        let mut listing = listing_with_cursor_on("notes.txt");
+        assert!(selection_status(&listing).starts_with("0 of 2"));
+
+        listing.toggle_selected(listing.cursor());
+        assert!(selection_status(&listing).starts_with("1 of 2"));
     }
 }

@@ -75,6 +75,16 @@ pub const STYLESHEET: &str = "
     padding: 4px 8px;
     font-family: monospace;
 }
+.marked {
+    /* Colour only, no bold: bold text is wider, and it pushed the date out
+       of its fixed-width column so a marked row read `2026-0... 8 17:20`.
+       Total Commander marks in red alone for the same reason. */
+    color: #c01c28;
+}
+.status-line {
+    padding: 2px 8px;
+    font-size: 90%;
+}
 .pane-active .path-bar {
     background-color: #3584e4;
     color: #ffffff;
@@ -93,9 +103,30 @@ pub const KIND_DIRECTORY: &str = "directory";
 
 /// The two delete questions. Separate strings rather than one with a word
 /// swapped: they are different questions, and only one of them is final.
-pub const DELETE_PROMPT_TRASH: &str = "Move the {kind} {name} to the trash?";
+pub const DELETE_PROMPT_TRASH: &str = "Move the {subject} to the trash?";
 pub const DELETE_PROMPT_PERMANENT: &str =
-    "Delete the {kind} {name} permanently? This cannot be undone.";
+    "Delete the {subject} permanently? This cannot be undone.";
+
+/// How several entries are described instead of being listed. A list of forty
+/// names is not a question anyone reads.
+pub const SUBJECT_MANY: &str = "{count} selected entries";
+
+/// What the status line under a pane says.
+pub const SELECTION_STATUS: &str =
+    "{marked} of {total} selected \u{2014} {marked_bytes} of {total_bytes}";
+
+/// Style class marking a row the user has selected.
+pub const CLASS_MARKED: &str = "marked";
+pub const CLASS_STATUS_LINE: &str = "status-line";
+
+/// Prompt of the dialog that asks for a select-by-pattern wildcard.
+pub const TITLE_MARK_PATTERN: &str = "Select by pattern";
+pub const TITLE_UNMARK_PATTERN: &str = "Deselect by pattern";
+pub const PROMPT_PATTERN: &str = "Pattern (* and ? are wildcards):";
+
+/// What that dialog starts with — everything, which is the common case and
+/// one keystroke from what anyone else wants.
+pub const PATTERN_DEFAULT: &str = "*.";
 
 /// Dialog titles.
 pub const TITLE_COPY: &str = "Copy";

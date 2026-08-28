@@ -30,6 +30,18 @@ pub enum Action {
     Delete,
     /// Shift+F8 / Shift+Del — delete for good.
     DeletePermanently,
+    /// Space — mark the row under the cursor, leaving the cursor where it is.
+    ToggleMark,
+    /// Insert — mark it and step down, so the key can be held.
+    ToggleMarkAndAdvance,
+    /// Num + — mark everything matching a pattern.
+    MarkByPattern,
+    /// Num − — unmark everything matching a pattern.
+    UnmarkByPattern,
+    /// Num * — swap what is marked for what is not.
+    InvertMarks,
+    /// Ctrl+A — mark everything visible.
+    MarkAll,
     Quit,
 }
 
@@ -132,6 +144,48 @@ static BINDINGS: &[Binding] = &[
         action: Action::DeletePermanently,
     },
     Binding {
+        key: Key::space,
+        modifiers: PLAIN,
+        action: Action::ToggleMark,
+    },
+    Binding {
+        key: Key::Insert,
+        modifiers: PLAIN,
+        action: Action::ToggleMarkAndAdvance,
+    },
+    // The keypad keys Total Commander uses, and the ordinary ones beside
+    // them, because not every keyboard has a numeric block.
+    Binding {
+        key: Key::KP_Add,
+        modifiers: PLAIN,
+        action: Action::MarkByPattern,
+    },
+    Binding {
+        key: Key::plus,
+        modifiers: PLAIN,
+        action: Action::MarkByPattern,
+    },
+    Binding {
+        key: Key::KP_Subtract,
+        modifiers: PLAIN,
+        action: Action::UnmarkByPattern,
+    },
+    Binding {
+        key: Key::minus,
+        modifiers: PLAIN,
+        action: Action::UnmarkByPattern,
+    },
+    Binding {
+        key: Key::KP_Multiply,
+        modifiers: PLAIN,
+        action: Action::InvertMarks,
+    },
+    Binding {
+        key: Key::a,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::MarkAll,
+    },
+    Binding {
         key: Key::q,
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::Quit,
@@ -173,6 +227,14 @@ mod tests {
                 ModifierType::SHIFT_MASK,
                 Action::DeletePermanently,
             ),
+            (Key::space, PLAIN, Action::ToggleMark),
+            (Key::Insert, PLAIN, Action::ToggleMarkAndAdvance),
+            (Key::KP_Add, PLAIN, Action::MarkByPattern),
+            (Key::plus, PLAIN, Action::MarkByPattern),
+            (Key::KP_Subtract, PLAIN, Action::UnmarkByPattern),
+            (Key::minus, PLAIN, Action::UnmarkByPattern),
+            (Key::KP_Multiply, PLAIN, Action::InvertMarks),
+            (Key::a, ModifierType::CONTROL_MASK, Action::MarkAll),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
         ];
         for (key, modifiers, action) in expected {
@@ -182,9 +244,10 @@ mod tests {
 
     #[test]
     fn an_unbound_key_triggers_nothing() {
-        // F5 and Delete left this list in phase 2, which bound them. The
-        // contract is unchanged; only the witnesses are.
-        for key in [Key::Escape, Key::a, Key::F9, Key::Insert] {
+        // F5 and Delete left this list in phase 2 and Insert in phase 3,
+        // each when it was bound. The contract is unchanged; only the
+        // witnesses are. Plain `a` is still unbound — only Ctrl+A is.
+        for key in [Key::Escape, Key::a, Key::F9, Key::F12] {
             assert_eq!(action_for(key, PLAIN), None, "{key:?}");
         }
     }

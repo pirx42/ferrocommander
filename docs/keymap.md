@@ -16,6 +16,12 @@
 | `F7` | Create a directory |
 | `F8`, `Delete` | Delete to the trash |
 | `Shift+F8`, `Shift+Delete` | Delete permanently |
+| `Space` | Mark the row under the cursor |
+| `Insert` | Mark it and step down |
+| `Num +`, `+` | Mark everything matching a wildcard |
+| `Num −`, `−` | Unmark everything matching a wildcard |
+| `Num *` | Swap what is marked for what is not |
+| `Ctrl+A` | Mark everything visible |
 | `Ctrl+Q` | Quit |
 
 Activating a *file* still does nothing — F3/F4 arrive in phase 4.
@@ -25,9 +31,27 @@ memory splits evenly between them. Shift is the only place in the keymap where
 a modifier changes what survives, so it has a test of its own rather than
 riding on the binding table.
 
+## Marks decide what an operation acts on
+
+F5–F8 act on **everything marked**, and fall back to the row under the cursor
+when nothing is marked. That fallback is what keeps marks optional rather than
+a mode: press F5 on a file and it copies, mark ten and it copies ten, and
+there is no third thing to learn.
+
+`Insert` steps down after marking so it can be held, which is how a run of
+files gets selected; `Space` leaves the cursor where it is, for picking one
+out of a list. The keypad keys have ordinary twins (`+`, `−`) because not
+every keyboard has a numeric block.
+
+Marking acts on what is **visible**: what the hidden-file flag or a filter is
+holding back is not something the user can see to have meant. Details of the
+model in [listing.md](listing.md).
+
 **`..` is not something to operate on.** It is a navigation control, not an
 entry, and copying or deleting "the parent directory" from inside it is never
-what the user means. F5-F8 on the `..` row do nothing.
+what the user means. It cannot be marked, and with nothing else marked, F5–F8
+on it do nothing. A mark elsewhere in the pane still counts — the `..` rule is
+about the fallback, not about the marks.
 
 ## What the target field means
 

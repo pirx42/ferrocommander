@@ -25,9 +25,10 @@ use tc_core::ops::{DeleteMode, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
-    APP_ID, APP_NAME, CONFLICT_PROMPT, PANE_COUNT, PANE_SPLIT_RATIO, PROGRESS_DELAY, PROMPT_COPY,
-    PROMPT_CREATE_DIR, PROMPT_MOVE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR,
-    TITLE_DELETE, TITLE_MOVE, WINDOW_HEIGHT, WINDOW_WIDTH,
+    APP_ID, APP_NAME, CONFLICT_PROMPT, PANE_COUNT, PANE_SPLIT_RATIO, PATTERN_DEFAULT,
+    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, STYLESHEET,
+    TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN, TITLE_MOVE,
+    TITLE_UNMARK_PATTERN, WINDOW_HEIGHT, WINDOW_WIDTH,
 };
 use keymap::Action;
 use pane::PaneView;
@@ -105,6 +106,12 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::CursorLast => shell.borrow_mut().active_pane().move_cursor_to_last(),
         Action::Activate => shell.borrow_mut().active_pane().activate(),
         Action::GoParent => shell.borrow_mut().active_pane().go_parent(),
+        Action::ToggleMark => shell.borrow_mut().active_pane().toggle_mark(false),
+        Action::ToggleMarkAndAdvance => shell.borrow_mut().active_pane().toggle_mark(true),
+        Action::MarkByPattern => start_pattern_marking(shell, true),
+        Action::UnmarkByPattern => start_pattern_marking(shell, false),
+        Action::InvertMarks => shell.borrow_mut().active_pane().invert_marks(),
+        Action::MarkAll => shell.borrow_mut().active_pane().mark_all(),
         Action::Copy => start_transfer(shell, true),
         Action::Move => start_transfer(shell, false),
         Action::CreateDir => start_create_dir(shell),
@@ -116,18 +123,20 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
 
 /// F5 and F6: ask where, then hand it to the queue.
 fn start_transfer(shell: &Rc<RefCell<Shell>>, copying: bool) {
-    let (window, source, source_dir, prefill) = {
+    let (window, sources, source_dir, prefill) = {
         let state = shell.borrow();
         let pane = &state.panes[state.active];
-        // `..` is a navigation control, not an entry to operate on.
-        let Some(source) = jobs::operable(pane.listing()) else {
+        // Everything marked, or the cursor row. Empty means `..` on its own,
+        // which is a navigation control rather than something to copy.
+        let sources = jobs::sources(pane.listing());
+        if sources.is_empty() {
             return;
-        };
+        }
         let Some(window) = state.window.upgrade() else {
             return;
         };
         let prefill = jobs::prefilled_target(state.panes[state.other()].listing().dir());
-        (window, source, pane.listing().dir().clone(), prefill)
+        (window, sources, pane.listing().dir().clone(), prefill)
     };
 
     let (title, prompt) = if copying {
@@ -140,7 +149,7 @@ fn start_transfer(shell: &Rc<RefCell<Shell>>, copying: bool) {
         let Some(destination) = jobs::parse_destination(&text, &source_dir) else {
             return;
         };
-        let sources = vec![source.clone()];
+        let sources = sources.clone();
         let job = if copying {
             Job::Copy {
                 sources,
@@ -154,6 +163,35 @@ fn start_transfer(shell: &Rc<RefCell<Shell>>, copying: bool) {
         };
         submit(&shell, job);
     });
+}
+
+/// `Num +` and `Num −`: mark or unmark everything matching a wildcard.
+fn start_pattern_marking(shell: &Rc<RefCell<Shell>>, marking: bool) {
+    let Some(window) = shell.borrow().window.upgrade() else {
+        return;
+    };
+    let title = if marking {
+        TITLE_MARK_PATTERN
+    } else {
+        TITLE_UNMARK_PATTERN
+    };
+    let shell = shell.clone();
+    dialogs::ask_text(
+        &window,
+        title,
+        PROMPT_PATTERN,
+        PATTERN_DEFAULT,
+        move |pattern| {
+            let pattern = pattern.trim().to_string();
+            if pattern.is_empty() {
+                return;
+            }
+            shell
+                .borrow_mut()
+                .active_pane()
+                .mark_matching(&pattern, marking);
+        },
+    );
 }
 
 /// F7.
@@ -189,18 +227,18 @@ fn start_create_dir(shell: &Rc<RefCell<Shell>>) {
 
 /// F8 / Del, and their Shift variants.
 fn start_delete(shell: &Rc<RefCell<Shell>>, mode: DeleteMode) {
-    let (window, path, message) = {
+    let (window, paths, message) = {
         let state = shell.borrow();
         let pane = &state.panes[state.active];
-        let Some(path) = jobs::operable(pane.listing()) else {
+        let paths = jobs::sources(pane.listing());
+        if paths.is_empty() {
             return;
-        };
+        }
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        let entry = pane.listing().current().expect("operable implies an entry");
-        let message = jobs::delete_prompt(&entry.name, entry.is_dir(), mode);
-        (window, path, message)
+        let subject = jobs::subject(pane.listing(), paths.len());
+        (window, paths, jobs::delete_prompt(&subject, mode))
     };
 
     let shell = shell.clone();
@@ -215,7 +253,7 @@ fn start_delete(shell: &Rc<RefCell<Shell>>, mode: DeleteMode) {
             submit(
                 &shell,
                 Job::Delete {
-                    paths: vec![path.clone()],
+                    paths: paths.clone(),
                     mode,
                 },
             );

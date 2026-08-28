@@ -51,6 +51,21 @@ run, not by a test.
 **Closing the conflict dialog without choosing answers nothing**, and the
 engine reads that silence as abort. See [ops.md](ops.md).
 
+## Marks
+
+Marked rows are drawn in red — colour only, no bold. Bold text is wider, and
+it pushed the date out of its fixed-width column so a marked row read
+`2026-0... 8 17:20`; Total Commander marks in red alone for the same reason.
+Red also survives the row being the cursor at the same time, which a
+background colour would not.
+
+A status line under each pane shows `n of m selected — x of y`, which is the
+number a person checks before pressing F5. It is rendered by the same pure
+`jobs` module that decides what an operation acts on, so the count in the
+question and the count in the status line cannot disagree.
+
+The dialog that asks for a wildcard is the same text dialog F5 and F7 use.
+
 ## Running a job
 
 The shell owns a `JobQueue`. A keystroke opens a dialog, the dialog's answer

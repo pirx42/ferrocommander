@@ -11,9 +11,10 @@ use tc_core::listing::Listing;
 use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
-    CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT,
-    COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
-    COLUMN_WIDTH_SIZE, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, XALIGN_LEFT, XALIGN_RIGHT,
+    CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR, CLASS_STATUS_LINE,
+    COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_DATE,
+    COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
+    XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_target, adopted_cursor, focus_after_move, parent_target};
 use crate::row::Row;
@@ -107,6 +108,14 @@ impl PaneEntry {
         entry
     }
 
+    fn is_marked(&self) -> bool {
+        self.imp()
+            .row
+            .borrow()
+            .as_ref()
+            .is_some_and(|row| row.selected)
+    }
+
     fn text(&self, column: Column) -> String {
         self.imp()
             .row
@@ -121,6 +130,7 @@ impl PaneEntry {
 pub struct PaneView {
     root: gtk::Box,
     path_bar: gtk::Label,
+    status: gtk::Label,
     store: gio::ListStore,
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
@@ -167,14 +177,19 @@ impl PaneView {
             .build();
         path_bar.add_css_class(CLASS_PATH_BAR);
 
+        let status = gtk::Label::builder().xalign(0.0).build();
+        status.add_css_class(CLASS_STATUS_LINE);
+
         let root = gtk::Box::new(gtk::Orientation::Vertical, PANE_SPACING);
         root.add_css_class(CLASS_PANE);
         root.append(&path_bar);
         root.append(&scroller);
+        root.append(&status);
 
         let mut pane = PaneView {
             root,
             path_bar,
+            status,
             store,
             selection,
             column_view,
@@ -239,12 +254,44 @@ impl PaneView {
                 .listing
                 .get(index)
                 .expect("indices below len() always resolve");
-            let row = Row::from_entry(entry, self.listing.is_parent(index));
+            let row = Row::from_entry(
+                entry,
+                self.listing.is_parent(index),
+                self.listing.is_selected(index),
+            );
             self.store.append(&PaneEntry::new(row));
         }
 
         self.listing.set_cursor(cursor);
+        self.status
+            .set_text(&crate::jobs::selection_status(&self.listing));
         self.sync_cursor();
+    }
+
+    /// Flips the mark on the cursor row; `advance` steps down afterwards, so
+    /// Insert can be held down the way it is in Total Commander.
+    pub fn toggle_mark(&mut self, advance: bool) {
+        self.adopt_selection();
+        self.listing.toggle_selected(self.listing.cursor());
+        if advance {
+            self.listing.move_cursor_by(1);
+        }
+        self.refresh();
+    }
+
+    pub fn mark_matching(&mut self, pattern: &str, selected: bool) {
+        self.listing.select_matching(pattern, selected);
+        self.refresh();
+    }
+
+    pub fn invert_marks(&mut self) {
+        self.listing.invert_selection();
+        self.refresh();
+    }
+
+    pub fn mark_all(&mut self) {
+        self.listing.select_all();
+        self.refresh();
     }
 
     /// Selects the listing's cursor row, focuses it, and scrolls it into
@@ -380,6 +427,13 @@ fn build_column(column: Column) -> gtk::ColumnViewColumn {
             .and_downcast::<gtk::Label>()
             .expect("setup installed a Label");
         label.set_text(&entry.text(column));
+        // Marked rows are coloured, which is how Total Commander shows them
+        // and the only cue that survives the row also being the cursor.
+        if entry.is_marked() {
+            label.add_css_class(CLASS_MARKED);
+        } else {
+            label.remove_css_class(CLASS_MARKED);
+        }
     });
 
     let view_column = gtk::ColumnViewColumn::new(Some(column.title()), Some(factory));
