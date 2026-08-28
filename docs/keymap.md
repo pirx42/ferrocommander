@@ -2,7 +2,7 @@
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
-## Phase 1 bindings
+## Bindings
 
 | Key | Action |
 |---|---|
@@ -11,9 +11,40 @@
 | `Home` / `End` | Move the cursor to the first / last row |
 | `Enter`, keypad `Enter` | Enter the directory under the cursor |
 | `Backspace` | Leave the current directory |
+| `F5` | Copy the entry under the cursor |
+| `F6` | Move it, or rename it in place |
+| `F7` | Create a directory |
+| `F8`, `Delete` | Delete to the trash |
+| `Shift+F8`, `Shift+Delete` | Delete permanently |
 | `Ctrl+Q` | Quit |
 
-Activating a *file* does nothing in phase 1 — F3/F4 arrive in phase 4.
+Activating a *file* still does nothing — F3/F4 arrive in phase 4.
+
+**Two keys for each delete**, because Total Commander has both and muscle
+memory splits evenly between them. Shift is the only place in the keymap where
+a modifier changes what survives, so it has a test of its own rather than
+riding on the binding table.
+
+**`..` is not something to operate on.** It is a navigation control, not an
+entry, and copying or deleting "the parent directory" from inside it is never
+what the user means. F5-F8 on the `..` row do nothing.
+
+## What the target field means
+
+F5 and F6 open the same dialog, prefilled with the *other* pane's directory
+**and a trailing separator**. That slash is the rule, shown rather than
+hidden:
+
+| What is in the field | Where the entry lands |
+|---|---|
+| `/mnt/backup/` | into that directory, keeping its name |
+| `/mnt/backup/holiday.txt` | at exactly that path |
+| `holiday.txt` | beside the source, under that name |
+
+The last row is the whole of "F6 renames in place" and "F5 duplicates a
+file" - no separate rename command, and no dialog that has to guess. A rename
+*is* a move whose destination is exact, which is why `ops` has no `Rename`
+job.
 
 ## Page Up / Page Down are the widget's job
 
@@ -99,8 +130,18 @@ including the cases that are easy to get wrong: an unbound key, a bound key
 with the wrong modifier, and irrelevant modifiers that must not break a
 binding.
 
-The wiring *between* a physical keypress and those functions — the GTK
-controller, its capture phase, the focus handling — is not covered by an
-automated test. Every binding in the table above was verified by hand on
-2026-08-28 and behaves as specified. Keep that in mind when
-touching the controller — nothing will fail the gate if it breaks.
+What the text in the target field means is unit-tested too, in `jobs.rs`,
+including that the prefilled value round-trips back to "into that directory".
+
+The wiring *between* a physical keypress and those functions used to have no
+automated coverage at all. It now has
+[`scripts/smoke-keys.sh`](../scripts/smoke-keys.sh): a real X server delivers
+real key events to the real binary, and the checks are on the filesystem
+afterwards. It covers Tab, the cursor keys and Enter in passing, and F5, F7
+and F8 with their dialogs directly.
+
+Run it after touching the controller, the keymap or a dialog:
+
+```bash
+cargo build --release && scripts/smoke-keys.sh
+```

@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 use std::io::Read;
 use std::sync::Arc;
 
-use tc_core::ops::{Answer, DeleteMode, Job, JobQueue, Outcome, Progress, Report, Resolution};
+use tc_core::ops::{
+    Answer, DeleteMode, Destination, Job, JobQueue, Outcome, Progress, Report, Resolution,
+};
 use tc_core::vfs::{LocalFs, VfsPath, VirtualFs};
 use tempfile::TempDir;
 
@@ -66,7 +68,7 @@ fn a_job_through_the_queue_produces_the_same_tree_as_a_direct_run() {
     let handle = queue.submit(
         Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: root.child("into"),
+            destination: Destination::Into(root.child("into")),
         },
         backend(),
         backend(),
@@ -85,7 +87,7 @@ fn progress_deltas_still_add_up_when_they_arrive_over_a_channel() {
     let handle = queue.submit(
         Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: root.child("into"),
+            destination: Destination::Into(root.child("into")),
         },
         backend(),
         backend(),
@@ -115,7 +117,7 @@ fn a_conflict_is_answered_over_the_channel_and_the_job_carries_on() {
     let handle = queue.submit(
         Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: root.child("into"),
+            destination: Destination::Into(root.child("into")),
         },
         backend(),
         backend(),
@@ -146,7 +148,7 @@ fn a_conflict_question_dropped_unanswered_aborts_instead_of_hanging() {
     let handle = queue.submit(
         Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: root.child("into"),
+            destination: Destination::Into(root.child("into")),
         },
         backend(),
         backend(),
@@ -175,7 +177,7 @@ fn a_cancel_from_another_thread_stops_a_running_job() {
     let handle = queue.submit(
         Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: root.child("into"),
+            destination: Destination::Into(root.child("into")),
         },
         backend(),
         backend(),
@@ -225,7 +227,7 @@ fn one_jobs_events_never_reach_another_jobs_handle() {
     let copy = queue.submit(
         Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: root.child("into"),
+            destination: Destination::Into(root.child("into")),
         },
         backend(),
         backend(),

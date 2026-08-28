@@ -1,5 +1,7 @@
 //! One pane: a path bar above a column view of a directory.
 
+use std::sync::Arc;
+
 use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
@@ -123,7 +125,9 @@ pub struct PaneView {
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
     listing: Listing,
-    fs: Box<dyn VirtualFs>,
+    /// Shared rather than owned: a running job holds the same backend on its
+    /// worker thread while the pane goes on using it.
+    fs: Arc<dyn VirtualFs>,
     /// Why the last navigation attempt failed, shown beside the path.
     error: Option<String>,
 }
@@ -137,7 +141,7 @@ impl PaneView {
     /// A directory that cannot be read yields an empty pane rather than
     /// failing construction — a window with one broken pane is still a usable
     /// program, and the reason is shown in the path bar.
-    pub fn new(fs: Box<dyn VirtualFs>, dir: VfsPath) -> Self {
+    pub fn new(fs: Arc<dyn VirtualFs>, dir: VfsPath) -> Self {
         let (listing, error) = match Listing::load(fs.as_ref(), dir.clone()) {
             Ok(listing) => (listing, None),
             Err(reason) => (Listing::new(dir, Vec::new()), Some(reason.to_string())),
@@ -185,6 +189,35 @@ impl PaneView {
     /// The widget to place in the window.
     pub fn widget(&self) -> &gtk::Widget {
         self.root.upcast_ref()
+    }
+
+    /// The model behind the pane, for the pure functions that decide what a
+    /// keystroke acts on.
+    pub fn listing(&self) -> &Listing {
+        &self.listing
+    }
+
+    /// A handle on this pane's backend, for a job that reads or writes here.
+    pub fn fs(&self) -> Arc<dyn VirtualFs> {
+        Arc::clone(&self.fs)
+    }
+
+    /// Re-reads the directory after a job may have changed it.
+    ///
+    /// Uses [`Listing::load_nearest`] rather than a plain reload, because the
+    /// job may have deleted or moved the very directory this pane is standing
+    /// in. Showing an error where a listing belongs would strand the user
+    /// somewhere they cannot navigate out of; landing on the nearest
+    /// surviving ancestor keeps the pane usable.
+    pub fn reload_after_job(&mut self) {
+        let focused = self.listing.current().map(|entry| entry.name.clone());
+        let mut listing = Listing::load_nearest(self.fs.as_ref(), self.listing.dir().clone());
+        if let Some(name) = focused {
+            listing.focus_entry(&name);
+        }
+        self.listing = listing;
+        self.error = None;
+        self.refresh();
     }
 
     /// Rebuilds the rows from the listing and puts the selection back on the

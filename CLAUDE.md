@@ -51,6 +51,7 @@ The project is in its build-up phase; this table grows with the code.
 | What is being built right now | [docs/plans/2026-08-28-phase2-core-ops.md](docs/plans/2026-08-28-phase2-core-ops.md) (phase 2, drafted; phase 1 done) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
 | Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
+| Verify a keystroke really works end to end | `scripts/smoke-keys.sh` (see [docs/keymap.md](docs/keymap.md)) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |
 | New plan document | `docs/plans/YYYY-MM-DD-<topic>.md` (skill [10](docs/skills/10-plan-lifecycle.md)) |
 

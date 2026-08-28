@@ -71,3 +71,15 @@ name is not visible, since the cursor cannot sit on a row that is not there.
 
 An empty listing has no current row: `current()` and `current_path()` return
 `None` rather than a placeholder.
+
+## Loading after a job
+
+`Listing::load_nearest` reads a directory, or the nearest ancestor that can
+still be read.
+
+A pane needs it after a file operation finishes: the job may have moved or
+deleted the very directory the pane was standing in. Showing an error where a
+listing belongs would strand the user somewhere they cannot navigate out of,
+so the pane lands on the nearest surviving ancestor instead. It always returns
+a listing — the root is the last stop, and a root that cannot be read yields
+an empty one rather than no pane at all.

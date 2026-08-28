@@ -55,25 +55,25 @@ provide. Nothing has been *run* on Windows.
 
 ## Testing
 
-**The keypress-to-pane path has no automated coverage.**
-The keymap table and the navigation targets are unit-tested, but the wiring
-between a physical keypress and those functions — the GTK controller, its
-capture phase, the focus handling — has no test behind it.
+**The keypress-to-pane path is covered end to end, but only for some keys.**
+This was a total gap until phase 2. It now has
+[`scripts/smoke-keys.sh`](../scripts/smoke-keys.sh), where a real X server
+delivers real key events to the real binary and the checks are on the
+filesystem afterwards — it covers Tab, the cursor keys and Enter in passing,
+and F5, F7 and F8 with their dialogs directly.
 
-Every phase-1 binding was manually confirmed by the owner on 2026-08-28. That
-same session also found a bug no unit test could see — stepping up left the
-cursor on `..` instead of the directory just left — while 74 tests passed.
-Each unit was correct; the composition was not. That is the argument for this
-gap mattering, and for the manual pass being repeated whenever the shell
-grows. A second one followed: Page Up/Down moved the widget's selection while
-the model's cursor stayed behind, so the next keystroke acted on a stale row.
-A third followed: the view never scrolled to the cursor, so it walked off
-screen. All three lived in the composition between GTK and the model, which
-is exactly the layer with no test. So the wiring is known good today; what is missing is a regression
-net, and a future refactor could break it silently.
-*Home:* would need a way to synthesize keystrokes in the session, or
-`gtk::test` smoke tests as the design doc's testing section anticipates.
-*From:* [keymap.md](keymap.md).
+Not covered: F6, Shift+Delete, Backspace, `Ctrl+Q`, the Page Up/Down adoption
+path, and the conflict dialog's Overwrite, Keep both and Abort buttons (the
+script answers with the focused Skip). Those were driven by hand and behave as
+specified.
+
+The gap this replaces was not theoretical. Phase 1's manual pass found three
+bugs that 74 green tests missed, all in the composition between GTK and the
+model; the phase-2 smoke run found a fourth — the conflict dialog opened with
+no focused button, so it could only be answered with the mouse.
+*Home:* extend the script as bindings are added; the phase that gives a dialog
+a keyboard path is the phase that should cover it.
+*From:* [keymap.md](keymap.md), [ui-shell.md](ui-shell.md).
 
 **Entry-building test helpers are duplicated.**
 Four test modules across both crates build `Entry` values with their own

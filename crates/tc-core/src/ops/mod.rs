@@ -36,23 +36,43 @@ pub enum DeleteMode {
     Permanent,
 }
 
+/// Where the things a job moves are supposed to end up.
+///
+/// One type rather than separate "into a directory" and "to a name" jobs:
+/// the F5 and F6 dialogs are the same dialog, and what the user typed is what
+/// decides. Copying a file to a new name in its own directory (a duplicate)
+/// and renaming one in place are then the same shape, not two special cases.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Destination {
+    /// Every source keeps its own name and lands inside this directory.
+    Into(VfsPath),
+    /// One source lands at exactly this path.
+    Exact(VfsPath),
+}
+
+impl Destination {
+    /// Where `source` lands.
+    fn of(&self, source: &VfsPath) -> VfsPath {
+        match self {
+            Destination::Into(dir) => dir.child(source.file_name().unwrap_or_default()),
+            Destination::Exact(path) => path.clone(),
+        }
+    }
+}
+
 /// One thing the user asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Job {
-    /// F5: copy each source into `target_dir` under its own name.
+    /// F5.
     Copy {
         sources: Vec<VfsPath>,
-        target_dir: VfsPath,
+        destination: Destination,
     },
-    /// F6 with a directory as the target: move each source into it.
+    /// F6. A rename is a move whose destination is [`Destination::Exact`].
     Move {
         sources: Vec<VfsPath>,
-        target_dir: VfsPath,
+        destination: Destination,
     },
-    /// F6 with the target edited down to a name: move one path to an exact
-    /// new path. Distinct from `Move` because it is a distinct intent, not
-    /// because it executes differently.
-    Rename { source: VfsPath, target: VfsPath },
     /// F8 / Del.
     Delete {
         paths: Vec<VfsPath>,
@@ -129,27 +149,18 @@ impl Run<'_> {
             Job::CreateDir { path } => self.create_dir(path),
             Job::Copy {
                 sources,
-                target_dir,
+                destination,
             } => {
-                let plan = plan::plan_transfer(self.source_fs, sources, |source| {
-                    target_dir.child(source.file_name().unwrap_or_default())
-                });
+                let plan =
+                    plan::plan_transfer(self.source_fs, sources, |source| destination.of(source));
                 self.transfer(plan, false);
             }
             Job::Move {
                 sources,
-                target_dir,
+                destination,
             } => {
-                let plan = plan::plan_transfer(self.source_fs, sources, |source| {
-                    target_dir.child(source.file_name().unwrap_or_default())
-                });
-                self.transfer(plan, true);
-            }
-            Job::Rename { source, target } => {
                 let plan =
-                    plan::plan_transfer(self.source_fs, std::slice::from_ref(source), |_| {
-                        target.clone()
-                    });
+                    plan::plan_transfer(self.source_fs, sources, |source| destination.of(source));
                 self.transfer(plan, true);
             }
             Job::Delete { paths, mode } => {

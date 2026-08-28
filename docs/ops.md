@@ -12,14 +12,19 @@ a script.
 
 | Job | Key | What it does |
 |---|---|---|
-| `Copy { sources, target_dir }` | F5 | each source lands in `target_dir` under its own name |
-| `Move { sources, target_dir }` | F6 | the same, and the source is removed once it has arrived |
-| `Rename { source, target }` | F6 with the target edited to a name | one path to one exact new path |
+| `Copy { sources, destination }` | F5 | the sources land where `destination` says |
+| `Move { sources, destination }` | F6 | the same, and each source is removed once it has arrived |
 | `Delete { paths, mode }` | F8 / Del | `DeleteMode::Trash` or `Permanent` |
 | `CreateDir { path }` | F7 | one directory |
 
-`Rename` executes exactly like `Move`. It is a separate variant because it is
-a separate *intent*, and the UI has to know which question to ask.
+A `Destination` is either `Into(dir)` — every source keeps its own name — or
+`Exact(path)`, where one source lands at one path.
+
+**There is no `Rename` job.** A rename is a move whose destination is exact,
+and duplicating a file is a copy whose destination is exact. F5 and F6 open
+the same dialog and what the user typed is what decides, so a separate job
+would have been a second name for a shape that already existed. The parsing
+rule is in [keymap.md](keymap.md).
 
 ## Scan, then execute
 

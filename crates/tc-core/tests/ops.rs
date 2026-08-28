@@ -12,8 +12,8 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 
 use tc_core::ops::{
-    self, Answer, ApplyToAll, CancelToken, Conflict, ConflictResolver, DeleteMode, Job, Outcome,
-    Progress, Report, Resolution, Silent,
+    self, Answer, ApplyToAll, CancelToken, Conflict, ConflictResolver, DeleteMode, Destination,
+    Job, Outcome, Progress, Report, Resolution, Silent,
 };
 use tc_core::vfs::{Entry, LocalFs, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
@@ -320,7 +320,7 @@ fn copying_conserves_every_file_byte_and_name() {
     run_clean(
         &Job::Copy {
             sources: vec![source.clone()],
-            target_dir: target_dir.clone(),
+            destination: Destination::Into(target_dir.clone()),
         },
         &LocalFs,
     );
@@ -347,7 +347,7 @@ fn a_copied_file_keeps_the_original_date() {
     run_clean(
         &Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: target_dir.clone(),
+            destination: Destination::Into(target_dir.clone()),
         },
         &LocalFs,
     );
@@ -370,7 +370,7 @@ fn moving_conserves_the_union_of_both_sides() {
     run_clean(
         &Job::Move {
             sources: vec![source.clone()],
-            target_dir: target_dir.clone(),
+            destination: Destination::Into(target_dir.clone()),
         },
         &LocalFs,
     );
@@ -392,7 +392,7 @@ fn a_move_within_one_filesystem_reads_no_bytes() {
     run_clean(
         &Job::Move {
             sources: vec![root.child("tree")],
-            target_dir: target_dir.clone(),
+            destination: Destination::Into(target_dir.clone()),
         },
         &counting,
     );
@@ -416,7 +416,7 @@ fn the_cross_device_fallback_conserves_the_same_things() {
     run_clean(
         &Job::Move {
             sources: vec![source.clone()],
-            target_dir: target_dir.clone(),
+            destination: Destination::Into(target_dir.clone()),
         },
         &fs,
     );
@@ -493,7 +493,7 @@ fn a_cancel_never_leaves_a_truncated_file() {
     let (report, _) = run_on(
         &Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir: target_dir.clone(),
+            destination: Destination::Into(target_dir.clone()),
         },
         &fs,
         &mut NoConflictsExpected,
@@ -527,7 +527,7 @@ fn a_cancel_leaves_the_source_untouched() {
     run_on(
         &Job::Move {
             sources: vec![source.clone()],
-            target_dir,
+            destination: Destination::Into(target_dir),
         },
         &AlwaysCrossDevice { inner: &LocalFs },
         &mut NoConflictsExpected,
@@ -564,7 +564,7 @@ fn collision() -> (TempDir, VfsPath, VfsPath) {
 fn copy_one(source_dir: &VfsPath, target_dir: &VfsPath, answer: Answer) -> Report {
     let job = Job::Copy {
         sources: vec![source_dir.child("a.txt")],
-        target_dir: target_dir.clone(),
+        destination: Destination::Into(target_dir.clone()),
     };
     ops::run(
         &job,
@@ -647,7 +647,7 @@ fn apply_to_all_asks_exactly_once_however_many_collide() {
     ops::run(
         &Job::Copy {
             sources,
-            target_dir,
+            destination: Destination::Into(target_dir),
         },
         &LocalFs,
         &LocalFs,
@@ -667,7 +667,7 @@ fn a_move_that_skipped_a_file_does_not_delete_it() {
     let (_dir, source_dir, target_dir) = collision();
     let job = Job::Move {
         sources: vec![source_dir.child("a.txt")],
-        target_dir,
+        destination: Destination::Into(target_dir),
     };
 
     ops::run(
@@ -697,7 +697,7 @@ fn progress_deltas_add_up_to_what_the_scan_promised() {
     let (_, events) = run_on(
         &Job::Copy {
             sources: vec![root.child("tree")],
-            target_dir,
+            destination: Destination::Into(target_dir),
         },
         &LocalFs,
         &mut NoConflictsExpected,
@@ -747,9 +747,9 @@ fn renaming_moves_a_path_to_an_exact_new_name() {
     let before = snapshot(&LocalFs, &root.child("tree"));
 
     run_clean(
-        &Job::Rename {
-            source: root.child("tree"),
-            target: root.child("renamed"),
+        &Job::Move {
+            sources: vec![root.child("tree")],
+            destination: Destination::Exact(root.child("renamed")),
         },
         &LocalFs,
     );
@@ -767,7 +767,7 @@ fn one_unreadable_source_does_not_cost_the_others() {
     let report = ops::run(
         &Job::Copy {
             sources: vec![root.child("not-there"), root.child("tree")],
-            target_dir: target_dir.clone(),
+            destination: Destination::Into(target_dir.clone()),
         },
         &LocalFs,
         &LocalFs,
@@ -825,7 +825,7 @@ mod symlinks {
         let report = ops::run(
             &Job::Copy {
                 sources: vec![root.child("link")],
-                target_dir,
+                destination: Destination::Into(target_dir),
             },
             &LocalFs,
             &LocalFs,

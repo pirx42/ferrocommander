@@ -75,3 +75,53 @@ pub const STYLESHEET: &str = "
     font-weight: bold;
 }
 ";
+
+/// Quotation marks around a name inside a prompt. Typographic, because the
+/// prompt is prose and a name may itself contain an ASCII quote.
+pub const QUOTE_OPEN: &str = "\u{201c}";
+pub const QUOTE_CLOSE: &str = "\u{201d}";
+
+/// What the delete confirmation calls the thing at stake.
+pub const KIND_FILE: &str = "file";
+pub const KIND_DIRECTORY: &str = "directory";
+
+/// The two delete questions. Separate strings rather than one with a word
+/// swapped: they are different questions, and only one of them is final.
+pub const DELETE_PROMPT_TRASH: &str = "Move the {kind} {name} to the trash?";
+pub const DELETE_PROMPT_PERMANENT: &str =
+    "Delete the {kind} {name} permanently? This cannot be undone.";
+
+/// Dialog titles.
+pub const TITLE_COPY: &str = "Copy";
+pub const TITLE_MOVE: &str = "Move / Rename";
+pub const TITLE_CREATE_DIR: &str = "New directory";
+pub const TITLE_DELETE: &str = "Confirm delete";
+pub const TITLE_CONFLICT: &str = "Target already exists";
+
+/// Prompts above the entry field of the input dialogs.
+pub const PROMPT_COPY: &str = "Copy to:";
+pub const PROMPT_MOVE: &str = "Move to:";
+pub const PROMPT_CREATE_DIR: &str = "Name of the new directory:";
+
+/// Button labels.
+pub const BUTTON_OK: &str = "OK";
+pub const BUTTON_CANCEL: &str = "Cancel";
+pub const BUTTON_DELETE: &str = "Delete";
+pub const BUTTON_OVERWRITE: &str = "Overwrite";
+pub const BUTTON_SKIP: &str = "Skip";
+pub const BUTTON_KEEP_BOTH: &str = "Keep both";
+pub const BUTTON_ABORT: &str = "Abort";
+
+/// Label of the checkbox that turns one answer into a policy.
+pub const CHECK_APPLY_TO_ALL: &str = "Apply to all";
+
+/// Spacing and margins shared by every dialog, so they look like one family.
+pub const DIALOG_SPACING: i32 = 12;
+pub const DIALOG_MARGIN: i32 = 16;
+pub const DIALOG_WIDTH: i32 = 520;
+
+/// Characters the entry field is at least wide enough for.
+pub const ENTRY_WIDTH_CHARS: i32 = 48;
+
+/// What the conflict dialog says above the buttons.
+pub const CONFLICT_PROMPT: &str = "{name} already exists in the target.";

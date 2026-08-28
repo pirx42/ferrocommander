@@ -44,6 +44,28 @@ impl Listing {
         Ok(Listing::new(dir, entries))
     }
 
+    /// Reads `dir`, or the nearest ancestor that can still be read.
+    ///
+    /// What a pane needs after a job finishes: the directory it was standing
+    /// in may have been moved or deleted by that very job, and showing an
+    /// error where a listing belongs strands the user somewhere they cannot
+    /// navigate out of. Walking up lands them somewhere real instead.
+    ///
+    /// Always returns a listing. The root is the last stop, and a root that
+    /// cannot be read yields an empty one rather than no pane at all.
+    pub fn load_nearest(fs: &dyn VirtualFs, dir: VfsPath) -> Self {
+        let mut current = dir;
+        loop {
+            match Listing::load(fs, current.clone()) {
+                Ok(listing) => return listing,
+                Err(_) => match current.parent() {
+                    Some(parent) => current = parent,
+                    None => return Listing::new(current, Vec::new()),
+                },
+            }
+        }
+    }
+
     /// Builds the model from entries that are already in hand.
     pub fn new(dir: VfsPath, entries: Vec<Entry>) -> Self {
         let parent = dir.parent().map(|_| Entry {

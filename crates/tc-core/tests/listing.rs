@@ -427,6 +427,34 @@ mod a_directory_that_disappeared {
     }
 
     #[test]
+    fn load_nearest_lands_where_walking_up_by_hand_lands() {
+        // The specification the characterization below turned into: what a
+        // pane does after a job deleted the directory it was standing in.
+        let parent = tempfile::TempDir::new().unwrap();
+        let deep = parent.path().join("a/b/c");
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(parent.path().join("survivor.txt"), "here").unwrap();
+
+        fs::remove_dir_all(parent.path().join("a")).unwrap();
+        let listing = Listing::load_nearest(&LocalFs, LocalFs::vfs_path(&deep));
+
+        assert_eq!(listing.dir(), &LocalFs::vfs_path(parent.path()));
+        assert!(listing.iter().any(|entry| entry.name == "survivor.txt"));
+    }
+
+    #[test]
+    fn load_nearest_of_a_directory_that_is_fine_just_loads_it() {
+        let parent = tempfile::TempDir::new().unwrap();
+        fs::write(parent.path().join("a.txt"), "x").unwrap();
+        let path = LocalFs::vfs_path(parent.path());
+
+        let listing = Listing::load_nearest(&LocalFs, path.clone());
+
+        assert_eq!(listing.dir(), &path);
+        assert!(listing.iter().any(|entry| entry.name == "a.txt"));
+    }
+
+    #[test]
     fn the_surviving_ancestors_are_still_loadable() {
         // The half phase 2 will lean on: whatever a job destroys, walking up
         // reaches something that loads — the root at the very latest.

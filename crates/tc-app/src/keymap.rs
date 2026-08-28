@@ -20,6 +20,16 @@ pub enum Action {
     Activate,
     /// Leave the current directory.
     GoParent,
+    /// F5 — copy the entry under the cursor.
+    Copy,
+    /// F6 — move it, or rename it in place.
+    Move,
+    /// F7 — create a directory here.
+    CreateDir,
+    /// F8 / Del — delete to the trash, recoverably.
+    Delete,
+    /// Shift+F8 / Shift+Del — delete for good.
+    DeletePermanently,
     Quit,
 }
 
@@ -41,7 +51,7 @@ const RELEVANT_MODIFIERS: ModifierType = ModifierType::CONTROL_MASK
     .union(ModifierType::SHIFT_MASK)
     .union(ModifierType::ALT_MASK);
 
-/// The phase-1 keymap.
+/// The keymap.
 static BINDINGS: &[Binding] = &[
     Binding {
         key: Key::Tab,
@@ -85,6 +95,43 @@ static BINDINGS: &[Binding] = &[
         action: Action::GoParent,
     },
     Binding {
+        key: Key::F5,
+        modifiers: PLAIN,
+        action: Action::Copy,
+    },
+    Binding {
+        key: Key::F6,
+        modifiers: PLAIN,
+        action: Action::Move,
+    },
+    Binding {
+        key: Key::F7,
+        modifiers: PLAIN,
+        action: Action::CreateDir,
+    },
+    // Two keys for each delete, because Total Commander has both and muscle
+    // memory splits evenly between them.
+    Binding {
+        key: Key::F8,
+        modifiers: PLAIN,
+        action: Action::Delete,
+    },
+    Binding {
+        key: Key::Delete,
+        modifiers: PLAIN,
+        action: Action::Delete,
+    },
+    Binding {
+        key: Key::F8,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::DeletePermanently,
+    },
+    Binding {
+        key: Key::Delete,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::DeletePermanently,
+    },
+    Binding {
         key: Key::q,
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::Quit,
@@ -115,6 +162,17 @@ mod tests {
             (Key::Return, PLAIN, Action::Activate),
             (Key::KP_Enter, PLAIN, Action::Activate),
             (Key::BackSpace, PLAIN, Action::GoParent),
+            (Key::F5, PLAIN, Action::Copy),
+            (Key::F6, PLAIN, Action::Move),
+            (Key::F7, PLAIN, Action::CreateDir),
+            (Key::F8, PLAIN, Action::Delete),
+            (Key::Delete, PLAIN, Action::Delete),
+            (Key::F8, ModifierType::SHIFT_MASK, Action::DeletePermanently),
+            (
+                Key::Delete,
+                ModifierType::SHIFT_MASK,
+                Action::DeletePermanently,
+            ),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
         ];
         for (key, modifiers, action) in expected {
@@ -124,8 +182,24 @@ mod tests {
 
     #[test]
     fn an_unbound_key_triggers_nothing() {
-        for key in [Key::F5, Key::Escape, Key::a, Key::Delete] {
+        // F5 and Delete left this list in phase 2, which bound them. The
+        // contract is unchanged; only the witnesses are.
+        for key in [Key::Escape, Key::a, Key::F9, Key::Insert] {
             assert_eq!(action_for(key, PLAIN), None, "{key:?}");
+        }
+    }
+
+    #[test]
+    fn shift_tells_a_recoverable_delete_from_a_final_one() {
+        // The one place in the keymap where a modifier changes what survives,
+        // so it gets its own test rather than riding on the table above.
+        for key in [Key::F8, Key::Delete] {
+            assert_eq!(action_for(key, PLAIN), Some(Action::Delete), "{key:?}");
+            assert_eq!(
+                action_for(key, ModifierType::SHIFT_MASK),
+                Some(Action::DeletePermanently),
+                "{key:?}"
+            );
         }
     }
 

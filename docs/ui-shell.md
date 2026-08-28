@@ -23,6 +23,48 @@ A `PaneView` owns a `Listing` and a `gio::ListStore` of `PaneEntry` objects.
 because `ColumnView` requires its items to be one, not because the row needs
 object semantics.
 
+## Dialogs
+
+Every dialog is built from one shell in `dialogs.rs`, so three dialogs do not
+become three layouts. Each takes a callback rather than returning an answer:
+GTK4 has no blocking dialog, and the shell must keep running the main loop
+while one is open.
+
+| Dialog | Opened by | Answers |
+|---|---|---|
+| target | F5, F6 | a line of text — see [keymap.md](keymap.md) |
+| name | F7 | a line of text |
+| delete confirmation | F8, Shift+F8 | yes / no |
+| conflict | a job that hit an existing target | overwrite / skip / keep both / abort, each with *apply to all* |
+
+**Escape closes all of them.** A modal `gtk::Window` does not do this on its
+own, and a dialog with no way out but the mouse is a trap in a keyboard-first
+program.
+
+**The safe button starts focused.** Permanent delete opens with Cancel under
+the finger and a red Delete beside it; the conflict dialog opens on Skip, the
+one answer that loses nothing. Enter is the key everyone reaches for, so it
+must never be the one that overwrites a file. The conflict dialog originally
+opened with *no* focus at all, which made it mouse-only — found by the smoke
+run, not by a test.
+
+**Closing the conflict dialog without choosing answers nothing**, and the
+engine reads that silence as abort. See [ops.md](ops.md).
+
+## Running a job
+
+The shell owns a `JobQueue`. A keystroke opens a dialog, the dialog's answer
+builds a `Job`, and the job goes to the queue with both panes' backends. Two
+futures on the GLib main loop then follow it — one draining conflict questions
+into dialogs, one waiting for the report — because the two arrive on separate
+channels and neither should wait for the other. Both end on their own when the
+job does.
+
+**Both panes reload when a job finishes.** A copy changed the target side, a
+move changed both, and a delete may have removed the directory a pane was
+standing in — which is why the reload goes through `Listing::load_nearest`
+rather than a plain reload. See [listing.md](listing.md).
+
 ## Where the logic lives
 
 Only one thing in this crate is real logic — turning an `Entry` into the four

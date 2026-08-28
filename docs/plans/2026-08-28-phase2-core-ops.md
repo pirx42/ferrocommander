@@ -1,6 +1,6 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: In Progress — sub-phases 0, A, B, C done
+Status: In Progress — sub-phases 0, A, B, C, D done
 
 *2026-08-28 — implements phase 2 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -448,8 +448,36 @@ the dropped-reply rule.
 
 *Tests:* the keymap table gains its new rows (and loses `F5`/`Delete` from
 the unbound-key witness set, as announced in section 2); the pure dialog
-decisions and `Listing::load_nearest` are unit tested; the widget wiring
-inherits the known manual-verification gap and is added to the manual pass.
+decisions and `Listing::load_nearest` are unit tested.
+
+*The widget wiring does **not** inherit the manual-verification gap, which is
+the biggest deviation in this plan.* The implementation environment turned out
+to have `Xvfb` and `xdotool`, so `scripts/smoke-keys.sh` now drives the real
+binary with real X key events and checks the filesystem afterwards — Tab, the
+cursor keys and Enter in passing, F5, F7 and F8 with their dialogs directly.
+It earned its keep on the first run by finding a defect no test could see: the
+conflict dialog opened with no focused button and could only be answered with
+the mouse. What it still does not reach is listed in
+[future-improvements.md](../future-improvements.md).
+
+*Deviations, implemented deliberately:*
+- **The conflict dialog moved from sub-phase E into D.** Without it, every
+  colliding copy in D would have been answered by the engine's
+  dropped-question rule — a silent abort. A sub-phase has to be usable on its
+  own (skill [11](../skills/11-multi-phase-commits.md)), and that one would
+  not have been. E keeps the progress window and the failure summary.
+- **`Job::Rename` was removed and `Destination` introduced.** Building the
+  dialog showed the UI needs "copy to an exact name" (duplicating a file) just
+  as much as "move to an exact name", so the asymmetry between a `Copy` that
+  could only target a directory and a `Rename` that could only target a path
+  collapsed into one `Destination { Into, Exact }`. Only test *call sites*
+  changed; no assertion did.
+- **The `Box`→`Arc` migration deferred from sub-phase A landed here**, where a
+  job first shares the handle.
+- **Sub-phase 0's characterization needed no superseding.** `load_nearest` is
+  a new function rather than a change to `load`, so the old contract is still
+  true and the phase-0 tests still hold; the third of them turned into the
+  specification the new function is tested against.
 
 *Docs:* [keymap.md](../keymap.md) — the new bindings and why a rename is a
 move · [ui-shell.md](../ui-shell.md) — the dialogs and the refresh rule ·
