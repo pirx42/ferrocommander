@@ -339,6 +339,24 @@ pub const SEARCH_LIST_LIMIT: usize = 5_000;
 /// What the status says once the list has stopped growing.
 pub const SEARCH_CAPPED: &str = "{count} found, showing the first {shown}";
 
+/// The multi-rename tool: its title, its fields, and how a preview row reads.
+pub const TITLE_RENAME: &str = "Multi-rename";
+pub const PROMPT_RENAME_TEMPLATE: &str = "Name template ([N] name, [E] extension, [C] counter):";
+pub const PROMPT_RENAME_COUNTER: &str = "Counter starts at:";
+pub const PROMPT_RENAME_FIND: &str = "Replace:";
+pub const PROMPT_RENAME_WITH: &str = "With:";
+pub const BUTTON_RENAME: &str = "Rename";
+
+/// A preview row, and what a refused one says instead of a new name.
+pub const RENAME_ROW: &str = "{from}  \u{2192}  {to}";
+pub const RENAME_EMPTY: &str = "(no name)";
+pub const RENAME_COLLIDES: &str = "(name already taken in this batch)";
+pub const RENAME_SEPARATOR: &str = "(a name cannot contain a path)";
+pub const RENAME_UNCHANGED: &str = "(unchanged)";
+
+/// How tall the preview may grow before it scrolls.
+pub const RENAME_LIST_HEIGHT: i32 = 320;
+
 /// Title of the command history Ctrl+Down opens.
 pub const TITLE_HISTORY: &str = "Command history";
 

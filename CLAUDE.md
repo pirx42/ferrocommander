@@ -76,12 +76,14 @@ The project is in its build-up phase; this table grows with the code.
 | Read/list files, path handling, platform differences | [docs/vfs.md](docs/vfs.md) |
 | Sorting, hidden files, cursor, the `..` row | [docs/listing.md](docs/listing.md) |
 | Copy/move/delete/mkdir, progress, conflicts, cancel | [docs/ops.md](docs/ops.md) |
+| Search by name or content (Alt+F7) | [docs/search.md](docs/search.md) |
+| Renaming many files by a rule (Ctrl+M), undo | [docs/multi-rename.md](docs/multi-rename.md) |
+| Looking inside a file: F3, paging, encodings, the F4 editor hook | [docs/viewer.md](docs/viewer.md) |
 | Widgets, row rendering, GTK version floor | [docs/ui-shell.md](docs/ui-shell.md) |
 | Key bindings, navigation actions | [docs/keymap.md](docs/keymap.md) |
 | Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
 | Noticing external changes: the watcher, `Ctrl+R` | [docs/watching.md](docs/watching.md) |
-| Looking inside a file: F3, paging, encodings | [docs/viewer.md](docs/viewer.md) |
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
 | What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 (phases 1–4 done, plus 3b and 3c; phase 5 next) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |

@@ -60,6 +60,8 @@ suite and end to end through the real binary.
 | `crates/tc-core/tests/queue.rs` | the background queue: ordering, the conflict round trip, cancelling from outside |
 | `crates/tc-core/tests/local_fs.rs` | the filesystem backend, per call |
 | `crates/tc-core/tests/trash.rs` | that a trashed file is still recoverable |
+| `crates/tc-core/tests/rename.rs` | the multi-rename rules, as a table, plus what they refuse ([multi-rename.md](multi-rename.md)) |
+| `crates/tc-core/tests/search.rs` | the walk: every hit and no others, refusals skipped, cancellation ([search.md](search.md)) |
 | `crates/tc-app/tests/ui.rs` | the real binary, driven by real key presses ([ui-shell.md](ui-shell.md)) |
 
 Failure injection is done with decorators around `VirtualFs` — one that

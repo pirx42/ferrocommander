@@ -37,6 +37,7 @@ const DIALOG_OUTPUT: &str = "Command output";
 const DIALOG_HISTORY: &str = "Command history";
 const DIALOG_NEW_FILE: &str = "New file";
 const DIALOG_SEARCH: &str = "Find files";
+const DIALOG_RENAME: &str = "Multi-rename";
 
 /// Where the settings file lands inside a test's private home. Spelled out
 /// rather than read from `tc-core`, for the same reason the dialog titles
@@ -606,6 +607,110 @@ fn a_search_that_finds_nothing_says_so_and_stays_open() {
 
     app.settle();
     assert!(app.has_dialog(DIALOG_SEARCH), "the search window closed");
+}
+
+#[test]
+fn ctrl_m_renames_the_marked_files_by_the_template() {
+    // The counter numbers the files in the order the pane shows them, which
+    // is the only order anybody can predict from looking at the screen.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — Insert twice marks both files.
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+
+    app.key("ctrl+m");
+    app.focus_dialog(DIALOG_RENAME);
+    // The template arrives selected, so this replaces it rather than
+    // appending to it.
+    app.type_text("page[C].[E]");
+    app.key("Return");
+
+    app.await_exists("src/page1.bin");
+    app.await_contents("src/page2.txt", SOURCE_TEXT);
+    app.await_gone("src/notes.txt");
+}
+
+#[test]
+fn ctrl_z_puts_the_renamed_names_back() {
+    // Undo is a rename back, so it has to know where the files went — not
+    // just what they used to be called.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+
+    app.key("ctrl+m");
+    app.focus_dialog(DIALOG_RENAME);
+    app.type_text("page[C].[E]");
+    app.key("Return");
+    app.await_contents("src/page2.txt", SOURCE_TEXT);
+    // Let the progress window close before the keyboard is asked for back.
+    app.settle();
+
+    app.focus_main();
+    app.key("ctrl+z");
+
+    app.await_contents("src/notes.txt", SOURCE_TEXT);
+    app.await_exists("src/data.bin");
+    app.await_gone("src/page1.bin");
+    app.await_gone("src/page2.txt");
+}
+
+#[test]
+fn two_files_that_would_get_one_name_do_not_overwrite_each_other() {
+    // The batch's own collisions are refused in the preview, before anything
+    // runs. The failure this guards against is not a bad name but a lost
+    // file: the second rename landing on the first.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+
+    app.key("ctrl+m");
+    app.focus_dialog(DIALOG_RENAME);
+    // No [C] and no [E]: both marked files want to be called `same`.
+    app.type_text("same");
+    app.key("Return");
+
+    // data.bin sorts first, so it takes the name; notes.txt keeps its own
+    // rather than being renamed over the top of it.
+    app.await_exists("src/same");
+    app.await_contents("src/notes.txt", SOURCE_TEXT);
+    assert_eq!(
+        std::fs::read(app.path("src/same")).unwrap(),
+        vec![9u8; 4096],
+        "the second file was renamed over the first"
+    );
+    // And refused *before* it ran, not caught by the conflict question
+    // afterwards. Without this the test passes on a build that submits the
+    // colliding move and leaves the user staring at a dialog nobody asked
+    // for — the file survives either way, so only the absent dialog tells
+    // the two apart.
+    app.settle();
+    assert!(
+        !app.has_dialog(DIALOG_CONFLICT),
+        "the colliding rename was submitted instead of being refused"
+    );
+}
+
+#[test]
+fn a_preview_that_is_cancelled_renames_nothing() {
+    // Typing rules redraws the preview on every keystroke. If that ever ran
+    // the rename instead of previewing it, this is the test that says so.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+
+    app.key("ctrl+m");
+    app.focus_dialog(DIALOG_RENAME);
+    app.type_text("page[C].[E]");
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_RENAME);
+
+    app.settle();
+    assert!(app.path("src/notes.txt").exists(), "the file was renamed");
+    assert!(
+        !app.path("src/page1.bin").exists(),
+        "the preview renamed something"
+    );
 }
 
 #[test]

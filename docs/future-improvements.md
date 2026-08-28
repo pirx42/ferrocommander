@@ -25,6 +25,15 @@ is what the date column shows.
 the Windows equivalent, weighed against how much a directory's mtime is worth.
 *From:* [vfs.md](vfs.md), phase 2 sub-phase A.
 
+**Undo is one multi-rename deep.**
+`Ctrl+Z` puts the last batch back and forgets it. Nothing else in the program
+is undoable, and a rename stack would be the visible half of a general
+operation history — which needs somewhere to record what a copy or a delete
+did, and an answer for what "undo a delete" means once the trash is involved.
+One batch is what the multi-rename tool actually needs to be safe to use.
+*Home:* whenever an operation history is worth its own phase; it is not in v1.
+*From:* [multi-rename.md](multi-rename.md), phase 5 sub-phase D.
+
 **A move assumes a single store.**
 `ops` tries one `rename` for a whole tree and falls back to copy + delete only
 on `CrossDevice`. Both address one backend. Phase 2's UI has exactly one, so

@@ -36,6 +36,8 @@
 | `Ctrl+↓`, `Alt+F8` | The command history — see [command-line.md](command-line.md) |
 | `Ctrl+Enter` | Put the name under the cursor into the command line |
 | `Alt+F7` | Find files below the active pane — see [search.md](search.md) |
+| `Ctrl+M` | Rename what is marked by a rule — see [multi-rename.md](multi-rename.md) |
+| `Ctrl+Z` | Put the last multi-rename back |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
 | `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
 | `Ctrl+U` | Exchange the two panes |

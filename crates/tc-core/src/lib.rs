@@ -10,6 +10,7 @@ pub mod config;
 pub mod glob;
 pub mod listing;
 pub mod ops;
+pub mod rename;
 pub mod search;
 pub mod vfs;
 pub mod viewer;

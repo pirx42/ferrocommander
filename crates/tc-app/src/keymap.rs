@@ -41,6 +41,10 @@ pub enum Action {
     Reread,
     /// Alt+F7 — find files below the active pane's directory.
     Search,
+    /// Ctrl+M — rename what is marked, by a rule, with a preview first.
+    MultiRename,
+    /// Ctrl+Z — put the last multi-rename back.
+    UndoRename,
     /// F3 — look inside the file under the cursor.
     View,
     /// F4 — hand it to the editor.
@@ -178,6 +182,19 @@ static BINDINGS: &[Binding] = &[
         key: Key::F7,
         modifiers: ModifierType::ALT_MASK,
         action: Action::Search,
+    },
+    Binding {
+        key: Key::m,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::MultiRename,
+    },
+    // Total Commander undoes a multi-rename from a button inside the tool.
+    // This one closes when it runs, so the undo is a key instead — and the key
+    // everybody already knows.
+    Binding {
+        key: Key::z,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::UndoRename,
     },
     Binding {
         key: Key::F3,
@@ -473,6 +490,8 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("move", Action::Move),
     ("reread", Action::Reread),
     ("search", Action::Search),
+    ("multi_rename", Action::MultiRename),
+    ("undo_rename", Action::UndoRename),
     ("view", Action::View),
     ("edit", Action::Edit),
     ("create_file", Action::CreateFile),
@@ -710,6 +729,8 @@ mod tests {
             (Key::KP_Enter, PLAIN, Action::Activate),
             (Key::BackSpace, PLAIN, Action::GoParent),
             (Key::F7, ModifierType::ALT_MASK, Action::Search),
+            (Key::m, ModifierType::CONTROL_MASK, Action::MultiRename),
+            (Key::z, ModifierType::CONTROL_MASK, Action::UndoRename),
             (Key::F3, PLAIN, Action::View),
             (Key::F4, PLAIN, Action::Edit),
             (Key::F5, PLAIN, Action::Copy),

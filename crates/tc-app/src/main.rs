@@ -53,6 +53,10 @@ struct Shell {
     /// What was last written. Compared against the current state so that
     /// moving the cursor around does not rewrite an identical file.
     saved: config::Settings,
+    /// What the last multi-rename did, as `(new, old)` pairs, for `Ctrl+Z`.
+    ///
+    /// One batch deep, and cleared when it is used.
+    renamed: Vec<(VfsPath, VfsPath)>,
     /// The command lines that were run, newest first.
     ///
     /// Beside `saved` rather than in it — see
@@ -93,6 +97,7 @@ impl Shell {
             config_root,
             drives: saved.drives.clone(),
             command_history: saved.command_history.clone(),
+            renamed: Vec::new(),
             saved,
             keymap,
             save_queued: false,
@@ -293,6 +298,8 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::RenameInline => shell.borrow_mut().active_pane().begin_rename(),
         Action::CreateDir => start_create_dir(shell),
         Action::Search => start_search(shell),
+        Action::MultiRename => start_multi_rename(shell),
+        Action::UndoRename => undo_rename(shell),
         Action::View => start_viewing(shell),
         Action::Edit => start_editing(shell),
         Action::CreateFile => start_create_file(shell),
@@ -965,6 +972,80 @@ fn typed_into_command_line(
     };
     shell.borrow().command_line.accept(character);
     glib::Propagation::Stop
+}
+
+/// Ctrl+M: rename what is marked, by a rule, with a preview first.
+///
+/// On the marks, falling back to the row under the cursor the way every other
+/// operation does — renaming one file by a template is a strange thing to want
+/// but a stranger thing to refuse.
+///
+/// Each rename is a `Move` with an exact destination through the usual queue,
+/// so a name that is already taken **outside** the batch asks the conflict
+/// question it always asks. The batch's own collisions are refused in the
+/// preview before anything runs.
+fn start_multi_rename(shell: &Rc<RefCell<Shell>>) {
+    let (window, directory, names) = {
+        let mut state = shell.borrow_mut();
+        let Some(window) = state.window.upgrade() else {
+            return;
+        };
+        state.active_pane().adopt_selection();
+        let pane = state.active_pane();
+        let names: Vec<String> = jobs::sources(pane.listing())
+            .iter()
+            .filter_map(|path| path.file_name().map(str::to_string))
+            .collect();
+        if names.is_empty() {
+            return;
+        }
+        (window, pane.listing().dir().clone(), names)
+    };
+
+    let shell = shell.clone();
+    dialogs::MultiRename::open(&window, names, move |rows| {
+        if rows.is_empty() {
+            return;
+        }
+        // Remembered before anything runs, and as *paths*: undo is a rename
+        // back, and a rename back needs to know where the files went.
+        shell.borrow_mut().renamed = rows
+            .iter()
+            .map(|row| (directory.child(&row.to), directory.child(&row.from)))
+            .collect();
+        for row in rows {
+            submit(
+                &shell,
+                Job::Move {
+                    sources: vec![directory.child(&row.from)],
+                    destination: Destination::Exact(directory.child(&row.to)),
+                },
+            );
+        }
+    });
+}
+
+/// Ctrl+Z: rename the last batch back.
+///
+/// The recorded names are not trusted — each is submitted as an ordinary move,
+/// so a file that has since been moved or replaced by something else asks the
+/// same conflict question it always would, and one that has gone is reported
+/// as a failure rather than silently skipped.
+///
+/// One batch deep. A rename is undone or it is not; a stack of them would be a
+/// history feature, and the honest version of that is a bigger thing than a
+/// key.
+fn undo_rename(shell: &Rc<RefCell<Shell>>) {
+    let batch = std::mem::take(&mut shell.borrow_mut().renamed);
+    for (from, to) in batch {
+        submit(
+            shell,
+            Job::Move {
+                sources: vec![from],
+                destination: Destination::Exact(to),
+            },
+        );
+    }
 }
 
 /// Alt+F7: find files below the active pane's directory.
