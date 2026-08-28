@@ -26,11 +26,11 @@ use tc_core::ops::{DeleteMode, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
-    APP_ID, APP_NAME, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, PANE_COUNT,
+    APP_ID, APP_NAME, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, LEFT_PANE, PANE_COUNT,
     PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
-    PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE,
-    SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_DELETE,
-    TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_UNMARK_PATTERN,
+    PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY,
+    SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
+    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_UNMARK_PATTERN,
 };
 use keymap::Action;
 use pane::PaneView;
@@ -198,6 +198,13 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         }
         Action::ClearFilter => shell.borrow_mut().active_pane().reset_filter(),
         Action::SortBy(key) => shell.borrow_mut().active_pane().sort_by(key),
+        Action::CloneToRight => clone_pane(shell, RIGHT_PANE),
+        Action::CloneToLeft => clone_pane(shell, LEFT_PANE),
+        Action::ExchangePanes => {
+            let mut state = shell.borrow_mut();
+            let (left, right) = state.panes.split_at_mut(RIGHT_PANE);
+            left[LEFT_PANE].exchange_with(&mut right[0]);
+        }
         Action::ToggleHidden => shell.borrow_mut().active_pane().toggle_hidden(),
         Action::Copy => start_transfer(shell, true),
         Action::Move => start_transfer(shell, false),
@@ -209,6 +216,21 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     // One place, rather than at the end of every arm: a keystroke that
     // changed nothing worth saving costs a comparison and no more.
     remember(shell);
+}
+
+/// Ctrl+← / Ctrl+→: the active pane's directory, shown in `target`.
+///
+/// Relative to the active pane, as in Total Commander: the arrow points at the
+/// pane being *written*. Pressing it toward the pane the keyboard is already
+/// in does nothing, rather than guessing which of the two directions was
+/// meant.
+fn clone_pane(shell: &Rc<RefCell<Shell>>, target: usize) {
+    let mut state = shell.borrow_mut();
+    if state.active == target {
+        return;
+    }
+    let dir = state.active_pane().listing().dir().clone();
+    state.panes[target].go_to(dir);
 }
 
 /// Shift+PgUp / Shift+PgDn: mark across one screenful and land there.

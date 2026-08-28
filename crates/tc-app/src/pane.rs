@@ -459,6 +459,35 @@ impl PaneView {
         self.refresh();
     }
 
+    /// Exchanges everything this pane is showing with another's.
+    ///
+    /// The contents, not the widgets: both panes are children of a `Paned`,
+    /// and reparenting them would be work for no reason. Swapping the whole
+    /// `Listing` is what makes the directory, the cursor and the marks come
+    /// along together — anything reconstructed field by field would quietly
+    /// drop one of them.
+    pub fn exchange_with(&mut self, other: &mut PaneView) {
+        self.adopt_selection();
+        other.adopt_selection();
+        std::mem::swap(&mut self.listing, &mut other.listing);
+        std::mem::swap(&mut self.sort, &mut other.sort);
+        std::mem::swap(&mut self.show_hidden, &mut other.show_hidden);
+        std::mem::swap(&mut self.remembered_marks, &mut other.remembered_marks);
+        let filter = self.filter_bar.text();
+        self.set_filter_text(&other.filter_bar.text());
+        other.set_filter_text(&filter);
+        for pane in [self, other] {
+            pane.update_headers();
+            pane.refresh();
+        }
+    }
+
+    /// Puts text into the quick-filter field, showing or hiding it to match.
+    fn set_filter_text(&self, filter: &str) {
+        self.filter_bar.set_text(filter);
+        self.filter_bar.set_visible(!filter.is_empty());
+    }
+
     /// Where the cursor is, and the last row it could be on.
     pub fn cursor(&self) -> usize {
         self.listing.cursor()

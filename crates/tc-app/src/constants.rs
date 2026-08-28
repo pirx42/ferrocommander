@@ -31,6 +31,11 @@ pub const PAGE_ROWS_FALLBACK: usize = 20;
 /// Both panes start equally wide — neither side is the "main" one.
 pub const PANE_SPLIT_RATIO: f32 = 0.5;
 
+/// The two panes by position, for the commands that name a side rather than
+/// "the active one": Ctrl+← / Ctrl+→ and the pane exchange.
+pub const LEFT_PANE: usize = 0;
+pub const RIGHT_PANE: usize = 1;
+
 /// Panes in the window. Switching cycles through them, so a third pane
 /// later would need no new switching logic.
 pub const PANE_COUNT: usize = 2;

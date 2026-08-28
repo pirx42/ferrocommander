@@ -660,6 +660,82 @@ fn shift_num_star_takes_the_directories_with_it() {
 }
 
 #[test]
+fn ctrl_right_shows_the_left_panes_directory_on_the_right() {
+    // The arrow points at the pane being written. Standing in the left pane,
+    // Ctrl+Right sends its directory across.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+Right");
+
+    // The right pane is now in src too, so F7 there creates inside src.
+    app.key("Tab");
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("cloned");
+    app.key("Return");
+
+    app.await_exists("src/cloned");
+    assert!(
+        !app.path("dst/cloned").exists(),
+        "the right pane stayed in dst"
+    );
+}
+
+#[test]
+fn an_arrow_pointing_at_the_pane_you_are_in_does_nothing() {
+    // TC-relative: Ctrl+Left names the left pane as the target, so pressing it
+    // while standing there has no direction left to mean. "Nothing" has to be
+    // literal — sending the pane to where it already is looks identical until
+    // you notice it re-read the directory, which drops the marks and puts the
+    // cursor back at the top. So this marks a file first and spends the mark
+    // afterwards.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — mark data.bin in the left pane.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("space");
+
+    app.key("ctrl+Left");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.settle();
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "the pane was reloaded by an arrow pointing at itself"
+    );
+}
+
+#[test]
+fn ctrl_u_exchanges_the_panes_and_the_marks_come_along() {
+    // Swapping the whole listing rather than rebuilding it field by field is
+    // what makes the marks travel with the directory. The keyboard stays in
+    // the same physical pane, which is now showing the other side.
+    let app = in_src_and_dst(arrange);
+    // Mark data.bin in the left pane, which is in src.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("space");
+
+    app.key("ctrl+u");
+
+    // The left pane now shows dst; the right one shows src with its mark.
+    // F5 from the right pane copies the marked file back to the left, which
+    // is dst — proving both the swap and that the mark survived it.
+    app.key("Tab");
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.settle();
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "the mark was lost in the exchange and F5 fell back to the cursor"
+    );
+}
+
+#[test]
 fn ctrl_a_then_f8_deletes_everything_in_the_pane() {
     let app = in_src_and_dst(arrange);
 

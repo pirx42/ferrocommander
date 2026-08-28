@@ -29,6 +29,8 @@
 | `Num /` | The selection from before the last operation |
 | `Ctrl+A`, `Ctrl+Num +` | Mark everything visible |
 | `Ctrl+Num −` | Unmark everything visible |
+| `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
+| `Ctrl+U` | Exchange the two panes |
 | `Ctrl+F3` … `Ctrl+F6` | Sort by name / ext / date / size |
 | `Ctrl+H` | Show or hide the dot-files |
 | `Ctrl+S` | Narrow the pane as you type |
@@ -106,6 +108,27 @@ entry, and copying or deleting "the parent directory" from inside it is never
 what the user means. It cannot be marked, and with nothing else marked, F5–F8
 on it do nothing. A mark elsewhere in the pane still counts — the `..` rule is
 about the fallback, not about the marks.
+
+## The two-pane commands
+
+`Ctrl+←/→` are **relative to the active pane**, as in Total Commander: the
+arrow points at the pane being *written*, and the active one supplies the
+directory. Pressing an arrow toward the pane the keyboard is already in does
+nothing, rather than guessing which of the two directions was meant.
+
+"Nothing" is literal, and that is the part worth a test: sending a pane to the
+directory it is already in looks identical from outside until you notice it
+re-read it, which drops the marks and puts the cursor back at the top. The
+end-to-end test marks a file, presses the self-pointing arrow, and then spends
+the mark.
+
+`Ctrl+U` exchanges the panes' **contents**, not their widgets — both are
+children of a `Paned`, and reparenting them would be work for no reason. The
+whole `Listing` is swapped, which is what makes the directory, the cursor and
+the marks travel together; anything rebuilt field by field would quietly drop
+one of them, and the test for it marks a file on one side and spends it on the
+other. The keyboard stays in the same physical pane, now showing the other
+side.
 
 ## What the target field means
 

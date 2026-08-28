@@ -70,6 +70,12 @@ pub enum Action {
     /// Ctrl+F3…Ctrl+F6 — sort by a column, or flip it if it is already the
     /// one in force.
     SortBy(SortKey),
+    /// Ctrl+→ — show the left pane's directory in the right one.
+    CloneToRight,
+    /// Ctrl+← — the other way round.
+    CloneToLeft,
+    /// Ctrl+U — exchange the two panes.
+    ExchangePanes,
     /// Ctrl+H — show or hide the dot-files.
     ToggleHidden,
     Quit,
@@ -306,6 +312,24 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::SortBy(SortKey::Size),
     },
+    // Relative to the active pane, as in Total Commander: the arrow points at
+    // the pane being *written*, so pressing it toward the pane the keyboard is
+    // already in does nothing rather than guessing.
+    Binding {
+        key: Key::Right,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::CloneToRight,
+    },
+    Binding {
+        key: Key::Left,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::CloneToLeft,
+    },
+    Binding {
+        key: Key::u,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::ExchangePanes,
+    },
     Binding {
         key: Key::h,
         modifiers: ModifierType::CONTROL_MASK,
@@ -462,6 +486,9 @@ mod tests {
                 ModifierType::CONTROL_MASK,
                 Action::SortBy(SortKey::Size),
             ),
+            (Key::Right, ModifierType::CONTROL_MASK, Action::CloneToRight),
+            (Key::Left, ModifierType::CONTROL_MASK, Action::CloneToLeft),
+            (Key::u, ModifierType::CONTROL_MASK, Action::ExchangePanes),
             (Key::h, ModifierType::CONTROL_MASK, Action::ToggleHidden),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
         ];
