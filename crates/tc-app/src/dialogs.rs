@@ -18,9 +18,9 @@ use tc_core::ops::{Answer, CancelToken, Resolution};
 
 use crate::constants::{
     BUTTON_ABORT, BUTTON_CANCEL, BUTTON_CLOSE, BUTTON_KEEP_BOTH, BUTTON_OK, BUTTON_OVERWRITE,
-    BUTTON_SKIP, CHECK_APPLY_TO_ALL, CLASS_DESTRUCTIVE, CLASS_DIM, CLASS_SUGGESTED, DIALOG_MARGIN,
-    DIALOG_SPACING, DIALOG_WIDTH, DRIVE_LIST_HEIGHT, ENTRY_WIDTH_CHARS, FAILURE_LIST_HEIGHT,
-    TITLE_FAILURES, TITLE_PROGRESS, XALIGN_LEFT,
+    BUTTON_SKIP, CHECK_APPLY_TO_ALL, CLASS_DESTRUCTIVE, CLASS_DIM, CLASS_OUTPUT, CLASS_SUGGESTED,
+    DIALOG_MARGIN, DIALOG_SPACING, DIALOG_WIDTH, DRIVE_LIST_HEIGHT, ENTRY_WIDTH_CHARS,
+    FAILURE_LIST_HEIGHT, OUTPUT_HEIGHT, TITLE_FAILURES, TITLE_PROGRESS, XALIGN_LEFT,
 };
 use crate::progress::{failure_lines, Meter};
 
@@ -209,6 +209,43 @@ pub fn choose_place(
     // tests could not tell the difference. A UI test presses Down and Enter
     // and has to reach the *second* place, so if a GTK release ever stops
     // doing it, that fails rather than the first Enter quietly dying.
+}
+
+/// Shows what a command printed, in a window that can be scrolled and copied.
+///
+/// Monospaced and unwrapped: this is program output, where the columns mean
+/// something and a wrapped line stops lining up. It scrolls sideways instead,
+/// which is what a terminal does.
+pub fn show_output(parent: &impl IsA<gtk::Window>, title: &str, output: &str) {
+    let (window, content) = shell(parent, title);
+
+    let text = gtk::Label::builder()
+        .label(output)
+        .xalign(XALIGN_LEFT)
+        .yalign(XALIGN_LEFT)
+        .selectable(true)
+        .build();
+    text.add_css_class(CLASS_OUTPUT);
+
+    let scroller = gtk::ScrolledWindow::builder()
+        .child(&text)
+        .propagate_natural_height(true)
+        .max_content_height(OUTPUT_HEIGHT)
+        .build();
+    content.append(&scroller);
+
+    let row = button_row();
+    let close = gtk::Button::with_label(BUTTON_CLOSE);
+    close.add_css_class(CLASS_SUGGESTED);
+    row.append(&close);
+    content.append(&row);
+
+    let closing = window.clone();
+    close.connect_clicked(move |_| closing.close());
+
+    window.present();
+    // Focused, so Space or Enter closes it without reaching for the mouse.
+    close.grab_focus();
 }
 
 /// Asks a yes/no question.

@@ -93,6 +93,25 @@ pub fn run(directory: &VfsPath, line: &str) -> Outcome {
     }
 }
 
+/// Starts a command on a thread of its own and hands back where its answer
+/// will arrive.
+///
+/// The threading lives here rather than in the shell, for the same reason the
+/// job queue's does: `tc-core` owns the channel and the worker, and the UI
+/// only awaits. It is a plain thread rather than the job queue because a
+/// command is not a file operation — it has no progress to report and no
+/// conflicts to answer, and must not wait behind a copy that is still
+/// running.
+pub fn spawn(directory: VfsPath, line: String) -> async_channel::Receiver<Outcome> {
+    // One slot, and the only send is the outcome: the worker never blocks and
+    // the channel closes when it ends.
+    let (sender, receiver) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let _ = sender.send_blocking(run(&directory, &line));
+    });
+    receiver
+}
+
 /// Trims the trailing newline and caps the length, marking a cut.
 fn limited(mut text: String) -> String {
     while text.ends_with('\n') || text.ends_with('\r') {

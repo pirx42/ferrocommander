@@ -20,6 +20,9 @@ cross-references instead of duplication.
   not undo.
 - [keymap.md](keymap.md) — what each key does, how bindings are looked up,
   and what happens when a directory cannot be entered.
+- [command-line.md](command-line.md) — the command line at the bottom: how a
+  typed line is run, why `cd` is read rather than spawned, and when output is
+  shown.
 - [config.md](config.md) — the settings file: where it lives, why it is
   written as it changes rather than on exit, why the write is atomic, and why
   nothing about it may stop the program starting.

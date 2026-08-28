@@ -167,6 +167,22 @@ pub const STYLESHEET: &str = "
     opacity: 0.55;
     font-family: monospace;
 }
+.command-line {
+    padding: 2px 4px;
+}
+.command-line entry {
+    font-family: monospace;
+}
+.command-prompt {
+    padding: 0 4px;
+    font-family: monospace;
+    opacity: 0.7;
+}
+.output {
+    /* Program output, where the columns mean something. */
+    font-family: monospace;
+    padding: 4px;
+}
 .drive-bar button {
     padding: 1px 8px;
     min-height: 0;
@@ -217,6 +233,12 @@ pub const CLASS_DRIVE_BAR: &str = "drive-bar";
 /// Secondary text that should not compete with what it sits beside — the
 /// mount path behind a drive's label.
 pub const CLASS_DIM: &str = "dim";
+
+/// The command line across the bottom, and the window a command's output
+/// lands in.
+pub const CLASS_COMMAND_LINE: &str = "command-line";
+pub const CLASS_COMMAND_PROMPT: &str = "command-prompt";
+pub const CLASS_OUTPUT: &str = "output";
 
 /// What the quick-filter field says when it is empty.
 pub const FILTER_PLACEHOLDER: &str = "Filter\u{2026}  (Esc to clear)";
@@ -269,6 +291,13 @@ pub const CONFLICT_PROMPT: &str = "{name} already exists in the target.";
 pub const TITLE_PROGRESS: &str = "Working";
 pub const TITLE_FAILURES: &str = "Some items were not processed";
 
+/// Title of the window a command's output lands in.
+pub const TITLE_OUTPUT: &str = "Command output";
+
+/// Separates the prompt from the entry: the directory a command will run in,
+/// then the usual shell mark.
+pub const COMMAND_PROMPT_SUFFIX: &str = "$";
+
 /// Title of the drive selector Alt+F1 / Alt+F2 open.
 pub const TITLE_DRIVES: &str = "Drives";
 
@@ -314,6 +343,9 @@ pub const FAILURE_LIST_HEIGHT: i32 = 240;
 /// it grows with its contents, so two mount points do not open a window mostly
 /// full of nothing.
 pub const DRIVE_LIST_HEIGHT: i32 = 320;
+
+/// How tall a command's output may grow before it scrolls.
+pub const OUTPUT_HEIGHT: i32 = 400;
 
 #[cfg(test)]
 mod tests {

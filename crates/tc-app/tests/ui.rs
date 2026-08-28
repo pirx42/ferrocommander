@@ -33,6 +33,7 @@ const DIALOG_CONFLICT: &str = "Target already exists";
 const DIALOG_FAILURES: &str = "Some items were not processed";
 const DIALOG_PATTERN: &str = "Select by pattern";
 const DIALOG_DRIVES: &str = "Drives";
+const DIALOG_OUTPUT: &str = "Command output";
 
 /// Where the settings file lands inside a test's private home. Spelled out
 /// rather than read from `tc-core`, for the same reason the dialog titles
@@ -1370,6 +1371,166 @@ fn the_title_names_the_build_it_is_running() {
     assert!(
         !hash.is_empty() && hash.chars().all(|digit| digit.is_ascii_hexdigit()),
         "the commit hash is not a hash: {hash:?}"
+    );
+}
+
+#[test]
+fn typing_a_letter_starts_a_command_and_enter_runs_it() {
+    // Total Commander's feel, and the only way into the command line from the
+    // keyboard: a letter no binding claims types instead of being dropped.
+    // The command runs in the *active pane's* directory, which is the whole
+    // point — `src`, not wherever the process happens to have started.
+    let app = in_src_and_dst(arrange);
+
+    app.type_text("touch typed-here");
+    app.key("Return");
+
+    app.await_exists("src/typed-here");
+}
+
+#[test]
+fn a_command_runs_in_the_pane_that_has_the_keyboard() {
+    // Tab moves the command line with it. A line that kept running in the
+    // pane you left would be the worst kind of wrong: plausible until it
+    // deletes something.
+    let app = in_src_and_dst(arrange);
+    app.key("Tab");
+
+    app.type_text("touch on-the-right");
+    app.key("Return");
+
+    app.await_exists("dst/on-the-right");
+    app.settle();
+    assert!(
+        !app.path("src/on-the-right").exists(),
+        "the command ran in the pane that no longer had the keyboard"
+    );
+}
+
+#[test]
+fn a_command_that_says_something_opens_a_window_saying_it() {
+    let app = in_src_and_dst(arrange);
+
+    app.type_text("echo hello from the shell");
+    app.key("Return");
+
+    app.focus_dialog(DIALOG_OUTPUT);
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_OUTPUT);
+}
+
+#[test]
+fn a_silent_command_opens_no_window_at_all() {
+    // Otherwise every `touch` costs a dialog to dismiss, and a command line
+    // that interrupts after every command is one nobody uses twice.
+    let app = in_src_and_dst(arrange);
+
+    app.type_text("touch quietly");
+    app.key("Return");
+    app.await_exists("src/quietly");
+
+    app.settle();
+    assert!(
+        !app.has_dialog(DIALOG_OUTPUT),
+        "a command that said nothing still opened a window"
+    );
+}
+
+#[test]
+fn a_failing_command_says_so_even_when_it_printed_nothing() {
+    // "It did nothing and said nothing" must not be indistinguishable from
+    // "it worked".
+    let app = in_src_and_dst(arrange);
+
+    app.type_text("false");
+    app.key("Return");
+
+    app.focus_dialog(DIALOG_OUTPUT);
+}
+
+#[test]
+fn cd_moves_the_pane_instead_of_being_run() {
+    // A `cd` in a child process changes nothing anybody can see, so a command
+    // line that spawned one would look broken.
+    let app = in_src_and_dst(arrange);
+
+    app.type_text("cd nested");
+    app.key("Return");
+    app.settle();
+
+    // The pane is in src/nested now, so F7 lands there.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("proof");
+    app.key("Return");
+
+    app.await_exists("src/nested/proof");
+}
+
+#[test]
+fn escape_empties_the_command_line_and_hands_back_the_keyboard() {
+    // A field with no way out but the mouse is a trap in a keyboard-first
+    // program, and this one has no Cancel button.
+    let app = in_src_and_dst(arrange);
+    app.type_text("touch never-run");
+    app.key("Escape");
+
+    // The keyboard is back on the rows: F7 opens its dialog rather than
+    // typing into the line.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("after-escape");
+    app.key("Return");
+    app.await_exists("src/after-escape");
+
+    app.settle();
+    assert!(
+        !app.path("src/never-run").exists(),
+        "Escape left the command behind to be run later"
+    );
+}
+
+#[test]
+fn a_shortcut_this_program_does_not_have_types_nothing() {
+    // Ctrl+J and Alt+J still report the letter J. Somebody reaching for a
+    // shortcut meant a shortcut, and silently typing `j` into the command
+    // line would turn a missing feature into a wrong answer — then Enter
+    // would run it.
+    let app = in_src_and_dst(arrange);
+
+    app.keys(&["ctrl+j", "alt+j"]);
+    app.key("Return");
+
+    app.settle();
+    assert!(
+        !app.has_dialog(DIALOG_OUTPUT),
+        "an unbound shortcut typed its letter and Enter ran it"
+    );
+}
+
+#[test]
+fn the_quick_filter_still_gets_its_own_letters() {
+    // The risk in letting unbound letters type: the filter field is a text
+    // widget the shell must keep its hands off, and breaking it would be a
+    // silent regression in a feature nothing else covers.
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+s");
+    app.type_text("notes");
+    app.key("Return");
+
+    // Only notes.txt is visible now, so Home+Down lands on it and F5 copies
+    // that one file.
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "the filter did not narrow the pane"
     );
 }
 

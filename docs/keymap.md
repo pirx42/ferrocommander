@@ -37,6 +37,7 @@
 | `Ctrl+S` | Narrow the pane as you type |
 | `Esc` | Stop narrowing |
 | `Ctrl+Q` | Quit |
+| any unbound letter | Starts a command — see [command-line.md](command-line.md) |
 
 Activating a *file* still does nothing — F3/F4 arrive in phase 4.
 

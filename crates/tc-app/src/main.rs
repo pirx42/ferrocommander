@@ -4,6 +4,7 @@
 //! keystroke up in the keymap, and forwards to `tc-core`, which owns every
 //! decision about what a directory contains and how it is ordered.
 
+mod command_line;
 mod constants;
 mod dialogs;
 mod jobs;
@@ -30,7 +31,7 @@ use constants::{
     PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY,
     PROMPT_CREATE_DIR, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY,
     SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY,
-    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_DRIVES, TITLE_MARK_PATTERN, TITLE_MOVE,
+    TITLE_CREATE_DIR, TITLE_DELETE, TITLE_DRIVES, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT,
     TITLE_UNMARK_PATTERN,
 };
 use keymap::{Action, Keymap};
@@ -51,6 +52,8 @@ struct Shell {
     /// What was last written. Compared against the current state so that
     /// moving the cursor around does not rewrite an identical file.
     saved: config::Settings,
+    /// The command line across the bottom, which follows the active pane.
+    command_line: command_line::CommandLine,
     /// Where each mount point was last showing, keyed by mount path.
     ///
     /// On the shell rather than on a pane, because it is shared: leaving a
@@ -73,10 +76,12 @@ impl Shell {
         config_root: Option<VfsPath>,
         saved: config::Settings,
         keymap: Keymap,
+        command_line: command_line::CommandLine,
     ) -> Self {
         let mut shell = Shell {
             panes,
             active: 0,
+            command_line,
             queue: JobQueue::new(),
             window: window.downgrade(),
             config_root,
@@ -103,6 +108,17 @@ impl Shell {
             pane.set_active(index == self.active);
         }
         self.panes[self.active].grab_focus();
+        self.follow_active();
+    }
+
+    /// Points the command line's prompt at the active pane.
+    ///
+    /// Shown rather than left to be remembered: which directory a command
+    /// would run in changes under the user with every Tab, and a command line
+    /// that did not say so is one you check by running something.
+    fn follow_active(&self) {
+        self.command_line
+            .follow(self.panes[self.active].listing().dir());
     }
 
     /// What the settings file would say if it were written right now.
@@ -236,8 +252,81 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::Quit => {}
     }
     // One place, rather than at the end of every arm: a keystroke that
-    // changed nothing worth saving costs a comparison and no more.
+    // changed nothing worth saving costs a comparison and no more. The
+    // command line's prompt is the same story — navigation moves it, and
+    // there is no arm that could not have.
+    shell.borrow().follow_active();
     remember(shell);
+}
+
+/// Runs whatever is in the command line, in the active pane's directory.
+///
+/// `cd` never reaches a shell: a `cd` in a child process changes nothing
+/// anybody can see, so a command line that spawned one would look broken.
+///
+/// Everything else runs on a worker thread and the answer arrives back on the
+/// GLib loop, like a job. Nothing blocks: a file manager whose prime directive
+/// is speed does not get to freeze while `find /` finishes, and a second
+/// command may start while the first is still running.
+fn run_command(shell: &Rc<RefCell<Shell>>) {
+    let (line, directory) = {
+        let mut state = shell.borrow_mut();
+        let line = state.command_line.text();
+        if line.trim().is_empty() {
+            return;
+        }
+        (line, state.active_pane().listing().dir().clone())
+    };
+
+    match command_line::read(&line) {
+        command_line::Typed::ChangeDirectory(argument) => {
+            let target = command_line::destination(&directory, &argument, LocalFs::home_dir());
+            if let Some(target) = target {
+                shell.borrow_mut().active_pane().go_to(target);
+            }
+            finish_command(shell);
+            remember(shell);
+        }
+        command_line::Typed::Shell(line) => {
+            finish_command(shell);
+            // Before it finishes, not after: the keyboard belongs back in the
+            // rows the moment the command is away, and a long one would
+            // otherwise hold it for as long as it ran.
+            spawn_command(shell, directory, line);
+        }
+    }
+}
+
+/// Empties the command line and hands the keyboard back to the rows.
+///
+/// Running a command is the end of typing one. Leaving the focus in the entry
+/// meant the next F7 was typed into it rather than opening a dialog, which is
+/// the sort of thing that reads as "the program ignored me".
+fn finish_command(shell: &Rc<RefCell<Shell>>) {
+    let state = shell.borrow();
+    state.command_line.clear();
+    state.panes[state.active].grab_focus();
+}
+
+/// Runs one shell command off the UI thread and shows what it said.
+fn spawn_command(shell: &Rc<RefCell<Shell>>, directory: VfsPath, line: String) {
+    let receiver = tc_core::command::spawn(directory, line);
+    let shell = shell.clone();
+    glib::spawn_future_local(async move {
+        let Ok(outcome) = receiver.recv().await else {
+            return;
+        };
+        // Both panes: a command is the one thing here that can change
+        // anything, and nothing says which side it touched.
+        shell.borrow_mut().reload_all();
+        if !outcome.worth_showing() {
+            return;
+        }
+        let Some(window) = shell.borrow().window.upgrade() else {
+            return;
+        };
+        dialogs::show_output(&window, TITLE_OUTPUT, &outcome.output);
+    });
 }
 
 /// Sends a pane to a mount point, landing where that mount was last showing.
@@ -627,9 +716,12 @@ fn build_window(app: &gtk::Application) {
         .resize_end_child(true)
         .build();
 
+    let command_line = command_line::CommandLine::new();
+
     let layout = gtk::Box::new(gtk::Orientation::Vertical, PANE_SPACING);
     layout.append(&drives);
     layout.append(&panes);
+    layout.append(command_line.widget());
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
@@ -645,6 +737,7 @@ fn build_window(app: &gtk::Application) {
         config_root,
         settings.clone(),
         keymap,
+        command_line,
     )));
     shell.borrow_mut().active = settings.active_pane.min(PANE_COUNT - 1);
     shell.borrow_mut().update_active();
@@ -652,6 +745,7 @@ fn build_window(app: &gtk::Application) {
         wire_filter_bar(&shell, index);
     }
     fill_drive_bar(&drives, &shell);
+    wire_command_line(&shell);
     remember_on_close(&window, &shell);
     remember_window_size(&window, &shell);
     window.add_controller(key_controller(&window, shell));
@@ -733,6 +827,61 @@ fn remember_window_size(window: &gtk::ApplicationWindow, shell: &Rc<RefCell<Shel
     window.connect_default_height_notify(move |_| remember(&height));
 }
 
+/// A key no binding claimed: if it is a character, it starts a command.
+///
+/// Total Commander's feel, and the only way into the command line from the
+/// keyboard — without it a keyboard-first program has a command line nobody
+/// can reach. Plain `a` did nothing before this; now it types.
+///
+/// Only an unmodified character, though. `Ctrl+X` and `Alt+X` still report a
+/// letter, and a user reaching for a shortcut this program does not have
+/// meant a shortcut, not the letter — silently typing it would be a wrong
+/// answer rather than a missing one.
+fn typed_into_command_line(
+    shell: &Rc<RefCell<Shell>>,
+    key: gdk::Key,
+    modifiers: gdk::ModifierType,
+) -> glib::Propagation {
+    if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
+        return glib::Propagation::Proceed;
+    }
+    // Control characters are keys, not text: Backspace and the arrows all
+    // report one, and typing them into the line would be nonsense.
+    let Some(character) = key.to_unicode().filter(|typed| !typed.is_control()) else {
+        return glib::Propagation::Proceed;
+    };
+    shell.borrow().command_line.accept(character);
+    glib::Propagation::Stop
+}
+
+/// Connects the command line: Enter runs, Escape hands the keyboard back.
+fn wire_command_line(shell: &Rc<RefCell<Shell>>) {
+    let entry = shell.borrow().command_line.entry().clone();
+
+    let running = shell.clone();
+    entry.connect_activate(move |_| run_command(&running));
+
+    // Capture phase, for the reason the filter bar's handler is: `GtkText`
+    // consumes Escape and Return itself, so a bubble-phase handler never sees
+    // them and the keyboard stays trapped in the field.
+    let controller = gtk::EventControllerKey::new();
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let leaving = shell.clone();
+    controller.connect_key_pressed(move |_, key, _, _| {
+        if key != gdk::Key::Escape {
+            return glib::Propagation::Proceed;
+        }
+        // Escape clears what is typed and gives the rows the keyboard back —
+        // one key for "never mind", rather than select-all-and-delete and
+        // then a reach for Tab.
+        let state = leaving.borrow();
+        state.command_line.clear();
+        state.panes[state.active].grab_focus();
+        glib::Propagation::Stop
+    });
+    entry.add_controller(controller);
+}
+
 /// Connects one pane's quick-filter field: typing narrows, Escape stops,
 /// Enter keeps the narrowed view and hands the keyboard back to the rows.
 fn wire_filter_bar(shell: &Rc<RefCell<Shell>>, index: usize) {
@@ -807,7 +956,7 @@ fn key_controller(
             return glib::Propagation::Proceed;
         }
         let Some(action) = shell.borrow().keymap.action_for(key, modifiers) else {
-            return glib::Propagation::Proceed;
+            return typed_into_command_line(&shell, key, modifiers);
         };
         if action == Action::Quit {
             if let Some(window) = window.upgrade() {
