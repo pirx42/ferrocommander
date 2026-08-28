@@ -14,8 +14,9 @@ use crate::constants::{
     CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
     CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME,
     COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
-    COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
-    SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, XALIGN_LEFT, XALIGN_RIGHT,
+    COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER, PAGE_ROWS_FALLBACK, PANE_SPACING,
+    PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, XALIGN_LEFT,
+    XALIGN_RIGHT,
 };
 use crate::navigation::{activation_target, adopted_cursor, focus_after_move, parent_target};
 use crate::row::Row;
@@ -160,6 +161,15 @@ pub struct PaneView {
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
     listing: Listing,
+    /// Kept so the two page keys that mark can measure a page; the model has
+    /// no idea how tall the viewport is.
+    scroller: gtk::ScrolledWindow,
+    /// What was marked when the last job was submitted, for `Num /`.
+    ///
+    /// Names rather than rows, and held by the pane rather than the listing,
+    /// because the listing this refers to no longer exists: every finished job
+    /// builds a new one.
+    remembered_marks: Vec<String>,
     /// How this pane orders and filters, which belongs to the *pane* and not
     /// to the directory it happens to be showing.
     ///
@@ -239,6 +249,8 @@ impl PaneView {
             selection,
             column_view,
             listing,
+            scroller,
+            remembered_marks: Vec::new(),
             fs,
             error,
         };
@@ -419,15 +431,60 @@ impl PaneView {
         }
     }
 
-    /// Flips the mark on the cursor row; `advance` steps down afterwards, so
-    /// Insert can be held down the way it is in Total Commander.
-    pub fn toggle_mark(&mut self, advance: bool) {
+    /// Flips the mark on the cursor row, then steps `step` rows.
+    ///
+    /// One method for four keys, because in Total Commander they are one
+    /// behaviour: `Space` marks without moving, `Insert` and `Shift+↓` mark
+    /// and step down so the key can be held, and `Shift+↑` does the same
+    /// upwards. Marking the row being *left* rather than the one arrived at
+    /// is TC's own rule, and it is what makes running back over a row take
+    /// its mark off again.
+    pub fn toggle_mark(&mut self, step: isize) {
         self.adopt_selection();
         self.listing.toggle_selected(self.listing.cursor());
-        if advance {
-            self.listing.move_cursor_by(1);
-        }
+        self.listing.move_cursor_by(step);
         self.refresh();
+    }
+
+    /// Marks every row between the cursor and `target`, then goes there.
+    ///
+    /// `Shift+Home`/`End`/`PgUp`/`PgDn`: a range, not a toggle, because a
+    /// jump has no direction to run back over and "flip everything I passed"
+    /// is not what a person asking for "to the end" means.
+    pub fn extend_mark_to(&mut self, target: usize) {
+        self.adopt_selection();
+        self.listing
+            .select_range(self.listing.cursor(), target, true);
+        self.listing.set_cursor(target);
+        self.refresh();
+    }
+
+    /// Where the cursor is, and the last row it could be on.
+    pub fn cursor(&self) -> usize {
+        self.listing.cursor()
+    }
+
+    pub fn last_row(&self) -> usize {
+        self.listing.len().saturating_sub(1)
+    }
+
+    /// How many rows fit on screen, for the two page keys that mark.
+    ///
+    /// Measured rather than assumed: the model has no idea how tall the
+    /// viewport is, which is exactly why plain Page Up/Down are left to the
+    /// widget ([`docs/keymap.md`]). The adjustment knows the content height
+    /// and the viewport height, and the rows are uniform, so the row count
+    /// falls out of the ratio. Before the first layout there is no height to
+    /// divide by and the fallback stands in.
+    pub fn page_rows(&self) -> usize {
+        let adjustment = self.scroller.vadjustment();
+        let (content, viewport) = (adjustment.upper(), adjustment.page_size());
+        let rows = self.listing.len() as f64;
+        if content <= 0.0 || viewport <= 0.0 || rows <= 0.0 {
+            return PAGE_ROWS_FALLBACK;
+        }
+        let row_height = content / rows;
+        ((viewport / row_height) as usize).max(1)
     }
 
     pub fn mark_matching(&mut self, pattern: &str, selected: bool) {
@@ -435,13 +492,47 @@ impl PaneView {
         self.refresh();
     }
 
-    pub fn invert_marks(&mut self) {
-        self.listing.invert_selection();
+    /// Flips the visible files, leaving directories alone — Total Commander's
+    /// `Num *`. `including_folders` is its `Shift+Num *`.
+    pub fn invert_marks(&mut self, including_folders: bool) {
+        if including_folders {
+            self.listing.invert_selection();
+        } else {
+            self.listing.invert_selection_files();
+        }
         self.refresh();
     }
 
     pub fn mark_all(&mut self) {
         self.listing.select_all();
+        self.refresh();
+    }
+
+    pub fn unmark_all(&mut self) {
+        self.listing.clear_selection();
+        self.refresh();
+    }
+
+    /// `Alt+Num ±`: every visible file sharing the cursor row's extension.
+    pub fn mark_same_extension(&mut self, selected: bool) {
+        self.adopt_selection();
+        self.listing.select_same_extension(selected);
+        self.refresh();
+    }
+
+    /// Puts away what is marked, so `Num /` can bring it back.
+    ///
+    /// Called when a job is submitted rather than when it finishes: the job
+    /// ends with a fresh listing, and by then the marks it consumed are gone.
+    pub fn remember_marks(&mut self) {
+        self.remembered_marks = self.listing.selected_names();
+    }
+
+    /// `Num /`: the selection from before the last operation.
+    pub fn restore_marks(&mut self) {
+        let remembered = std::mem::take(&mut self.remembered_marks);
+        self.listing.set_selected_names(&remembered);
+        self.remembered_marks = remembered;
         self.refresh();
     }
 

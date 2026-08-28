@@ -33,16 +33,36 @@ pub enum Action {
     DeletePermanently,
     /// Space — mark the row under the cursor, leaving the cursor where it is.
     ToggleMark,
-    /// Insert — mark it and step down, so the key can be held.
+    /// Insert / Shift+↓ — mark it and step down, so the key can be held.
     ToggleMarkAndAdvance,
+    /// Shift+↑ — the same, upwards.
+    ToggleMarkAndRetreat,
+    /// Shift+Home — mark from the cursor to the first row, and go there.
+    ExtendMarkToFirst,
+    /// Shift+End — the same, to the last row.
+    ExtendMarkToLast,
+    /// Shift+PgUp — the same, one page up.
+    ExtendMarkPageUp,
+    /// Shift+PgDn — the same, one page down.
+    ExtendMarkPageDown,
     /// Num + — mark everything matching a pattern.
     MarkByPattern,
     /// Num − — unmark everything matching a pattern.
     UnmarkByPattern,
-    /// Num * — swap what is marked for what is not.
+    /// Num * — swap what is marked for what is not, files only.
     InvertMarks,
-    /// Ctrl+A — mark everything visible.
+    /// Shift+Num * — the same, directories included.
+    InvertMarksIncludingFolders,
+    /// Alt+Num + — mark every file with the cursor row's extension.
+    MarkSameExtension,
+    /// Alt+Num − — unmark them.
+    UnmarkSameExtension,
+    /// Num / — the selection from before the last operation.
+    RestoreMarks,
+    /// Ctrl+A / Ctrl+Num + — mark everything visible.
     MarkAll,
+    /// Ctrl+Num − — unmark everything visible.
+    UnmarkAll,
     /// Ctrl+S — narrow the pane as you type.
     QuickFilter,
     /// Escape — stop narrowing.
@@ -163,15 +183,50 @@ static BINDINGS: &[Binding] = &[
         modifiers: PLAIN,
         action: Action::ToggleMarkAndAdvance,
     },
-    // The keypad keys Total Commander uses, and the ordinary ones beside
-    // them, because not every keyboard has a numeric block.
+    // Shift+cursor is Total Commander's other way of marking a run, and it is
+    // the same behaviour Insert has: mark the row being *left*, then move. So
+    // Shift+↓ is Insert under another name, and reversing direction runs back
+    // over a row and takes its mark off again.
     Binding {
-        key: Key::KP_Add,
-        modifiers: PLAIN,
-        action: Action::MarkByPattern,
+        key: Key::Down,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::ToggleMarkAndAdvance,
     },
     Binding {
-        key: Key::plus,
+        key: Key::Up,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::ToggleMarkAndRetreat,
+    },
+    // A jump has no direction to run back over, so these mark a range rather
+    // than toggling: "to the end" does not mean "flip everything I passed".
+    Binding {
+        key: Key::Home,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::ExtendMarkToFirst,
+    },
+    Binding {
+        key: Key::End,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::ExtendMarkToLast,
+    },
+    // The one pair that is bound with Shift and unbound without it: plain
+    // paging is the widget's job, because only it knows how tall the viewport
+    // is. With Shift the pane measures a page and marks what it crosses.
+    Binding {
+        key: Key::Page_Up,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::ExtendMarkPageUp,
+    },
+    Binding {
+        key: Key::Page_Down,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::ExtendMarkPageDown,
+    },
+    // The keypad keys Total Commander uses. Their ordinary twins reach the
+    // same bindings through `KEYPAD_TWINS` rather than through entries of
+    // their own.
+    Binding {
+        key: Key::KP_Add,
         modifiers: PLAIN,
         action: Action::MarkByPattern,
     },
@@ -181,14 +236,39 @@ static BINDINGS: &[Binding] = &[
         action: Action::UnmarkByPattern,
     },
     Binding {
-        key: Key::minus,
-        modifiers: PLAIN,
-        action: Action::UnmarkByPattern,
-    },
-    Binding {
         key: Key::KP_Multiply,
         modifiers: PLAIN,
         action: Action::InvertMarks,
+    },
+    Binding {
+        key: Key::KP_Multiply,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::InvertMarksIncludingFolders,
+    },
+    Binding {
+        key: Key::KP_Divide,
+        modifiers: PLAIN,
+        action: Action::RestoreMarks,
+    },
+    Binding {
+        key: Key::KP_Add,
+        modifiers: ModifierType::ALT_MASK,
+        action: Action::MarkSameExtension,
+    },
+    Binding {
+        key: Key::KP_Subtract,
+        modifiers: ModifierType::ALT_MASK,
+        action: Action::UnmarkSameExtension,
+    },
+    Binding {
+        key: Key::KP_Add,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::MarkAll,
+    },
+    Binding {
+        key: Key::KP_Subtract,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::UnmarkAll,
     },
     Binding {
         key: Key::a,
@@ -238,13 +318,46 @@ static BINDINGS: &[Binding] = &[
     },
 ];
 
+/// Ordinary keys that stand in for keypad ones, because not every keyboard
+/// has a numeric block.
+///
+/// An alias table rather than four more bindings: the twins are the *same*
+/// commands, and duplicating each of them once per modifier would be eight
+/// entries that have to be kept in step with the keypad ones.
+const KEYPAD_TWINS: [(Key, Key); 4] = [
+    (Key::plus, Key::KP_Add),
+    (Key::minus, Key::KP_Subtract),
+    (Key::asterisk, Key::KP_Multiply),
+    (Key::slash, Key::KP_Divide),
+];
+
 /// The action a keystroke triggers, or `None` when nothing is bound.
 pub fn action_for(key: Key, modifiers: ModifierType) -> Option<Action> {
-    let modifiers = modifiers & RELEVANT_MODIFIERS;
+    let (key, modifiers) = normalize(key, modifiers & RELEVANT_MODIFIERS);
     BINDINGS
         .iter()
         .find(|binding| binding.key == key && binding.modifiers == modifiers)
         .map(|binding| binding.action)
+}
+
+/// Resolves a keypad twin, and drops the Shift that produced it.
+///
+/// On most layouts `+` is Shift and `*` is Shift too, so the keystroke arrives
+/// as `plus` or `asterisk` *with* `SHIFT_MASK` and matched nothing at all —
+/// the `+` binding shipped in phase 3 was dead on arrival for that reason.
+/// A modifier that was needed to type a character is a fact about the
+/// keyboard, not something the user meant, so it does not take part in the
+/// lookup.
+///
+/// The cost is that the ordinary `*` cannot also carry a *deliberate* Shift:
+/// `Shift+Num *` (invert including folders) is reachable from the keypad
+/// only. That is a limitation of layouts on which `*` cannot be typed without
+/// Shift, not a choice — and a plain `*` that does nothing would be worse.
+fn normalize(key: Key, modifiers: ModifierType) -> (Key, ModifierType) {
+    match KEYPAD_TWINS.iter().find(|(twin, _)| *twin == key) {
+        Some((_, keypad)) => (*keypad, modifiers - ModifierType::SHIFT_MASK),
+        None => (key, modifiers),
+    }
 }
 
 #[cfg(test)]
@@ -275,11 +388,57 @@ mod tests {
             ),
             (Key::space, PLAIN, Action::ToggleMark),
             (Key::Insert, PLAIN, Action::ToggleMarkAndAdvance),
+            (
+                Key::Down,
+                ModifierType::SHIFT_MASK,
+                Action::ToggleMarkAndAdvance,
+            ),
+            (
+                Key::Up,
+                ModifierType::SHIFT_MASK,
+                Action::ToggleMarkAndRetreat,
+            ),
+            (
+                Key::Home,
+                ModifierType::SHIFT_MASK,
+                Action::ExtendMarkToFirst,
+            ),
+            (Key::End, ModifierType::SHIFT_MASK, Action::ExtendMarkToLast),
+            (
+                Key::Page_Up,
+                ModifierType::SHIFT_MASK,
+                Action::ExtendMarkPageUp,
+            ),
+            (
+                Key::Page_Down,
+                ModifierType::SHIFT_MASK,
+                Action::ExtendMarkPageDown,
+            ),
             (Key::KP_Add, PLAIN, Action::MarkByPattern),
-            (Key::plus, PLAIN, Action::MarkByPattern),
             (Key::KP_Subtract, PLAIN, Action::UnmarkByPattern),
-            (Key::minus, PLAIN, Action::UnmarkByPattern),
             (Key::KP_Multiply, PLAIN, Action::InvertMarks),
+            (
+                Key::KP_Multiply,
+                ModifierType::SHIFT_MASK,
+                Action::InvertMarksIncludingFolders,
+            ),
+            (Key::KP_Divide, PLAIN, Action::RestoreMarks),
+            (
+                Key::KP_Add,
+                ModifierType::ALT_MASK,
+                Action::MarkSameExtension,
+            ),
+            (
+                Key::KP_Subtract,
+                ModifierType::ALT_MASK,
+                Action::UnmarkSameExtension,
+            ),
+            (Key::KP_Add, ModifierType::CONTROL_MASK, Action::MarkAll),
+            (
+                Key::KP_Subtract,
+                ModifierType::CONTROL_MASK,
+                Action::UnmarkAll,
+            ),
             (Key::a, ModifierType::CONTROL_MASK, Action::MarkAll),
             (Key::s, ModifierType::CONTROL_MASK, Action::QuickFilter),
             (Key::Escape, PLAIN, Action::ClearFilter),
@@ -347,6 +506,114 @@ mod tests {
             assert_eq!(
                 action_for(key, ModifierType::SHIFT_MASK),
                 Some(Action::DeletePermanently),
+                "{key:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_ordinary_key_reaches_its_keypad_twin_shifted_or_not() {
+        // `+` and `*` need Shift on most layouts, so they arrive carrying one.
+        // A modifier that was needed to type a character is a fact about the
+        // keyboard, not something the user meant — and the phase-3 `+` binding
+        // was dead on arrival for exactly this reason.
+        for (twin, keypad) in KEYPAD_TWINS {
+            let expected = action_for(keypad, PLAIN);
+            assert!(expected.is_some(), "{keypad:?} is not bound at all");
+            for modifiers in [PLAIN, ModifierType::SHIFT_MASK] {
+                assert_eq!(action_for(twin, modifiers), expected, "{twin:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_twin_carries_the_modifiers_that_were_meant() {
+        // Only Shift is dropped. Ctrl and Alt on an ordinary `+` still reach
+        // the keypad meanings, which is what makes a keyboard without a
+        // numeric block able to run every marking command.
+        assert_eq!(
+            action_for(Key::plus, ModifierType::CONTROL_MASK),
+            Some(Action::MarkAll)
+        );
+        assert_eq!(
+            action_for(Key::minus, ModifierType::ALT_MASK),
+            Some(Action::UnmarkSameExtension)
+        );
+    }
+
+    #[test]
+    fn one_keypad_key_means_four_things_by_its_modifier() {
+        // Num ± carry the most meanings of any key here, and each modifier
+        // has to reach its own. A lookup that ignored modifiers would collapse
+        // all four into whichever came first in the table.
+        for (modifiers, add, subtract) in [
+            (PLAIN, Action::MarkByPattern, Action::UnmarkByPattern),
+            (
+                ModifierType::ALT_MASK,
+                Action::MarkSameExtension,
+                Action::UnmarkSameExtension,
+            ),
+            (
+                ModifierType::CONTROL_MASK,
+                Action::MarkAll,
+                Action::UnmarkAll,
+            ),
+        ] {
+            assert_eq!(
+                action_for(Key::KP_Add, modifiers),
+                Some(add),
+                "{modifiers:?}"
+            );
+            assert_eq!(
+                action_for(Key::KP_Subtract, modifiers),
+                Some(subtract),
+                "{modifiers:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn shift_tells_the_two_inversions_apart() {
+        // Files only, or directories too — Total Commander's split, and the
+        // one place in the marking keys where Shift changes what is touched
+        // rather than only where the cursor ends up.
+        assert_eq!(
+            action_for(Key::KP_Multiply, PLAIN),
+            Some(Action::InvertMarks)
+        );
+        assert_eq!(
+            action_for(Key::KP_Multiply, ModifierType::SHIFT_MASK),
+            Some(Action::InvertMarksIncludingFolders)
+        );
+    }
+
+    #[test]
+    fn shift_turns_a_cursor_key_into_a_marking_key() {
+        // Every cursor key that marks with Shift still navigates without it.
+        // A binding that ignored its modifiers would lose one of the two.
+        for (key, plain, shifted) in [
+            (Key::Down, Action::CursorDown, Action::ToggleMarkAndAdvance),
+            (Key::Up, Action::CursorUp, Action::ToggleMarkAndRetreat),
+            (Key::Home, Action::CursorFirst, Action::ExtendMarkToFirst),
+            (Key::End, Action::CursorLast, Action::ExtendMarkToLast),
+        ] {
+            assert_eq!(action_for(key, PLAIN), Some(plain), "{key:?}");
+            assert_eq!(
+                action_for(key, ModifierType::SHIFT_MASK),
+                Some(shifted),
+                "{key:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn paging_is_bound_with_shift_and_unbound_without_it() {
+        // The asymmetry is deliberate: plain paging belongs to the widget,
+        // which is the only thing that knows how tall the viewport is.
+        for key in [Key::Page_Up, Key::Page_Down] {
+            assert_eq!(action_for(key, PLAIN), None, "{key:?}");
+            assert!(
+                action_for(key, ModifierType::SHIFT_MASK).is_some(),
                 "{key:?}"
             );
         }

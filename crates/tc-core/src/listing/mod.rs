@@ -358,6 +358,19 @@ impl Listing {
         }
     }
 
+    /// Marks or unmarks every row between `a` and `b`, both ends included.
+    ///
+    /// Order-independent, because the two ends are a cursor and a destination
+    /// and either can be the higher one. Out-of-range ends are clamped rather
+    /// than rejected: `Shift+End` names the last row by asking for one past
+    /// it, and that is not an error to report anywhere.
+    pub fn select_range(&mut self, a: usize, b: usize, selected: bool) {
+        let last = self.len().saturating_sub(1);
+        for index in a.min(b)..=a.max(b).min(last) {
+            self.set_selected(index, selected);
+        }
+    }
+
     /// Marks or unmarks every visible row whose name matches `pattern`.
     pub fn select_matching(&mut self, pattern: &str, selected: bool) {
         let matching: Vec<usize> = self

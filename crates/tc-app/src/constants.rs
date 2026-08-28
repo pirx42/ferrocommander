@@ -20,6 +20,14 @@ pub const SETTINGS_SAVE_DELAY: std::time::Duration = std::time::Duration::from_m
 pub const SETTINGS_UNREADABLE: &str = "settings could not be read, using defaults";
 pub const SETTINGS_UNWRITABLE: &str = "settings could not be saved";
 
+/// Rows a page key moves when the pane has not been laid out yet and there is
+/// no viewport height to divide by.
+///
+/// Only reachable before the first frame, since a laid-out pane measures its
+/// own page. A screenful on a small window, so the one keystroke that could
+/// land here does something sensible rather than nothing.
+pub const PAGE_ROWS_FALLBACK: usize = 20;
+
 /// Both panes start equally wide — neither side is the "main" one.
 pub const PANE_SPLIT_RATIO: f32 = 0.5;
 

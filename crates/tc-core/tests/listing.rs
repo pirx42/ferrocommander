@@ -773,6 +773,63 @@ mod selection {
     }
 
     #[test]
+    fn a_range_marks_both_its_ends_and_everything_between() {
+        // What Shift+Home/End and Shift+PgUp/PgDn ask for. Rows: `..`,
+        // projects, a.txt, b.txt, notes.md.
+        let mut listing = listing();
+
+        listing.select_range(2, 3, true);
+
+        assert_eq!(
+            marked_set(&listing),
+            vec!["a.txt".to_string(), "b.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_range_reads_the_same_in_either_direction() {
+        // The two ends are a cursor and a destination, and either can be the
+        // higher one — Shift+Home runs backwards, Shift+End forwards.
+        let mut forwards = listing();
+        forwards.select_range(1, 4, true);
+        let mut backwards = listing();
+        backwards.select_range(4, 1, true);
+
+        assert_eq!(marked_set(&forwards), marked_set(&backwards));
+        assert_eq!(forwards.selection_summary().count, 4, "every visible row");
+    }
+
+    #[test]
+    fn a_range_running_off_the_end_stops_at_the_last_row() {
+        // Shift+End names the last row by asking for one past it, which is
+        // not an error to report anywhere.
+        let mut listing = listing();
+
+        listing.select_range(0, 999, true);
+
+        assert_eq!(
+            listing.selection_summary().count,
+            listing.len() - 1,
+            "every row but `..`, and no panic"
+        );
+    }
+
+    #[test]
+    fn a_range_can_take_marks_back_as_well_as_give_them() {
+        let mut listing = listing();
+        listing.select_all();
+
+        // Rows 2 and 3 are a.txt and b.txt; projects above and notes.md below
+        // are outside the range and keep their marks.
+        listing.select_range(2, 3, false);
+
+        assert_eq!(
+            marked_set(&listing),
+            vec!["notes.md".to_string(), "projects".to_string()]
+        );
+    }
+
+    #[test]
     fn selecting_everything_marks_every_visible_row() {
         let mut listing = listing();
         listing.select_all();

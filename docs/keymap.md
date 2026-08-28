@@ -17,11 +17,18 @@
 | `F8`, `Delete` | Delete to the trash |
 | `Shift+F8`, `Shift+Delete` | Delete permanently |
 | `Space` | Mark the row under the cursor |
-| `Insert` | Mark it and step down |
-| `Num +`, `+` | Mark everything matching a wildcard |
-| `Num −`, `−` | Unmark everything matching a wildcard |
-| `Num *` | Swap what is marked for what is not |
-| `Ctrl+A` | Mark everything visible |
+| `Insert`, `Shift+↓` | Mark it and step down |
+| `Shift+↑` | Mark it and step up |
+| `Shift+Home` / `Shift+End` | Mark from the cursor to the first / last row |
+| `Shift+PgUp` / `Shift+PgDn` | The same, over one page |
+| `Num +` | Mark everything matching a wildcard |
+| `Num −` | Unmark everything matching a wildcard |
+| `Num *` | Invert the marks on the **files** |
+| `Shift+Num *` | Invert them on the directories too |
+| `Alt+Num +` / `Alt+Num −` | Mark / unmark every file with the cursor row's extension |
+| `Num /` | The selection from before the last operation |
+| `Ctrl+A`, `Ctrl+Num +` | Mark everything visible |
+| `Ctrl+Num −` | Unmark everything visible |
 | `Ctrl+F3` … `Ctrl+F6` | Sort by name / ext / date / size |
 | `Ctrl+H` | Show or hide the dot-files |
 | `Ctrl+S` | Narrow the pane as you type |
@@ -44,8 +51,46 @@ there is no third thing to learn.
 
 `Insert` steps down after marking so it can be held, which is how a run of
 files gets selected; `Space` leaves the cursor where it is, for picking one
-out of a list. The keypad keys have ordinary twins (`+`, `−`) because not
-every keyboard has a numeric block.
+out of a list.
+
+**`Shift`+cursor is the same behaviour under another key.** Total Commander
+marks the row being *left* and then moves, so `Shift+↓` is `Insert` by another
+name — and running back over a row toggles it a second time and takes its mark
+off again. That is TC's own quirk: it does not mark the row you land on, so
+someone coming from Explorer overshoots by one. Reproducing it is the point.
+
+**A jump marks a range instead of toggling.** `Shift+Home`/`End`/`PgUp`/`PgDn`
+have no direction to run back over, and "to the end" does not mean "flip
+everything I passed". `..` still cannot be marked, so a range running over it
+simply does not pick it up.
+
+**`Num *` inverts the files only; `Shift+Num *` takes the directories too.**
+TC's split, and the useful default — a person inverting a selection is nearly
+always thinking about files. `Alt+Num ±` follows the same rule: a directory
+called `photos.backup` is not one of "the `.backup` files".
+
+**`Num /` restores the selection from before the last operation.** The marks
+are put away when a job is *submitted*, not when it finishes: the job ends by
+building a fresh listing, and by then the marks it consumed are gone.
+
+### Ordinary keys stand in for the keypad
+
+`+ − * /` reach their keypad bindings through an alias table rather than
+through bindings of their own, so a keyboard with no numeric block runs every
+marking command, modifiers included: `Ctrl+−` is `Ctrl+Num −`, `Alt++` is
+`Alt+Num +`.
+
+**The Shift that produced the character is dropped.** On most layouts `+` is
+`Shift+=` and `*` is `Shift+8`, so the keystroke arrives as `plus` or
+`asterisk` *carrying* `SHIFT_MASK` and matched nothing at all — the `+` twin
+shipped in phase 3 was dead on arrival, and only a real key press could say
+so. A modifier needed to type a character is a fact about the keyboard, not
+something the user meant.
+
+The cost: the ordinary `*` cannot also carry a *deliberate* Shift, so
+`Shift+Num *` is reachable from the keypad only. That is a limitation of
+layouts on which `*` cannot be typed without Shift, not a choice, and a plain
+`*` that did nothing would be worse.
 
 **Both are a toggle, not a set**: pressing either again on a marked row takes
 the mark back, which is the only way to unmark one row out of many. Tested at
@@ -85,6 +130,14 @@ They are deliberately **not** in the table. Paging depends on how many rows
 fit on screen, and the model has no idea how tall the viewport is — the
 `ColumnView` does. So the page keys fall through to the widget, which moves
 its own selection and scrolls.
+
+**With Shift they are bound, and the pane measures a page itself.** The
+scrolled window's adjustment knows the content height and the viewport height,
+and the rows are uniform, so the row count falls out of the ratio; before the
+first layout there is no height to divide by and a fallback constant stands
+in. That measurement is the one part of this that could quietly be wrong, so
+it has an end-to-end test on a screen tall enough to hold every row, where one
+`Shift+PgDn` has to mark all of them.
 
 That leaves the widget's selection ahead of the model's cursor, so the pane
 **adopts the selection before acting on any bound key**. Without that step the

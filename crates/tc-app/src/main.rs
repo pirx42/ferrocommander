@@ -172,12 +172,26 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::CursorLast => shell.borrow_mut().active_pane().move_cursor_to_last(),
         Action::Activate => shell.borrow_mut().active_pane().activate(),
         Action::GoParent => shell.borrow_mut().active_pane().go_parent(),
-        Action::ToggleMark => shell.borrow_mut().active_pane().toggle_mark(false),
-        Action::ToggleMarkAndAdvance => shell.borrow_mut().active_pane().toggle_mark(true),
+        Action::ToggleMark => shell.borrow_mut().active_pane().toggle_mark(0),
+        Action::ToggleMarkAndAdvance => shell.borrow_mut().active_pane().toggle_mark(1),
+        Action::ToggleMarkAndRetreat => shell.borrow_mut().active_pane().toggle_mark(-1),
+        Action::ExtendMarkToFirst => shell.borrow_mut().active_pane().extend_mark_to(0),
+        Action::ExtendMarkToLast => {
+            let mut state = shell.borrow_mut();
+            let last = state.active_pane().last_row();
+            state.active_pane().extend_mark_to(last);
+        }
+        Action::ExtendMarkPageUp => extend_by_page(shell, -1),
+        Action::ExtendMarkPageDown => extend_by_page(shell, 1),
         Action::MarkByPattern => start_pattern_marking(shell, true),
         Action::UnmarkByPattern => start_pattern_marking(shell, false),
-        Action::InvertMarks => shell.borrow_mut().active_pane().invert_marks(),
+        Action::InvertMarks => shell.borrow_mut().active_pane().invert_marks(false),
+        Action::InvertMarksIncludingFolders => shell.borrow_mut().active_pane().invert_marks(true),
+        Action::MarkSameExtension => shell.borrow_mut().active_pane().mark_same_extension(true),
+        Action::UnmarkSameExtension => shell.borrow_mut().active_pane().mark_same_extension(false),
+        Action::RestoreMarks => shell.borrow_mut().active_pane().restore_marks(),
         Action::MarkAll => shell.borrow_mut().active_pane().mark_all(),
+        Action::UnmarkAll => shell.borrow_mut().active_pane().unmark_all(),
         Action::QuickFilter => {
             let state = shell.borrow();
             state.panes[state.active].begin_filter();
@@ -195,6 +209,18 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     // One place, rather than at the end of every arm: a keystroke that
     // changed nothing worth saving costs a comparison and no more.
     remember(shell);
+}
+
+/// Shift+PgUp / Shift+PgDn: mark across one screenful and land there.
+///
+/// A free function because the page size has to be measured off the pane
+/// before the same pane is borrowed mutably to act on it.
+fn extend_by_page(shell: &Rc<RefCell<Shell>>, direction: isize) {
+    let mut state = shell.borrow_mut();
+    let pane = state.active_pane();
+    let page = pane.page_rows() as isize;
+    let target = (pane.cursor() as isize + direction * page).max(0) as usize;
+    pane.extend_mark_to(target);
 }
 
 /// F5 and F6: ask where, then hand it to the queue.
@@ -340,7 +366,10 @@ fn start_delete(shell: &Rc<RefCell<Shell>>, mode: DeleteMode) {
 /// Hands a job to the queue and starts watching it.
 fn submit(shell: &Rc<RefCell<Shell>>, job: Job) {
     let handle = {
-        let state = shell.borrow();
+        let mut state = shell.borrow_mut();
+        // Put the marks away before the job spends them: it ends with a fresh
+        // listing, and by then there is nothing left for `Num /` to restore.
+        state.active_pane().remember_marks();
         let source_fs = state.panes[state.active].fs();
         let target_fs = state.panes[state.other()].fs();
         state.queue.submit(job, source_fs, target_fs)

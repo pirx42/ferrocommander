@@ -47,6 +47,13 @@ fn arrange(home: &Path) {
     fs::write(home.join("src/nested/inner.txt"), "deep").unwrap();
 }
 
+/// Same, with a second `.txt` so the extension keys have something to pick
+/// from and something to leave behind.
+fn with_two_text_files(home: &Path) {
+    arrange(home);
+    std::fs::write(home.join("src/other.txt"), SOURCE_TEXT).unwrap();
+}
+
 /// Same, with something already at the destination.
 fn arrange_with_collision(home: &Path) {
     arrange(home);
@@ -440,6 +447,219 @@ fn insert_steps_down_so_it_can_be_held() {
 }
 
 #[test]
+fn shift_down_marks_a_run_the_way_insert_does() {
+    // Total Commander's other way of marking a run, and the same behaviour:
+    // mark the row being left, then move. Two presses from data.bin take
+    // data.bin and notes.txt.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["shift+Down", "shift+Down"]);
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+}
+
+#[test]
+fn running_back_over_a_row_with_shift_takes_its_mark_off() {
+    // The consequence of marking the row being *left*: Shift+Down then
+    // Shift+Up passes over the same row twice and toggles it twice. This is
+    // TC's own quirk, and reproducing it is the point.
+    let app = in_src_and_dst(arrange);
+    // From data.bin: down marks it and lands on notes.txt; up marks notes.txt
+    // and lands back on data.bin; down marks data.bin *off* again and lands on
+    // notes.txt, which is left marked and is the only mark.
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["shift+Down", "shift+Up", "shift+Down"]);
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "a row passed over twice kept its mark"
+    );
+}
+
+#[test]
+fn shift_end_marks_everything_from_the_cursor_down() {
+    // A jump marks a range rather than toggling: "to the end" does not mean
+    // "flip everything I passed".
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — from data.bin to the last row.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("shift+End");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/nested").exists(),
+        "the range reached above the cursor"
+    );
+}
+
+#[test]
+fn shift_home_marks_up_to_the_top_but_never_the_parent_row() {
+    // `..` is a navigation control, and a range that runs over it must not
+    // pick it up — deleting "the parent directory" is never what was meant.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("shift+Home");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/nested");
+    app.settle();
+    // Had `..` been marked, the copy would have tried to put src's own parent
+    // into dst. The home directory holds `src` and `dst` themselves.
+    assert!(
+        !app.path("dst/src").exists() && !app.path("dst/dst").exists(),
+        "the parent row was marked and copied"
+    );
+}
+
+#[test]
+fn shift_page_down_marks_across_a_screenful() {
+    // The page keys measure a page off the widget, since the model has no
+    // idea how tall the viewport is. A screen this size holds every row, so
+    // one press marks everything below the cursor.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down"]);
+    app.key("shift+Next");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/nested");
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+}
+
+#[test]
+fn ctrl_numminus_takes_every_mark_back() {
+    // The gap Ctrl+A left: before this there was no way to unmark everything.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+a");
+    app.key("ctrl+KP_Subtract");
+
+    // Nothing marked, so F5 falls back to the cursor row alone — `..`, which
+    // is not something to operate on, so the copy does nothing at all.
+    app.key("F5");
+    app.settle();
+    assert!(!app.has_dialog(DIALOG_COPY), "F5 still had marks to act on");
+    for untouched in ["dst/nested", "dst/data.bin", "dst/notes.txt"] {
+        assert!(
+            !app.path(untouched).exists(),
+            "{untouched} was still marked"
+        );
+    }
+}
+
+#[test]
+fn alt_numplus_marks_the_files_sharing_an_extension() {
+    let app = in_src_and_dst(with_two_text_files);
+    // `..`, nested, data.bin, notes.txt, other.txt — cursor on notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("alt+KP_Add");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/notes.txt");
+    app.await_exists("dst/other.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "a file with another extension came along"
+    );
+}
+
+#[test]
+fn num_slash_brings_back_the_selection_the_last_job_spent() {
+    // TC's Num /. The job ends with a fresh listing, so the marks it acted on
+    // are gone by then — they have to have been put away when it started.
+    let app = in_src_and_dst(with_two_text_files);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("alt+KP_Add");
+
+    // Copy the two .txt files, which clears the marks.
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/other.txt");
+
+    // Bring them back and delete them, which proves the marks are real again
+    // and that they are the same two files, not everything in the pane.
+    app.focus_main();
+    app.key("KP_Divide");
+    app.key("F8");
+    app.focus_dialog(DIALOG_DELETE);
+    app.key("space");
+
+    app.await_gone("src/notes.txt");
+    app.await_gone("src/other.txt");
+    assert!(
+        app.path("src/data.bin").exists(),
+        "the restored selection was wider than the one that was put away"
+    );
+}
+
+#[test]
+fn num_star_inverts_the_files_and_shift_num_star_the_directories_too() {
+    // TC's split. Marking the one directory and inverting files-only must
+    // leave it marked; inverting with Shift must take it off again.
+    let app = in_src_and_dst(arrange);
+    // Mark `nested`, the only directory.
+    app.keys(&["Home", "Down"]);
+    app.key("space");
+    app.key("KP_Multiply");
+
+    // nested (still marked) plus both files (newly marked) all travel.
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/nested");
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+}
+
+#[test]
+fn shift_num_star_takes_the_directories_with_it() {
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down"]);
+    app.key("space");
+    app.key("shift+KP_Multiply");
+
+    // `nested` was marked and is now not; the two files are.
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/nested").exists(),
+        "the directory kept its mark through an inversion that includes them"
+    );
+}
+
+#[test]
 fn ctrl_a_then_f8_deletes_everything_in_the_pane() {
     let app = in_src_and_dst(arrange);
 
@@ -721,4 +941,29 @@ fn a_settings_file_that_is_nonsense_does_not_stop_the_program() {
     app.key("Return");
 
     app.await_exists("started-anyway");
+}
+
+#[test]
+fn an_ordinary_plus_reaches_the_keypad_binding() {
+    // `+` needs Shift on most layouts, so it arrives as `plus` carrying one
+    // and matched nothing at all — the twin binding shipped in phase 3 was
+    // dead, and a real key press is the only thing that could have said so.
+    let app = in_src_and_dst(arrange);
+
+    app.key("plus");
+
+    app.focus_dialog(DIALOG_PATTERN);
+    app.type_text("*.bin");
+    app.key("Return");
+    app.focus_main();
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.settle();
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "the pattern dialog acted on more than it matched"
+    );
 }
