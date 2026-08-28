@@ -1,6 +1,6 @@
 # Phase 2 Implementation Plan — Core File Operations
 
-Status: In Progress — sub-phases 0, A, B, C, D, E done
+Status: In Progress — all sub-phases done
 
 *2026-08-28 — implements phase 2 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -525,20 +525,55 @@ dialog, and where the event loop is attached.
 
 *Commit:* `refactor(core,app): audit corrections for the core operations phase`
 
-Audit over everything sub-phases 0–E added, corrections implemented in the
-same phase. The axes that phase 1's audit found things on, and that this
-phase is most likely to repeat:
+**Done.** Audit over everything sub-phases 0–E added, corrections implemented
+in the same phase. 157 tests green; behavior unchanged, verified by re-running
+all five mutation probes and the smoke script afterwards.
 
-- **Redundancy** — the copy loop, the conflict policy and the "which sources"
-  derivation each exist once, or they get pulled together now.
-- **API ahead of its caller** — every `pub` item in `ops` has a caller outside
-  its own tests, or it is narrowed. Phase 1 found four of these.
-- **Magic values** — dialog titles, button labels, buffer sizes and format
-  strings live in `constants.rs`, not inline.
-- **Architecture** — no `gtk`/`glib`/`gdk` anywhere in `tc-core`, no
-  `std::fs`/`std::path` in `tc-app` production code, and the four-test-module
-  `Entry` fixture duplication that phase 1 deliberately accepted is
-  re-decided now that phase 2's operation tests need the same shapes.
+**Architecture: clean.** No `gtk`/`glib`/`gdk` anywhere in `tc-core`; no
+`std::fs`, `std::path` or `PathBuf` in `tc-app` production code (the one
+`std::fs` is inside a `#[cfg(test)]` module); no `cfg` branch in `tc-app` at
+all, and none in `tc-core` outside `vfs/platform.rs`. The invariants phase 1
+established survived a phase that doubled the code.
+
+**Redundancy.** The four-arm conflict dispatch existed twice — in `make_dir`
+and in `copy_file` — with the same meanings and different work afterwards.
+Extracted into `Run::settle`, which returns a `Landing`; the callers now
+differ only in what they do with it. Two smaller wins fell out: the recursive
+re-entry `make_dir` needed for `KeepBoth` disappeared, and a file's
+`KeepBoth` no longer pushes a path redirect it has no use for, which keeps the
+per-item redirect list short enough to scan on every task.
+
+**Test duplication — the item phase 1 deferred.** Its audit left the helper
+duplication alone, to be revisited "when phase 2's operation tests need the
+same shapes". They did: `ops.rs` and `queue.rs` each carried their own tree
+builder and their own tree comparison, and two implementations of "are these
+the same tree" is one too many for the question every transfer test asks. Both
+now use `tests/common/mod.rs` — a shared test module rather than a
+`test-support` feature, which keeps the helpers out of the shipped library.
+
+*That change paid for itself immediately.* Sharing one richer fixture turned
+two queue tests red, and both were right to fail: they had been asserting
+against the order `read_dir` happened to return, which the interface
+explicitly does not promise. They now use two top-level sources with the
+conflicting one first — `plan_transfer` keeps the order it is given — so
+"there was still work left to stop" and "the rest was never reached" are true
+by construction rather than by luck.
+
+**Magic values.** `CLASS_SUGGESTED` and `CLASS_DESTRUCTIVE` were declared
+beside their use in `dialogs.rs` while every other style class lived in
+`constants.rs`; moved, so all class names are one list.
+
+**A gap the audit found rather than a smell.** Every prompt in the shell is a
+template with `{placeholder}` tokens substituted by a `.replace` call that
+names them a second time, so a rename on one side would leave `{kind}` sitting
+in a dialog. One assertion per template — no leftover brace in the rendered
+string — now covers all of them, in `jobs.rs` and `progress.rs`.
+
+**Accepted without change.** `Entry`-building helpers are still duplicated
+across test modules in *both* crates. `tests/common/` cannot reach `tc-app`,
+so sharing those would need the `test-support` feature phase 1 declined, and
+the fixtures remain small and shaped to each test. The reasoning has not
+changed; only the `tc-core` half of the problem was worth solving.
 
 ## 5. Effort
 

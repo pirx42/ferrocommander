@@ -5,7 +5,6 @@
 //! a call names. An engine that writes the right file and quietly loses a
 //! sibling passes the narrow kind of test and fails these.
 
-use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -18,76 +17,9 @@ use tc_core::ops::{
 use tc_core::vfs::{Entry, LocalFs, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
 
-// ---------------------------------------------------------------- fixtures
+mod common;
 
-/// A tree with nesting, an empty file, an empty directory and a unicode name,
-/// so every walk has something awkward in it.
-fn tree(root: &std::path::Path) {
-    use std::fs;
-    fs::create_dir_all(root.join("sub/deep")).unwrap();
-    fs::create_dir(root.join("emptydir")).unwrap();
-    fs::write(root.join("a.txt"), "hello world").unwrap();
-    fs::write(root.join("empty.txt"), "").unwrap();
-    fs::write(root.join("Ünïcødé — ✓.md"), "unicode").unwrap();
-    fs::write(root.join("sub/b.bin"), vec![7u8; 200_000]).unwrap();
-    fs::write(root.join("sub/deep/c.txt"), "deep").unwrap();
-}
-
-fn fixture() -> (TempDir, VfsPath) {
-    let dir = TempDir::new().unwrap();
-    tree(&dir.path().join("tree"));
-    let root = LocalFs::vfs_path(dir.path());
-    (dir, root)
-}
-
-/// A whole tree as relative path to contents, `None` for a directory.
-type Snapshot = BTreeMap<String, Option<Vec<u8>>>;
-
-/// Every file below `root`, as relative path to contents.
-///
-/// The comparison unit for every transfer test: two trees are the same tree
-/// exactly when their snapshots are equal.
-fn snapshot(fs: &dyn VirtualFs, root: &VfsPath) -> Snapshot {
-    let mut found = BTreeMap::new();
-    collect(fs, root, root, &mut found);
-    found
-}
-
-fn collect(fs: &dyn VirtualFs, root: &VfsPath, at: &VfsPath, found: &mut Snapshot) {
-    for entry in fs.read_dir(at).unwrap_or_default() {
-        let path = at.child(&entry.name);
-        let relative = path
-            .as_str()
-            .strip_prefix(root.as_str())
-            .unwrap_or_default()
-            .to_string();
-        if entry.is_dir() {
-            // Directories appear too, so an empty one is not silently lost —
-            // as `None`, because an empty file is not an empty directory.
-            found.insert(relative, None);
-            collect(fs, root, &path, found);
-        } else {
-            let mut bytes = Vec::new();
-            fs.open_read(&path)
-                .unwrap()
-                .read_to_end(&mut bytes)
-                .unwrap();
-            found.insert(relative, Some(bytes));
-        }
-    }
-}
-
-fn file_count(snapshot: &Snapshot) -> usize {
-    snapshot.values().flatten().count()
-}
-
-fn byte_sum(snapshot: &Snapshot) -> usize {
-    snapshot.values().flatten().map(Vec::len).sum()
-}
-
-fn exists(fs: &dyn VirtualFs, path: &VfsPath) -> bool {
-    fs.stat(path).is_ok()
-}
+use common::{byte_sum, exists, file_count, fixture, snapshot, Snapshot};
 
 // --------------------------------------------------------------- resolvers
 
@@ -314,7 +246,6 @@ fn copying_conserves_every_file_byte_and_name() {
     let (_dir, root) = fixture();
     let source = root.child("tree");
     let target_dir = root.child("into");
-    LocalFs.create_dir(&target_dir).unwrap();
     let before = snapshot(&LocalFs, &source);
 
     run_clean(
@@ -342,7 +273,6 @@ fn a_copied_file_keeps_the_original_date() {
     // the date column stops meaning anything after a backup.
     let (_dir, root) = fixture();
     let target_dir = root.child("into");
-    LocalFs.create_dir(&target_dir).unwrap();
 
     run_clean(
         &Job::Copy {
@@ -364,7 +294,6 @@ fn moving_conserves_the_union_of_both_sides() {
     let (_dir, root) = fixture();
     let source = root.child("tree");
     let target_dir = root.child("into");
-    LocalFs.create_dir(&target_dir).unwrap();
     let before = snapshot(&LocalFs, &source);
 
     run_clean(
@@ -387,7 +316,6 @@ fn a_move_within_one_filesystem_reads_no_bytes() {
     let (_dir, root) = fixture();
     let counting = Counting::new(&LocalFs);
     let target_dir = root.child("into");
-    counting.create_dir(&target_dir).unwrap();
 
     run_clean(
         &Job::Move {
@@ -410,7 +338,6 @@ fn the_cross_device_fallback_conserves_the_same_things() {
     let fs = AlwaysCrossDevice { inner: &LocalFs };
     let source = root.child("tree");
     let target_dir = root.child("into");
-    fs.create_dir(&target_dir).unwrap();
     let before = snapshot(&LocalFs, &source);
 
     run_clean(
@@ -447,7 +374,11 @@ fn deleting_touches_nothing_but_its_targets() {
     assert!(!exists(&LocalFs, &tree), "the whole tree must be gone");
     assert_eq!(
         snapshot(&LocalFs, &root),
-        Snapshot::from([("/keeper.txt".to_string(), Some(b"untouched".to_vec()))])
+        Snapshot::from([
+            ("/keeper.txt".to_string(), Some(b"untouched".to_vec())),
+            // The shared fixture's empty landing directory, untouched.
+            ("/into".to_string(), None),
+        ])
     );
 }
 
@@ -483,7 +414,6 @@ fn a_cancel_never_leaves_a_truncated_file() {
     // the rollback existing at all.
     let (_dir, root) = fixture();
     let target_dir = root.child("into");
-    LocalFs.create_dir(&target_dir).unwrap();
     let cancel = CancelToken::new();
     let fs = CancelsMidFile {
         inner: &LocalFs,
@@ -519,7 +449,6 @@ fn a_cancel_leaves_the_source_untouched() {
     let (_dir, root) = fixture();
     let source = root.child("tree");
     let target_dir = root.child("into");
-    LocalFs.create_dir(&target_dir).unwrap();
     let before = snapshot(&LocalFs, &source);
     let cancel = CancelToken::new();
     cancel.cancel();
@@ -692,7 +621,6 @@ fn a_move_that_skipped_a_file_does_not_delete_it() {
 fn progress_deltas_add_up_to_what_the_scan_promised() {
     let (_dir, root) = fixture();
     let target_dir = root.child("into");
-    LocalFs.create_dir(&target_dir).unwrap();
 
     let (_, events) = run_on(
         &Job::Copy {
@@ -762,7 +690,6 @@ fn renaming_moves_a_path_to_an_exact_new_name() {
 fn one_unreadable_source_does_not_cost_the_others() {
     let (_dir, root) = fixture();
     let target_dir = root.child("into");
-    LocalFs.create_dir(&target_dir).unwrap();
 
     let report = ops::run(
         &Job::Copy {
@@ -823,9 +750,7 @@ mod symlinks {
         let (_dir, root) = fixture();
         let target_dir = root.child("into");
         let outside = root.child("outside");
-        for path in [&target_dir, &outside] {
-            LocalFs.create_dir(path).unwrap();
-        }
+        LocalFs.create_dir(&outside).unwrap();
         // Pointed away from the copy target: a link into it would make the
         // snapshot walk follow the copy back into itself.
         std::os::unix::fs::symlink(
@@ -866,9 +791,7 @@ mod symlinks {
         let source = root.child("tree");
         let target_dir = root.child("into");
         let outside = root.child("outside");
-        for path in [&target_dir, &outside] {
-            LocalFs.create_dir(path).unwrap();
-        }
+        LocalFs.create_dir(&outside).unwrap();
         std::os::unix::fs::symlink(outside.as_str(), format!("{source}/link-to-dir")).unwrap();
         let before = snapshot(&LocalFs, &source);
 
@@ -898,7 +821,6 @@ mod symlinks {
         // recreate the link instead. Refusing says so out loud.
         let (_dir, root) = fixture();
         let target_dir = root.child("into");
-        LocalFs.create_dir(&target_dir).unwrap();
         std::os::unix::fs::symlink(root.child("tree").as_str(), format!("{root}/link")).unwrap();
 
         let report = ops::run(

@@ -191,6 +191,23 @@ mod tests {
     }
 
     #[test]
+    fn every_prompt_is_fully_rendered() {
+        // The templates and the `.replace` calls name their placeholders
+        // separately, so a rename on one side would leave `{kind}` sitting in
+        // a dialog. Checking for a leftover brace catches all of them at once
+        // rather than one assertion per placeholder.
+        for is_dir in [true, false] {
+            for mode in [DeleteMode::Trash, DeleteMode::Permanent] {
+                let rendered = delete_prompt("x.txt", is_dir, mode);
+                assert!(
+                    !rendered.contains('{'),
+                    "unsubstituted placeholder in {rendered:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn the_question_says_whether_a_directory_is_at_stake() {
         let file = delete_prompt("x", false, DeleteMode::Trash);
         let dir = delete_prompt("x", true, DeleteMode::Trash);

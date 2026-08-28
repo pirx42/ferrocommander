@@ -188,6 +188,21 @@ mod tests {
     }
 
     #[test]
+    fn every_rendered_line_is_fully_substituted() {
+        // Same reasoning as the prompt test in `jobs.rs`: one check for a
+        // leftover brace covers every placeholder in every template.
+        let mut meter = Meter::default();
+        meter.apply(&Progress::Scanned {
+            files: 1,
+            bytes: 2048,
+        });
+        assert!(!meter.caption().contains('{'), "{}", meter.caption());
+
+        let lines = failure_lines(&[(path("/a.txt"), VfsError::NotFound)]);
+        assert!(!lines[0].contains('{'), "{}", lines[0]);
+    }
+
+    #[test]
     fn byte_counts_are_written_the_way_they_are_read() {
         let cases = [
             (0, "0 B"),

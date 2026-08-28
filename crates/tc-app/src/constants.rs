@@ -59,6 +59,12 @@ pub const CLASS_PANE: &str = "pane";
 pub const CLASS_PANE_ACTIVE: &str = "pane-active";
 pub const CLASS_PATH_BAR: &str = "path-bar";
 
+/// Style classes GTK itself renders: the affirmative button and the dangerous
+/// one. Here rather than beside their use, so every class name in the shell
+/// is in one list (skill 17).
+pub const CLASS_SUGGESTED: &str = "suggested-action";
+pub const CLASS_DESTRUCTIVE: &str = "destructive-action";
+
 /// The shell's stylesheet.
 ///
 /// The active pane is marked on its path bar rather than by dimming the whole

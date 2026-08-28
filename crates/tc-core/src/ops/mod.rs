@@ -125,6 +125,18 @@ enum Flow {
     Stop,
 }
 
+/// Where a settled conflict leaves the task that hit it.
+enum Landing {
+    /// Go ahead at this path. `replacing` when something has to go first.
+    Proceed { target: VfsPath, replacing: bool },
+    /// The user chose to leave it alone.
+    Skip,
+    /// The user ended the job.
+    Abort,
+    /// Something went wrong and has already been reported.
+    Failed,
+}
+
 struct Run<'a> {
     source_fs: &'a dyn VirtualFs,
     target_fs: &'a dyn VirtualFs,
@@ -316,44 +328,78 @@ impl Run<'_> {
         Flow::Continue
     }
 
-    fn make_dir(&mut self, source: &VfsPath, target: &VfsPath) -> Flow {
-        let target = self.redirected(target);
-        match conflict_at(self.target_fs, source, true, &target) {
+    /// What settling a conflict left the caller to do.
+    ///
+    /// The four resolutions mean the same thing wherever a conflict is met;
+    /// only the work afterwards differs. Deciding once and acting twice is
+    /// what keeps `make_dir` and `copy_file` from being two copies of the
+    /// same match (skill 44).
+    fn settle(&mut self, source: &VfsPath, is_dir: bool, target: VfsPath) -> Landing {
+        let conflict = match conflict_at(self.target_fs, source, is_dir, &target) {
             // Nothing there, or an existing directory to merge into.
-            Ok(None) => {}
-            Ok(Some(conflict)) => match self.ask(&conflict) {
-                Resolution::Overwrite => {
-                    if let Err(error) = self.target_fs.remove_file(&target) {
-                        self.fail(&target, error);
-                        return Flow::Continue;
+            Ok(None) => {
+                return Landing::Proceed {
+                    target,
+                    replacing: false,
+                }
+            }
+            Ok(Some(conflict)) => conflict,
+            Err(error) => {
+                self.fail(&target, error);
+                return Landing::Failed;
+            }
+        };
+
+        match self.ask(&conflict) {
+            Resolution::Overwrite => Landing::Proceed {
+                target,
+                replacing: true,
+            },
+            Resolution::Skip => {
+                self.skips += 1;
+                Landing::Skip
+            }
+            Resolution::KeepBoth => match free_name_beside(self.target_fs, &target) {
+                Ok(free) => {
+                    // A directory's contents were planned under the old name,
+                    // so the redirect has to carry them along, however deep.
+                    // A file has no contents and needs no entry — which also
+                    // keeps the redirect list short enough to scan per task.
+                    if is_dir {
+                        self.redirects.push((target, free.clone()));
+                    }
+                    Landing::Proceed {
+                        target: free,
+                        replacing: false,
                     }
                 }
-                Resolution::Skip => {
-                    self.skips += 1;
-                    return Flow::Continue;
-                }
-                Resolution::KeepBoth => match free_name_beside(self.target_fs, &target) {
-                    Ok(free) => {
-                        // Redirecting the directory carries everything the
-                        // plan put inside it along, however deep.
-                        self.redirects.push((target.clone(), free));
-                        return self.make_dir(source, &target);
-                    }
-                    Err(error) => {
-                        self.fail(&target, error);
-                        return Flow::Continue;
-                    }
-                },
-                Resolution::Abort => {
-                    self.outcome = Outcome::Aborted;
-                    return Flow::Stop;
+                Err(error) => {
+                    self.fail(&target, error);
+                    Landing::Failed
                 }
             },
-            Err(error) => {
+            Resolution::Abort => {
+                self.outcome = Outcome::Aborted;
+                Landing::Abort
+            }
+        }
+    }
+
+    fn make_dir(&mut self, source: &VfsPath, target: &VfsPath) -> Flow {
+        let target = self.redirected(target);
+        let (target, replacing) = match self.settle(source, true, target) {
+            Landing::Proceed { target, replacing } => (target, replacing),
+            Landing::Skip | Landing::Failed => return Flow::Continue,
+            Landing::Abort => return Flow::Stop,
+        };
+
+        if replacing {
+            if let Err(error) = self.target_fs.remove_file(&target) {
                 self.fail(&target, error);
                 return Flow::Continue;
             }
         }
+        // Merging into a directory that is already there needs no create.
         if self.target_fs.stat(&target) == Err(VfsError::NotFound) {
             if let Err(error) = self.target_fs.create_dir(&target) {
                 self.fail(&target, error);
@@ -369,37 +415,18 @@ impl Run<'_> {
         size: u64,
         modified: std::time::SystemTime,
     ) -> Flow {
-        let mut target = self.redirected(target);
-        let mut overwriting = false;
-
-        match conflict_at(self.target_fs, source, false, &target) {
-            Ok(None) => {}
-            Ok(Some(conflict)) => match self.ask(&conflict) {
-                Resolution::Overwrite => overwriting = true,
-                Resolution::Skip => {
-                    self.skips += 1;
-                    // Count the bytes anyway, so the bar still reaches the
-                    // total the scan promised.
-                    self.progress.emit(Progress::Advanced { bytes: size });
-                    return Flow::Continue;
-                }
-                Resolution::KeepBoth => match free_name_beside(self.target_fs, &target) {
-                    Ok(free) => target = free,
-                    Err(error) => {
-                        self.fail(source, error);
-                        return Flow::Continue;
-                    }
-                },
-                Resolution::Abort => {
-                    self.outcome = Outcome::Aborted;
-                    return Flow::Stop;
-                }
-            },
-            Err(error) => {
-                self.fail(source, error);
+        let target = self.redirected(target);
+        let (target, overwriting) = match self.settle(source, false, target) {
+            Landing::Proceed { target, replacing } => (target, replacing),
+            Landing::Skip => {
+                // Count the bytes anyway, so the bar still reaches the total
+                // the scan promised.
+                self.progress.emit(Progress::Advanced { bytes: size });
                 return Flow::Continue;
             }
-        }
+            Landing::Failed => return Flow::Continue,
+            Landing::Abort => return Flow::Stop,
+        };
 
         self.progress.emit(Progress::Started {
             path: source.clone(),

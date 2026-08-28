@@ -5,51 +5,19 @@
 //! here is the wrapper — ordering, the conflict round trip, cancelling from
 //! outside — not the engine, which `ops.rs` already pins.
 
-use std::collections::BTreeMap;
-use std::io::Read;
 use std::sync::Arc;
 
 use tc_core::ops::{
     Answer, DeleteMode, Destination, Job, JobQueue, Outcome, Progress, Report, Resolution,
 };
-use tc_core::vfs::{LocalFs, VfsPath, VirtualFs};
-use tempfile::TempDir;
+use tc_core::vfs::{LocalFs, VirtualFs};
+
+mod common;
+
+use common::{fixture, snapshot};
 
 fn backend() -> Arc<dyn VirtualFs> {
     Arc::new(LocalFs)
-}
-
-fn fixture() -> (TempDir, VfsPath) {
-    let dir = TempDir::new().unwrap();
-    let root = LocalFs::vfs_path(dir.path());
-    std::fs::create_dir(dir.path().join("tree")).unwrap();
-    std::fs::write(dir.path().join("tree/a.txt"), "hello world").unwrap();
-    std::fs::write(dir.path().join("tree/big.bin"), vec![3u8; 200_000]).unwrap();
-    std::fs::create_dir(dir.path().join("into")).unwrap();
-    (dir, root)
-}
-
-fn snapshot(root: &VfsPath) -> BTreeMap<String, Vec<u8>> {
-    let mut found = BTreeMap::new();
-    let mut stack = vec![root.clone()];
-    while let Some(at) = stack.pop() {
-        for entry in LocalFs.read_dir(&at).unwrap_or_default() {
-            let path = at.child(&entry.name);
-            let relative = path.as_str().trim_start_matches(root.as_str()).to_string();
-            if entry.is_dir() {
-                stack.push(path);
-            } else {
-                let mut bytes = Vec::new();
-                LocalFs
-                    .open_read(&path)
-                    .unwrap()
-                    .read_to_end(&mut bytes)
-                    .unwrap();
-                found.insert(relative, bytes);
-            }
-        }
-    }
-    found
 }
 
 /// The report a finished job leaves. Blocks until the job is done, which is
@@ -63,7 +31,7 @@ fn a_job_through_the_queue_produces_the_same_tree_as_a_direct_run() {
     // The concurrency wrapper changes timing, not results.
     let (_dir, root) = fixture();
     let queue = JobQueue::new();
-    let before = snapshot(&root.child("tree"));
+    let before = snapshot(&LocalFs, &root.child("tree"));
 
     let handle = queue.submit(
         Job::Copy {
@@ -76,7 +44,10 @@ fn a_job_through_the_queue_produces_the_same_tree_as_a_direct_run() {
     let report = wait(&handle.report);
 
     assert!(report.is_clean(), "{report:?}");
-    assert_eq!(snapshot(&root.child("into").child("tree")), before);
+    assert_eq!(
+        snapshot(&LocalFs, &root.child("into").child("tree")),
+        before
+    );
 }
 
 #[test]
@@ -130,8 +101,8 @@ fn a_conflict_is_answered_over_the_channel_and_the_job_carries_on() {
     let report = wait(&handle.report);
     assert!(report.is_clean(), "{report:?}");
     assert_eq!(
-        snapshot(&root.child("into").child("tree")),
-        snapshot(&root.child("tree"))
+        snapshot(&LocalFs, &root.child("into").child("tree")),
+        snapshot(&LocalFs, &root.child("tree"))
     );
 }
 
@@ -140,14 +111,17 @@ fn a_conflict_question_dropped_unanswered_aborts_instead_of_hanging() {
     // If the caller is gone, or a dialog is dismissed without deciding, the
     // worker must not sit on a channel forever holding a half-copied tree.
     // Abort, not skip: silence is not consent to overwrite anything.
+    //
+    // Two sources, the conflicting one first. `plan_transfer` keeps the order
+    // it was given, so the second source is provably untouched work — where
+    // relying on the order `read_dir` happens to return would not be.
     let (dir, root) = fixture();
-    std::fs::create_dir(dir.path().join("into/tree")).unwrap();
-    std::fs::write(dir.path().join("into/tree/a.txt"), "old").unwrap();
+    std::fs::write(dir.path().join("into/a.txt"), "old").unwrap();
     let queue = JobQueue::new();
 
     let handle = queue.submit(
         Job::Copy {
-            sources: vec![root.child("tree")],
+            sources: vec![root.child("tree/a.txt"), root.child("tree/sub")],
             destination: Destination::Into(root.child("into")),
         },
         backend(),
@@ -158,25 +132,25 @@ fn a_conflict_question_dropped_unanswered_aborts_instead_of_hanging() {
 
     assert_eq!(wait(&handle.report).outcome, Outcome::Aborted);
     assert_eq!(
-        snapshot(&root.child("into").child("tree")),
-        BTreeMap::from([("/a.txt".to_string(), b"old".to_vec())]),
-        "an abort must leave the target exactly as it was"
+        snapshot(&LocalFs, &root.child("into")),
+        common::Snapshot::from([("/a.txt".to_string(), Some(b"old".to_vec()))]),
+        "an abort must leave the target as it was and never reach the rest"
     );
 }
 
 #[test]
 fn a_cancel_from_another_thread_stops_a_running_job() {
-    // Deterministic by construction: the worker is parked on a conflict
-    // question, so the cancel is guaranteed to reach it mid-job rather than
-    // racing the end of one.
+    // Deterministic by construction twice over: the worker is parked on a
+    // conflict question, so the cancel reaches it mid-job rather than racing
+    // the end of one, and the second source proves there was still work left
+    // to stop.
     let (dir, root) = fixture();
-    std::fs::create_dir(dir.path().join("into/tree")).unwrap();
-    std::fs::write(dir.path().join("into/tree/a.txt"), "old").unwrap();
+    std::fs::write(dir.path().join("into/a.txt"), "old").unwrap();
     let queue = JobQueue::new();
 
     let handle = queue.submit(
         Job::Copy {
-            sources: vec![root.child("tree")],
+            sources: vec![root.child("tree/a.txt"), root.child("tree/sub")],
             destination: Destination::Into(root.child("into")),
         },
         backend(),
@@ -188,6 +162,10 @@ fn a_cancel_from_another_thread_stops_a_running_job() {
     request.answer(Answer::once(Resolution::Skip));
 
     assert_eq!(wait(&handle.report).outcome, Outcome::Cancelled);
+    assert!(
+        LocalFs.stat(&root.child("into/sub")).is_err(),
+        "the work after the cancel must not have happened"
+    );
 }
 
 #[test]

@@ -18,16 +18,11 @@ use tc_core::ops::{Answer, CancelToken, Resolution};
 
 use crate::constants::{
     BUTTON_ABORT, BUTTON_CANCEL, BUTTON_CLOSE, BUTTON_KEEP_BOTH, BUTTON_OK, BUTTON_OVERWRITE,
-    BUTTON_SKIP, CHECK_APPLY_TO_ALL, DIALOG_MARGIN, DIALOG_SPACING, DIALOG_WIDTH,
-    ENTRY_WIDTH_CHARS, FAILURE_LIST_HEIGHT, TITLE_FAILURES, TITLE_PROGRESS,
+    BUTTON_SKIP, CHECK_APPLY_TO_ALL, CLASS_DESTRUCTIVE, CLASS_SUGGESTED, DIALOG_MARGIN,
+    DIALOG_SPACING, DIALOG_WIDTH, ENTRY_WIDTH_CHARS, FAILURE_LIST_HEIGHT, TITLE_FAILURES,
+    TITLE_PROGRESS,
 };
 use crate::progress::{failure_lines, Meter};
-
-/// Style class GTK renders as the affirmative button.
-const CLASS_SUGGESTED: &str = "suggested-action";
-
-/// Style class GTK renders as the dangerous one.
-const CLASS_DESTRUCTIVE: &str = "destructive-action";
 
 /// A modal window with a vertical content box, parented so the window manager
 /// keeps it above the shell.
