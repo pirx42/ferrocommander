@@ -3,12 +3,17 @@
 //! Pure, so the arithmetic that a progress bar lives or dies by is tested
 //! without a window — the same split `jobs.rs` and `navigation.rs` use.
 
+use std::collections::VecDeque;
+use std::time::Duration;
+
 use tc_core::ops::Progress;
 use tc_core::vfs::{VfsError, VfsPath};
 
 use crate::constants::{
     BYTE_DECIMALS, BYTE_STEP, BYTE_UNITS, FAILURES_MORE, FAILURES_SHOWN, FAILURE_FORMAT,
-    PROGRESS_FORMAT, PROGRESS_SCANNING,
+    MINUTES_PER_HOUR, PROGRESS_ETA_SUFFIX, PROGRESS_FORMAT, PROGRESS_RATE_DELAY,
+    PROGRESS_RATE_SUFFIX, PROGRESS_RATE_WINDOW, PROGRESS_SCANNING, PROGRESS_SEPARATOR,
+    SECONDS_PER_MINUTE,
 };
 
 /// Where a job has got to.
@@ -19,6 +24,13 @@ pub struct Meter {
     /// Set once the scan has reported, which is when a total exists at all.
     scanned: bool,
     current: Option<String>,
+    /// How much was done and when, over the last [`PROGRESS_RATE_WINDOW`].
+    ///
+    /// A window rather than the whole job: a run of small files followed by
+    /// one big one leaves a whole-job average saying something that stopped
+    /// being true minutes ago, and an estimate built on it is wrong for the
+    /// rest of the run.
+    samples: VecDeque<(Duration, u64)>,
 }
 
 impl Meter {
@@ -40,6 +52,57 @@ impl Meter {
         }
     }
 
+    /// Notes how much is done at `elapsed` since the job started.
+    ///
+    /// Separate from [`apply`](Self::apply) so that folding an event stays
+    /// free of the clock: what a stream of events adds up to is arithmetic and
+    /// tested as such, and how fast they arrived is the caller's observation.
+    pub fn observe(&mut self, elapsed: Duration) {
+        self.samples.push_back((elapsed, self.done));
+        // Drop what has fallen out of the window, but never the last two:
+        // events arrive when they arrive, and a job that reported nothing for
+        // a while would otherwise be left with a single sample and no span to
+        // measure over.
+        let cutoff = elapsed.saturating_sub(PROGRESS_RATE_WINDOW);
+        while self.samples.len() > 2 && self.samples[0].0 < cutoff {
+            self.samples.pop_front();
+        }
+    }
+
+    /// Bytes per second over the recent window, once there is enough to say.
+    ///
+    /// `None` until the job has been running long enough for the number to
+    /// mean something, and when nothing has moved in the window — a rate of
+    /// zero would give an infinite estimate, and "0 B/s" is not news anyone
+    /// wants during a stall on a network mount.
+    pub fn rate(&self) -> Option<f64> {
+        let (first, done_then) = *self.samples.front()?;
+        let (last, done_now) = *self.samples.back()?;
+        let span = last.checked_sub(first)?;
+        if last < PROGRESS_RATE_DELAY || span.is_zero() {
+            return None;
+        }
+        let moved = done_now.checked_sub(done_then)?;
+        if moved == 0 {
+            return None;
+        }
+        Some(moved as f64 / span.as_secs_f64())
+    }
+
+    /// How long the rest is expected to take, at the recent rate.
+    ///
+    /// `None` before the scan — there is no total to be left of — and once the
+    /// work is done. An estimate is a guess and says so by disappearing rather
+    /// than counting down to a zero it may not reach.
+    pub fn remaining(&self) -> Option<Duration> {
+        if !self.scanned {
+            return None;
+        }
+        let left = self.total.checked_sub(self.done).filter(|&left| left > 0)?;
+        let rate = self.rate()?;
+        Some(Duration::from_secs_f64(left as f64 / rate))
+    }
+
     /// Whether this job is big enough to be worth a window.
     ///
     /// A `mkdir` moves nothing and should not put one up at all.
@@ -59,20 +122,49 @@ impl Meter {
         (self.done as f64 / self.total as f64).clamp(0.0, 1.0)
     }
 
-    /// The line under the bar.
+    /// The line under the bar: how much, how fast, how much longer.
+    ///
+    /// The rate and the estimate appear only once they are worth trusting, and
+    /// each on its own terms — a rate with no estimate is what a finished-but-
+    /// for-the-last-file job looks like.
     pub fn caption(&self) -> String {
         if !self.scanned {
             return PROGRESS_SCANNING.to_string();
         }
-        PROGRESS_FORMAT
+        let mut caption = PROGRESS_FORMAT
             .replace("{done}", &human_bytes(self.done))
-            .replace("{total}", &human_bytes(self.total))
+            .replace("{total}", &human_bytes(self.total));
+        if let Some(rate) = self.rate() {
+            caption.push_str(PROGRESS_SEPARATOR);
+            caption.push_str(&human_bytes(rate as u64));
+            caption.push_str(PROGRESS_RATE_SUFFIX);
+        }
+        if let Some(left) = self.remaining() {
+            caption.push_str(PROGRESS_SEPARATOR);
+            caption.push_str(&human_duration(left));
+            caption.push_str(PROGRESS_ETA_SUFFIX);
+        }
+        caption
     }
 
     /// The path being worked on, empty before the first one starts.
     pub fn current(&self) -> &str {
         self.current.as_deref().unwrap_or_default()
     }
+}
+
+/// A duration as a person reads a time left: `0:07`, `2:35`, `1:02:35`.
+///
+/// Minutes and seconds, with hours only when there are any — a job with four
+/// seconds to go should not say `0:00:04`.
+pub fn human_duration(left: Duration) -> String {
+    let seconds = left.as_secs();
+    let (minutes, seconds) = (seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE);
+    let (hours, minutes) = (minutes / MINUTES_PER_HOUR, minutes % MINUTES_PER_HOUR);
+    if hours > 0 {
+        return format!("{hours}:{minutes:02}:{seconds:02}");
+    }
+    format!("{minutes}:{seconds:02}")
 }
 
 /// A byte count as a person reads it.
@@ -251,5 +343,134 @@ mod tests {
     #[test]
     fn no_failures_produce_no_lines() {
         assert!(failure_lines(&[]).is_empty());
+    }
+
+    /// A meter that has scanned `total` and moved `done` by `at`.
+    fn moving(total: u64, done: u64, at: Duration) -> Meter {
+        let mut meter = Meter::default();
+        meter.apply(&Progress::Scanned {
+            files: 1,
+            bytes: total,
+        });
+        meter.observe(Duration::ZERO);
+        meter.apply(&Progress::Advanced { bytes: done });
+        meter.observe(at);
+        meter
+    }
+
+    #[test]
+    fn the_rate_is_what_moved_over_how_long_it_took() {
+        // Ten seconds, ten megabytes: one megabyte a second, and no rounding
+        // games in between.
+        let meter = moving(100 << 20, 10 << 20, Duration::from_secs(10));
+
+        let rate = meter.rate().expect("a rate after ten seconds");
+        assert!(
+            (rate - (1 << 20) as f64).abs() < 1.0,
+            "{rate} is not a MiB per second"
+        );
+    }
+
+    #[test]
+    fn nothing_is_said_until_there_is_something_to_say() {
+        // A number computed from the first fifty milliseconds is noise, and
+        // one that appears and then halves reads as a program that does not
+        // know what it is doing.
+        let meter = moving(100 << 20, 1 << 20, Duration::from_millis(100));
+
+        assert_eq!(meter.rate(), None);
+        assert_eq!(meter.remaining(), None);
+        assert!(!meter.caption().contains(PROGRESS_RATE_SUFFIX));
+    }
+
+    #[test]
+    fn a_stall_reports_no_rate_rather_than_zero() {
+        // A rate of zero divides into an infinite estimate, and "0 B/s" is not
+        // news anybody wants during a pause on a network mount.
+        let mut meter = moving(100 << 20, 10 << 20, Duration::from_secs(1));
+        // Long enough that every sample carrying progress has fallen out of
+        // the window.
+        for second in 2..12 {
+            meter.observe(Duration::from_secs(second));
+        }
+
+        assert_eq!(meter.rate(), None, "a stall reported a rate");
+        assert_eq!(meter.remaining(), None);
+    }
+
+    #[test]
+    fn the_estimate_is_what_is_left_at_the_current_rate() {
+        // 90 MiB left at 1 MiB/s is a minute and a half.
+        let meter = moving(100 << 20, 10 << 20, Duration::from_secs(10));
+
+        let left = meter.remaining().expect("an estimate");
+        assert!(
+            (left.as_secs_f64() - 90.0).abs() < 1.0,
+            "{left:?} is not about ninety seconds"
+        );
+    }
+
+    #[test]
+    fn a_job_with_nothing_left_offers_no_estimate() {
+        // An estimate is a guess and says so by disappearing, rather than
+        // counting down to a zero it may not reach.
+        let meter = moving(10 << 20, 10 << 20, Duration::from_secs(10));
+
+        assert_eq!(meter.remaining(), None);
+        assert!(!meter.caption().contains(PROGRESS_ETA_SUFFIX));
+    }
+
+    #[test]
+    fn the_rate_follows_what_is_happening_now() {
+        // The reason for a window rather than a whole-job average: a run of
+        // small files and then one big one. A meter that averaged everything
+        // would still be reporting the slow start long after it ended.
+        let mut meter = Meter::default();
+        meter.apply(&Progress::Scanned {
+            files: 2,
+            bytes: 1000 << 20,
+        });
+        meter.observe(Duration::ZERO);
+        // Ten seconds crawling.
+        meter.apply(&Progress::Advanced { bytes: 1 << 20 });
+        meter.observe(Duration::from_secs(10));
+        // Then a second at a hundred times that.
+        meter.apply(&Progress::Advanced { bytes: 100 << 20 });
+        meter.observe(Duration::from_secs(11));
+
+        let rate = meter.rate().expect("a rate");
+        let whole_job = (101 << 20) as f64 / 11.0;
+        assert!(
+            rate > whole_job * 5.0,
+            "{rate} is still averaging in the slow start ({whole_job})"
+        );
+    }
+
+    #[test]
+    fn a_time_left_reads_the_way_a_person_writes_one() {
+        for (seconds, written) in [
+            (7u64, "0:07"),
+            (67, "1:07"),
+            (155, "2:35"),
+            (3600, "1:00:00"),
+            (3755, "1:02:35"),
+        ] {
+            assert_eq!(human_duration(Duration::from_secs(seconds)), written);
+        }
+    }
+
+    #[test]
+    fn the_caption_carries_all_three_once_it_can() {
+        let meter = moving(100 << 20, 10 << 20, Duration::from_secs(10));
+
+        let caption = meter.caption();
+        for part in [
+            "10.0 MiB",
+            "100.0 MiB",
+            PROGRESS_RATE_SUFFIX,
+            PROGRESS_ETA_SUFFIX,
+        ] {
+            assert!(caption.contains(part), "{caption:?} is missing {part:?}");
+        }
     }
 }

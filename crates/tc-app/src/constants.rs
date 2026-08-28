@@ -317,6 +317,31 @@ pub const PROGRESS_SCANNING: &str = "Scanning\u{2026}";
 /// How the progress window reports where a job has got to.
 pub const PROGRESS_FORMAT: &str = "{done} of {total}";
 
+/// Between the parts of the caption: bytes, then rate, then what is left.
+pub const PROGRESS_SEPARATOR: &str = " \u{b7} ";
+pub const PROGRESS_RATE_SUFFIX: &str = "/s";
+pub const PROGRESS_ETA_SUFFIX: &str = " left";
+
+/// How far back the rate is measured over.
+///
+/// Not the whole job: a run of small files followed by one big one would leave
+/// the average saying something that stopped being true minutes ago, and an
+/// estimate built on it would be wrong for the rest of the job. Not one sample
+/// either — that jumps around with every buffer. A few seconds is long enough
+/// to be steady and short enough to still be about now.
+pub const PROGRESS_RATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// How long a job must have been running before a rate is shown at all.
+///
+/// A number computed from the first fifty milliseconds is noise, and one that
+/// appears and then halves reads as a program that does not know what it is
+/// doing.
+pub const PROGRESS_RATE_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
+
+/// Seconds in a minute and minutes in an hour, for writing a time left.
+pub const SECONDS_PER_MINUTE: u64 = 60;
+pub const MINUTES_PER_HOUR: u64 = 60;
+
 /// Units byte counts are rendered in. Binary, because file managers count in
 /// what the filesystem allocates rather than in what a marketing department
 /// prints on a box.

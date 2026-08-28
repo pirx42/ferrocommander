@@ -237,3 +237,32 @@ written.
 fallback both address a single backend. Phase 2's UI has exactly one, so it
 holds; phase 6 introduces a second and is where a cross-store move has to be
 told apart from a same-store one.
+
+## The progress window says how fast and how much longer
+
+Under the bar: how much of how much, then the rate, then the time left —
+`10.0 MiB of 100.0 MiB · 1.0 MiB/s · 1:30 left`.
+
+**The rate is measured over a few seconds, not over the whole job.** A run of
+small files followed by one big one leaves a whole-job average saying something
+that stopped being true minutes ago, and an estimate built on it is wrong for
+the rest of the run. The window is `PROGRESS_RATE_WINDOW`; samples older than
+that are dropped, except that the last two are always kept — events arrive when
+they arrive, and a job that reported nothing for a while would otherwise be left
+with a single sample and no span to measure over.
+
+Each part appears only when it is worth trusting:
+
+- **No rate for the first `PROGRESS_RATE_DELAY`.** A number computed from the
+  first fifty milliseconds is noise, and one that appears and then halves reads
+  as a program that does not know what it is doing.
+- **A stall reports no rate at all**, rather than `0 B/s`. Zero divides into an
+  infinite estimate, and it is not news anybody wants during a pause on a
+  network mount.
+- **No estimate once there is nothing left.** An estimate is a guess and says
+  so by disappearing, rather than counting down to a zero it may not reach.
+
+The arithmetic is in `Meter` and is tested without a window, like the rest of
+`progress.rs`. Folding an event stays free of the clock — what a stream of
+events adds up to is arithmetic, and how fast they arrived is the shell's
+observation, passed in through `observe`.

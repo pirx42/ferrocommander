@@ -688,6 +688,10 @@ fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl FnOnce() + 's
         let mut view: Option<dialogs::ProgressView> = None;
         while let Ok(event) = progress.recv().await {
             meter.apply(&event);
+            // The clock is the shell's to read, not the meter's: what the
+            // events add up to is arithmetic, and how fast they arrived is an
+            // observation.
+            meter.observe(started.elapsed());
             // The window appears only once a job has proved it is going to
             // take a moment. Checked as events arrive rather than on a timer:
             // a job that finishes first simply never opens one, and a job
