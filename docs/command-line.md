@@ -63,6 +63,13 @@ act on the file you are looking at without typing its name. Appended as a
 unless the line already ends in a space, because reaching for the space bar
 first would make the shortcut not worth using.
 
+**It follows the active pane**, and typing does not change which one that is:
+the focus moves into the entry, but the pane the keyboard came from is still
+the one being looked at. A name taken from the other side would be plausible
+right up until it named a file that exists on both — so the test presses Tab
+first, and uses a name both panes have with different contents to say which
+one it came from.
+
 ## The shell keeps its hands off a text field — with one exception
 
 While a text field has the focus the shell dispatches nothing, or every letter

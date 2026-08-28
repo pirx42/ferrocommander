@@ -1580,6 +1580,30 @@ fn ctrl_enter_puts_the_name_under_the_cursor_into_the_command_line() {
 }
 
 #[test]
+fn the_inserted_name_comes_from_the_pane_that_has_the_keyboard() {
+    // Ctrl+Enter follows the active pane, and typing into the command line
+    // does not change which one that is: the focus moves into the entry, but
+    // the pane the keyboard came from is still the one being looked at. A
+    // name taken from the other side would be plausible right up until it
+    // named a file that exists on both.
+    let app = in_src_and_dst(arrange_with_collision);
+    app.key("Tab");
+    // dst holds only notes.txt, so `..` then it.
+    app.keys(&["Home", "Down"]);
+
+    app.type_text("cat");
+    app.key("ctrl+Return");
+    app.type_text(" > out.txt");
+    app.key("Return");
+
+    // dst/notes.txt holds EXISTING_TEXT and src/notes.txt holds SOURCE_TEXT,
+    // and the left pane's cursor is on `..` — so what landed in out.txt says
+    // which pane the name came from. The redirection creates the file either
+    // way, which is why the contents are the assertion and not the file.
+    app.await_contents("dst/out.txt", EXISTING_TEXT);
+}
+
+#[test]
 fn an_inserted_name_is_a_separate_word() {
     // The difference between `lsnotes.txt` and `ls notes.txt`. Having to
     // reach for the space bar first would make the shortcut not worth using,
