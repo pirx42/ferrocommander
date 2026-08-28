@@ -61,6 +61,9 @@ cross-references instead of duplication.
   [archive/2026-08-28-phase3c-command-line.md](plans/archive/2026-08-28-phase3c-command-line.md)
   (the command line and `Ctrl+↓` for its history — `Ctrl+↑` needs tabs, which
   stay out of v1).
+  Also active:
+  [2026-08-28-phase4-viewer.md](plans/2026-08-28-phase4-viewer.md)
+  (design phase 4: the F3 viewer and the F4 editor hook).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
   (trigger table in the root CLAUDE.md).
 
