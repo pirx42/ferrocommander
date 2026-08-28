@@ -22,6 +22,8 @@ cross-references instead of duplication.
   and what happens when a directory cannot be entered.
 - [watching.md](watching.md) — how a pane notices what another program did:
   the directory watcher, `Ctrl+R`, and what survives a re-read.
+- [viewer.md](viewer.md) — the F3 viewer: why it never reads the file, how
+  paging works, and what encoding detection amounts to.
 - [command-line.md](command-line.md) — the command line at the bottom: how a
   typed line is run, why `cd` is read rather than spawned, and when output is
   shown.
@@ -61,8 +63,8 @@ cross-references instead of duplication.
   [archive/2026-08-28-phase3c-command-line.md](plans/archive/2026-08-28-phase3c-command-line.md)
   (the command line and `Ctrl+↓` for its history — `Ctrl+↑` needs tabs, which
   stay out of v1).
-  Also active:
-  [2026-08-28-phase4-viewer.md](plans/2026-08-28-phase4-viewer.md)
+  and
+  [archive/2026-08-28-phase4-viewer.md](plans/archive/2026-08-28-phase4-viewer.md)
   (design phase 4: the F3 viewer and the F4 editor hook).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
   (trigger table in the root CLAUDE.md).

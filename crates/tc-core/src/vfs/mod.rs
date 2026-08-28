@@ -104,6 +104,23 @@ pub trait VirtualFs: Send + Sync {
     /// Opens a file for reading.
     fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError>;
 
+    /// Reads at most `len` bytes starting `offset` into a file.
+    ///
+    /// Random access rather than a seekable reader, because a seekable reader
+    /// is a promise not every backend can keep: an entry inside a compressed
+    /// archive has no cheap seek, and a trait method some backends must fake
+    /// is worse than one they implement honestly and slowly.
+    ///
+    /// What the viewer is built on. It never holds a file — it holds an
+    /// offset, reads a window around it, and moves the offset — which is the
+    /// only way a four-gigabyte file opens instantly (`docs/performance.md`).
+    ///
+    /// **A read past the end comes back short**, and one entirely past the end
+    /// comes back empty. Not an error: that is what every caller wants at the
+    /// end of a file, and the alternative is each of them clamping against a
+    /// size that may have changed since they asked.
+    fn read_at(&self, path: &VfsPath, offset: u64, len: usize) -> Result<Vec<u8>, VfsError>;
+
     /// Creates a file for writing, **truncating** an existing one.
     ///
     /// Deciding whether overwriting is allowed happens before this call — the

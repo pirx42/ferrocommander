@@ -39,6 +39,10 @@ pub enum Action {
     Move,
     /// Ctrl+R — re-read the directory, keeping marks, cursor and position.
     Reread,
+    /// F3 — look inside the file under the cursor.
+    View,
+    /// F4 — hand it to the editor.
+    Edit,
     /// Shift+F4 — create an empty file and open it in the editor.
     CreateFile,
     /// Shift+F6 — rename the row under the cursor, in the list itself.
@@ -167,6 +171,16 @@ static BINDINGS: &[Binding] = &[
         key: Key::BackSpace,
         modifiers: PLAIN,
         action: Action::GoParent,
+    },
+    Binding {
+        key: Key::F3,
+        modifiers: PLAIN,
+        action: Action::View,
+    },
+    Binding {
+        key: Key::F4,
+        modifiers: PLAIN,
+        action: Action::Edit,
     },
     Binding {
         key: Key::F5,
@@ -451,6 +465,8 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("copy", Action::Copy),
     ("move", Action::Move),
     ("reread", Action::Reread),
+    ("view", Action::View),
+    ("edit", Action::Edit),
     ("create_file", Action::CreateFile),
     ("rename_inline", Action::RenameInline),
     ("create_dir", Action::CreateDir),
@@ -685,6 +701,8 @@ mod tests {
             (Key::Return, PLAIN, Action::Activate),
             (Key::KP_Enter, PLAIN, Action::Activate),
             (Key::BackSpace, PLAIN, Action::GoParent),
+            (Key::F3, PLAIN, Action::View),
+            (Key::F4, PLAIN, Action::Edit),
             (Key::F5, PLAIN, Action::Copy),
             (Key::F6, PLAIN, Action::Move),
             (Key::F4, ModifierType::SHIFT_MASK, Action::CreateFile),
@@ -978,6 +996,21 @@ mod tests {
         assert_eq!(
             bound(Key::F6, ModifierType::CONTROL_MASK),
             Some(Action::SortBy(SortKey::Size))
+        );
+    }
+
+    #[test]
+    fn f4_means_three_things_by_its_modifier() {
+        // Edit, create-and-edit, sort by extension. F3 and F4 stopped being
+        // unbound in phase 4, which is also why the modifier tests name them.
+        assert_eq!(bound(Key::F4, PLAIN), Some(Action::Edit));
+        assert_eq!(
+            bound(Key::F4, ModifierType::SHIFT_MASK),
+            Some(Action::CreateFile)
+        );
+        assert_eq!(
+            bound(Key::F4, ModifierType::CONTROL_MASK),
+            Some(Action::SortBy(SortKey::Ext))
         );
     }
 

@@ -157,7 +157,10 @@ every phase ships its tests alongside the code (skill
    **Implemented**; plan archived at
    [archive/2026-08-28-phase3c-command-line.md](archive/2026-08-28-phase3c-command-line.md),
    subsystem doc [command-line.md](../command-line.md).
-4. **Viewer** — F3 text/hex viewer, F4 external editor hook. *(~1 day)*
+4. **Viewer** — F3 text/hex viewer, F4 external editor hook. ✅
+   **Implemented**; plan archived at
+   [archive/2026-08-28-phase4-viewer.md](archive/2026-08-28-phase4-viewer.md),
+   subsystem doc [viewer.md](../viewer.md).
 5. **Search & multi-rename** — Alt+F7 dialog + streaming results; Ctrl+M tool
    with table-driven rename-engine tests. *(~1–2 days)*
 6. **Archives** — archive VFS read, then pack/unpack via the same copy pipeline;

@@ -8,7 +8,7 @@ use tc_core::vfs::VfsPath;
 
 /// Where activating the cursor row leads, or `None` when it leads nowhere.
 ///
-/// Files are `None`: opening one is F3/F4, which is phase 4. The `..` row
+/// Files are `None`: opening one is F3 or F4, not Enter. The `..` row
 /// needs no special case — it is a directory like any other, and `VfsPath`
 /// normalization makes its target the parent.
 pub fn activation_target(listing: &Listing) -> Option<VfsPath> {

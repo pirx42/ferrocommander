@@ -740,6 +740,18 @@ impl PaneView {
         self.listing.current().map(|entry| entry.name.clone())
     }
 
+    /// The path of the row under the cursor, when it is a **file**.
+    ///
+    /// `None` on `..` and on a directory: what F3 and F4 do with one is
+    /// nothing, which is what Total Commander does too.
+    pub fn current_file(&self) -> Option<VfsPath> {
+        let entry = self.listing.current()?;
+        if entry.is_dir() || self.listing.is_parent(self.listing.cursor()) {
+            return None;
+        }
+        self.listing.current_path()
+    }
+
     /// Whether the last navigation failed and left the pane where it was.
     pub fn went_wrong(&self) -> bool {
         self.error.is_some()
@@ -889,8 +901,8 @@ impl PaneView {
         self.navigate_to(dir)
     }
 
-    /// Enters the directory under the cursor. Does nothing on a file — F3/F4
-    /// arrive in phase 4.
+    /// Enters the directory under the cursor. Does nothing on a file, which
+    /// is what F3 and F4 are for.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     pub fn activate(&mut self) -> Option<Loading> {
         activation_target(&self.listing).map(|target| self.navigate_to(target))

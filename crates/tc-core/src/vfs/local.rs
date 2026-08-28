@@ -100,6 +100,25 @@ impl VirtualFs for LocalFs {
         Ok(Box::new(fs::File::open(platform::to_std_path(path))?))
     }
 
+    fn read_at(&self, path: &VfsPath, offset: u64, len: usize) -> Result<Vec<u8>, VfsError> {
+        use std::io::{Seek, SeekFrom};
+
+        let mut file = fs::File::open(platform::to_std_path(path))?;
+        file.seek(SeekFrom::Start(offset))?;
+        let mut buffer = vec![0; len];
+        // `read` may stop short of a full buffer for reasons that are not the
+        // end of the file, so this reads until it is full or the file ends.
+        let mut filled = 0;
+        while filled < len {
+            match file.read(&mut buffer[filled..])? {
+                0 => break,
+                read => filled += read,
+            }
+        }
+        buffer.truncate(filled);
+        Ok(buffer)
+    }
+
     fn create_file(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
         Ok(Box::new(fs::File::create(platform::to_std_path(path))?))
     }

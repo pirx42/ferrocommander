@@ -296,6 +296,18 @@ pub const TITLE_CREATE_FILE: &str = "New file";
 pub const PROMPT_CREATE_FILE: &str = "Create and open:";
 pub const NEW_FILE_DEFAULT: &str = "new.txt";
 
+/// The viewer's title: the file being looked at, and where in it.
+pub const TITLE_VIEWER: &str = "{name} \u{2014} {percent}%";
+
+/// How tall and wide the viewer opens. Bigger than a dialog, because it is
+/// there to be read rather than answered.
+pub const VIEWER_WIDTH: i32 = 900;
+pub const VIEWER_HEIGHT: i32 = 700;
+
+/// What a file with nothing in it says, rather than an empty window that looks
+/// like it failed to load.
+pub const VIEWER_EMPTY: &str = "(empty file)";
+
 /// Title of the command history Ctrl+Down opens.
 pub const TITLE_HISTORY: &str = "Command history";
 

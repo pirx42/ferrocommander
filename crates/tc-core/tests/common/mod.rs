@@ -155,6 +155,14 @@ macro_rules! delegate_vfs {
             ) -> Result<Box<dyn std::io::Read + Send>, tc_core::vfs::VfsError> {
                 self.open_read_impl(path)
             }
+            fn read_at(
+                &self,
+                path: &tc_core::vfs::VfsPath,
+                offset: u64,
+                len: usize,
+            ) -> Result<Vec<u8>, tc_core::vfs::VfsError> {
+                self.inner.read_at(path, offset, len)
+            }
             fn create_file(
                 &self,
                 path: &tc_core::vfs::VfsPath,

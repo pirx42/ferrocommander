@@ -545,6 +545,95 @@ fn a_re_read_of_a_directory_that_has_gone_lands_somewhere_real() {
 }
 
 #[test]
+fn f3_opens_a_viewer_on_the_file_under_the_cursor() {
+    // The window is titled with the file's name, which is how the test finds
+    // it — and also what tells a person which of several open viewers is
+    // which.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("F3");
+
+    app.focus_dialog("notes.txt");
+    // Escape closes it and hands the keyboard back to the rows.
+    app.key("Escape");
+    app.await_dialog_closed("notes.txt");
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+}
+
+#[test]
+fn the_viewer_pages_through_a_file_it_never_read() {
+    // The percentage in the title is the only thing about the viewer that is
+    // observable from outside — and it happens to be exactly the thing worth
+    // asserting: it says where in the file the offset is, so watching it move
+    // is watching the paging work.
+    //
+    // The file is larger than one window on purpose. A viewer that read the
+    // whole thing would open just as well; one that could only *show* what it
+    // had read would not move at all.
+    let app = App::launch(|home| {
+        arrange(home);
+        let big: String = (0..200_000).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(home.join("src/big.txt"), big).unwrap();
+    });
+    app.keys(&["Home", "Down", "Down", "Return"]);
+    await_panes_at(&app, "/src", "");
+    // `..`, nested, big.txt.
+    app.keys(&["Home", "Down", "Down"]);
+
+    app.key("F3");
+    app.focus_dialog("big.txt");
+    assert!(app.has_dialog("0%"), "it did not open at the top");
+
+    app.key("End");
+    app.settle();
+    // That it moved, not how far: End stops half a window short of the size so
+    // the last page still has something in it, and pinning the exact
+    // percentage here would be pinning that arithmetic twice — it has its own
+    // test in `tc-core`.
+    assert!(!app.has_dialog("0%"), "End did not move the offset");
+
+    app.key("Home");
+    app.settle();
+    assert!(app.has_dialog("0%"), "Home did not come back");
+}
+
+#[test]
+fn f3_does_nothing_on_a_directory_or_on_the_parent_row() {
+    // There is nothing to read, and Total Commander does not offer either.
+    let app = in_src_and_dst(arrange);
+
+    // A viewer is titled `<name> — <percent>%`, so `0%` is the marker that a
+    // viewer is open at all — and unlike the file's own name it cannot match
+    // anything else on the display. (`..` as a search would match every
+    // window there is: xdotool takes a regex, and `.` is any character.)
+    app.key("Home");
+    app.key("F3");
+    app.settle();
+    assert!(!app.has_dialog("0%"), "a viewer opened on the parent row");
+
+    app.key("Down");
+    app.key("F3");
+    app.settle();
+    assert!(!app.has_dialog("0%"), "a viewer opened on a directory");
+}
+
+#[test]
+fn f4_hands_the_file_under_the_cursor_to_the_editor() {
+    let app = in_src_and_dst(with_recording_editor);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("F4");
+
+    app.await_contents(
+        "opened.log",
+        &format!("{}/src/notes.txt", app.home().display()),
+    );
+}
+
+#[test]
 fn shift_f4_creates_a_file_and_opens_it() {
     let app = in_src_and_dst(with_recording_editor);
 

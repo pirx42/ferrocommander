@@ -323,24 +323,29 @@ impl App {
         if !self.try_xdotool(&["windowfocus", window]) {
             return false;
         }
-        self.focused_window_name()
-            .is_some_and(|focused| focused.contains(title))
+        let Some(focused) = self.focused_window_id() else {
+            return false;
+        };
+        // By id when it matches, and by name otherwise. The focus often lands
+        // on a *child* of the window that was asked for — one GTK window is
+        // several X windows — and a child carries no name of its own, so a
+        // name comparison alone reads a perfectly focused window as a failure.
+        if focused == window {
+            return true;
+        }
+        self.window_name(&focused)
+            .is_some_and(|name| name.contains(title))
     }
 
-    /// The name of whatever currently has the keyboard focus.
-    fn focused_window_name(&self) -> Option<String> {
-        let focused = Command::new("xdotool")
+    /// The id of whatever currently has the keyboard focus.
+    fn focused_window_id(&self) -> Option<String> {
+        let output = Command::new("xdotool")
             .env("DISPLAY", &self.display)
             .arg("getwindowfocus")
+            .stderr(Stdio::null())
             .output()
             .ok()?;
-        let id = String::from_utf8_lossy(&focused.stdout).trim().to_string();
-        let name = Command::new("xdotool")
-            .env("DISPLAY", &self.display)
-            .args(["getwindowname", &id])
-            .output()
-            .ok()?;
-        Some(String::from_utf8_lossy(&name.stdout).trim().to_string())
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
     /// Whether a dialog matching `title` is open right now.
@@ -370,25 +375,7 @@ impl App {
     /// Every window title on this display, for a failure message that says
     /// what was there instead of what was wanted.
     fn window_names(&self) -> Vec<String> {
-        let output = Command::new("xdotool")
-            .env("DISPLAY", &self.display)
-            .args(["search", "--name", "."])
-            .output();
-        let Ok(output) = output else {
-            return Vec::new();
-        };
-        String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .filter_map(|id| {
-                let name = Command::new("xdotool")
-                    .env("DISPLAY", &self.display)
-                    .args(["getwindowname", id])
-                    .output()
-                    .ok()?;
-                Some(String::from_utf8_lossy(&name.stdout).trim().to_string())
-            })
-            .filter(|name| !name.is_empty())
-            .collect()
+        self.windows().into_iter().map(|(_, name)| name).collect()
     }
 
     /// Waits until `relative` exists below the home directory.
@@ -484,16 +471,53 @@ impl App {
         }
     }
 
+    /// The window whose title contains `title`, if one is up.
+    ///
+    /// Every window is listed and the names compared here, rather than asking
+    /// `xdotool search --name <title>` to do it. Two reasons, both found the
+    /// hard way: its pattern is a **regex**, so a title of `..` matches every
+    /// window on the display and a test asserting one is *absent* can never
+    /// fail; and it does not reliably match a substring anyway — a window
+    /// plainly named `notes.txt — 0%` was not found by `notes.txt`.
+    ///
+    /// Plain `contains` on a name this side has no such surprises.
     fn find_window(&self, title: &str) -> Option<String> {
+        self.windows()
+            .into_iter()
+            .find(|(_, name)| name.contains(title))
+            .map(|(id, _)| id)
+    }
+
+    /// Every window that has a name, as `(id, name)`.
+    fn windows(&self) -> Vec<(String, String)> {
         let output = Command::new("xdotool")
             .env("DISPLAY", &self.display)
-            .args(["search", "--name", title])
-            .output()
-            .ok()?;
+            // `.` matches any window that has a name at all — the one place a
+            // regex is wanted.
+            .args(["search", "--name", "."])
+            .stderr(Stdio::null())
+            .output();
+        let Ok(output) = output else {
+            return Vec::new();
+        };
         String::from_utf8_lossy(&output.stdout)
             .lines()
-            .next()
-            .map(str::to_string)
+            .filter_map(|id| {
+                let name = self.window_name(id)?;
+                (!name.is_empty()).then(|| (id.to_string(), name))
+            })
+            .collect()
+    }
+
+    /// The name X has for one window id, if it has one.
+    fn window_name(&self, id: &str) -> Option<String> {
+        let output = Command::new("xdotool")
+            .env("DISPLAY", &self.display)
+            .args(["getwindowname", id])
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
     /// Resizes the main window, the way dragging its corner would.

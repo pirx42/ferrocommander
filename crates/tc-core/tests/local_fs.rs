@@ -494,3 +494,74 @@ mod attributes {
         );
     }
 }
+
+/// Random access, which the viewer is built on: it never holds a file, only an
+/// offset into one.
+mod read_at {
+    use super::*;
+
+    /// A file of known bytes, and its path.
+    fn file(contents: &[u8]) -> (TempDir, VfsPath) {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("bytes.bin");
+        std::fs::write(&path, contents).unwrap();
+        let vfs = VfsPath::new(path.to_str().unwrap());
+        (dir, vfs)
+    }
+
+    #[test]
+    fn a_window_is_the_same_bytes_the_whole_file_has_there() {
+        // The invariant that makes paging trustworthy: reading a window is
+        // reading the file and slicing it, however the window is placed.
+        let whole: Vec<u8> = (0..=255u8).cycle().take(5000).collect();
+        let (_dir, path) = file(&whole);
+
+        for (offset, len) in [(0, 10), (1, 1), (255, 512), (4990, 10), (1234, 1000)] {
+            let window = LocalFs.read_at(&path, offset as u64, len).unwrap();
+            assert_eq!(
+                window,
+                &whole[offset..offset + len],
+                "window at {offset} of {len}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_read_running_off_the_end_comes_back_short() {
+        // What every caller wants at the end of a file. An error instead would
+        // have each of them clamping against a size that may have changed
+        // since they asked.
+        let (_dir, path) = file(b"0123456789");
+
+        let window = LocalFs.read_at(&path, 6, 100).unwrap();
+
+        assert_eq!(window, b"6789");
+    }
+
+    #[test]
+    fn a_read_entirely_past_the_end_comes_back_empty() {
+        let (_dir, path) = file(b"0123456789");
+
+        assert!(LocalFs.read_at(&path, 10, 100).unwrap().is_empty());
+        assert!(LocalFs.read_at(&path, 1_000_000, 100).unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_empty_read_is_empty_rather_than_an_error() {
+        let (_dir, path) = file(b"0123456789");
+
+        assert!(LocalFs.read_at(&path, 0, 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_directory_or_a_missing_file_is_an_error_not_a_panic() {
+        let dir = TempDir::new().unwrap();
+        let root = VfsPath::new(dir.path().to_str().unwrap());
+
+        assert!(LocalFs.read_at(&root, 0, 10).is_err(), "a directory");
+        assert!(
+            LocalFs.read_at(&root.child("nothing"), 0, 10).is_err(),
+            "a missing file"
+        );
+    }
+}

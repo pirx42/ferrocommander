@@ -292,6 +292,8 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::Move => start_transfer(shell, false),
         Action::RenameInline => shell.borrow_mut().active_pane().begin_rename(),
         Action::CreateDir => start_create_dir(shell),
+        Action::View => start_viewing(shell),
+        Action::Edit => start_editing(shell),
         Action::CreateFile => start_create_file(shell),
         Action::Reread => shell.borrow_mut().active_pane().reread(),
         Action::Delete => start_delete(shell, DeleteMode::Trash),
@@ -962,6 +964,42 @@ fn typed_into_command_line(
     };
     shell.borrow().command_line.accept(character);
     glib::Propagation::Stop
+}
+
+/// F3: look inside the file under the cursor.
+///
+/// Nothing on a directory or on `..`: there is nothing to read, and Total
+/// Commander does not offer either.
+fn start_viewing(shell: &Rc<RefCell<Shell>>) {
+    let (window, fs, path) = {
+        let mut state = shell.borrow_mut();
+        let Some(window) = state.window.upgrade() else {
+            return;
+        };
+        state.active_pane().adopt_selection();
+        let Some(path) = state.active_pane().current_file() else {
+            return;
+        };
+        let fs = state.active_pane().fs();
+        (window, fs, path)
+    };
+    // Opening reads the size and nothing else, so this is instant however big
+    // the file is (`docs/viewer.md`).
+    let Ok(view) = tc_core::viewer::View::open(fs.as_ref(), path) else {
+        return;
+    };
+    dialogs::Viewer::open(&window, fs, view);
+}
+
+/// F4: hand the file under the cursor to the editor from the settings.
+fn start_editing(shell: &Rc<RefCell<Shell>>) {
+    let mut state = shell.borrow_mut();
+    state.active_pane().adopt_selection();
+    let Some(path) = state.active_pane().current_file() else {
+        return;
+    };
+    let editor = state.saved.editor().to_string();
+    tc_core::command::open_in_editor(&editor, &path);
 }
 
 /// Shift+F4: ask for a name, create an empty file, open it in the editor.

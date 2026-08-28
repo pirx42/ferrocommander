@@ -1,6 +1,6 @@
 # Phase 4 — the viewer (F3) and the external editor (F4)
 
-**Status:** In progress
+**Status:** Implemented
 **Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) § 6, phase 4.
 
 ## 1. Why
@@ -83,6 +83,21 @@ Neither does anything on `..` or on a directory: there is nothing to view, and
 TC does not either.
 
 ### D. Docs and the audit
+
+**What the audit found**, all of it in the test harness rather than the app:
+
+- **`xdotool search --name` is a regex and an unreliable one.** A title of `..`
+  matched every window on the display, so a test asserting a viewer was
+  *absent* could never fail — and a window plainly named `notes.txt — 0%` was
+  not found by `notes.txt` at all. The harness now lists every window and
+  compares names itself, which has no such surprises.
+- **Focus was checked by name, and a focused window often has none.** One GTK
+  window is several X windows and the focus lands on a child, which carries no
+  name — so a perfectly focused viewer read as a failure. Compared by id first
+  now, by name second.
+
+Neither was reachable before phase 4, because every window the suite had ever
+looked for was a dialog with a plain ASCII title.
 
 A new `docs/viewer.md`, the keymap table, and the audit per skill 49.
 

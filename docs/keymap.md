@@ -11,6 +11,8 @@
 | `Home` / `End` | Move the cursor to the first / last row |
 | `Enter`, keypad `Enter` | Enter the directory under the cursor |
 | `Backspace` | Leave the current directory |
+| `F3` | Look inside the file under the cursor — see [viewer.md](viewer.md) |
+| `F4` | Hand it to the editor |
 | `F5` | Copy the entry under the cursor |
 | `F6` | Move it, or rename it in place |
 | `Shift+F6` | Rename the row under the cursor, in the list itself |
@@ -44,7 +46,8 @@
 | `Ctrl+Q` | Quit |
 | any unbound letter | Starts a command — see [command-line.md](command-line.md) |
 
-Activating a *file* still does nothing — F3/F4 arrive in phase 4.
+Activating a *file* does nothing: `F3` views it and `F4` edits it
+([viewer.md](viewer.md)).
 
 **Two keys for each delete**, because Total Commander has both and muscle
 memory splits evenly between them. Shift is the only place in the keymap where
@@ -396,7 +399,8 @@ how the harness closes the app.
 **What is deliberately not exercised end to end**, and why:
 
 - `Backspace`, and `Ctrl+F3`/`F4`/`F5` — covered headlessly, and reaching them
-  through a real window would say nothing the unit tests do not.
+  through a real window would say nothing the unit tests do not. (Plain `F3`
+  and `F4` left this list in phase 4, when they stopped being unbound.)
 - The **second** drive key: `Alt+F1` and `Alt+F2` differ only in which pane
   they name, and the test that presses `Alt+F2` covers exactly that.
 - The **aliases**: `Ctrl+Num +` for `Ctrl+A`, keypad `Enter` for `Enter`,
