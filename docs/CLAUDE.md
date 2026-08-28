@@ -10,6 +10,8 @@ cross-references instead of duplication.
 - [vfs.md](vfs.md) — the virtual filesystem layer: the `VirtualFs`
   interface, `VfsPath` semantics, entry/error model, and where Linux and
   Windows differ.
+- [listing.md](listing.md) — the directory model behind a pane: ordering
+  rules, the `..` row, hidden-file filtering, cursor behavior.
 - [good-development-practices.md](good-development-practices.md) —
   working rules, workflow, and the four-phase cycle (adopted from the
   Chimera project); read before starting non-trivial work.

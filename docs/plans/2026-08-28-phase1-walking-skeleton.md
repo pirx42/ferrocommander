@@ -1,6 +1,6 @@
 # Phase 1 Implementation Plan — Walking Skeleton
 
-Status: In Progress — sub-phases 0, A done
+Status: In Progress — sub-phases 0, A, B done
 
 *2026-08-28 — implements phase 1 of
 [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
@@ -181,8 +181,17 @@ untested code shipped; phase 3's refresh logic is where this belongs.
 
 *Commit:* `feat(listing): sorted directory model with cursor and parent entry`
 
-- `Listing { fs, dir, entries, cursor, sort, show_hidden }` built by
-  `Listing::load(fs, dir)`.
+- `Listing { dir, entries, cursor, sort, show_hidden }` built by
+  `Listing::load(fs, dir)` or `Listing::new(dir, entries)`.
+
+  *Deviation from this sketch, implemented deliberately:* the listing does
+  **not** own the `VirtualFs`. The pane does — stepping into an archive swaps
+  the backend while the pane lives on — and the fs is passed only to `load`
+  and `reload`. Keeping the handle out of the model makes a `Listing`
+  constructible from a bare `Vec<Entry>`, which is how nearly every test
+  builds one and how phase 5's streaming search results will feed a pane. It
+  is also the proof that sorting, filtering and cursor movement never touch
+  the disk: there is nothing there to touch it with.
 - `SortKey { Name, Ext, Size, Modified }` × `SortOrder { Asc, Desc }`;
   directories always sort before files (Total Commander behavior), the
   synthetic `..` entry always sorts first regardless of key/order.
@@ -211,7 +220,17 @@ untested code shipped; phase 3's refresh logic is where this belongs.
 - Reload of a changed directory keeps the cursor on the same *name* when that
   name still exists, falls back to a clamped index when it does not.
 
-*Docs:* `docs/listing.md` — sort rules, the `..` and hidden-file semantics.
+*Docs:* [docs/listing.md](../listing.md) — sort rules, the `..` and
+hidden-file semantics, cursor behavior.
+
+**Done.** 50 tests green across the workspace; Windows branch clippy-clean.
+
+*Decision — `Descending` reverses only within a group.* Directories are
+grouped ahead of files before the direction is applied, so flipping the order
+moves the newest file to the top rather than burying the directories at the
+bottom. Every key ends in a name tiebreak, which makes the order total and
+turns "descending is the exact reverse of ascending within each group" into an
+invariant the tests assert directly rather than a claim in a comment.
 
 ### C — `tc-app`: window with two panes
 
