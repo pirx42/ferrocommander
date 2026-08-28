@@ -17,12 +17,22 @@ comments, commit messages.
 ```bash
 cargo build                # Debug build (workspace)
 cargo run -p tc-app        # Run the app
-cargo test --workspace     # Unit/integration tests (tc-core headless)
+cargo test --workspace     # All tests, including the end-to-end UI suite
 cargo fmt --all -- --check # Format gate
 cargo clippy --workspace --all-targets -- -D warnings  # Lint gate (CI)
 cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings  # Windows cfg branch
 cargo build --release      # Release build
 ```
+
+**Build prerequisites:** `build-essential`, `pkg-config`, `libgtk-4-dev`
+(GTK ≥ 4.12), plus `xvfb` and `xdotool` for the UI tests. Those two are not
+optional garnish: without them `cargo test --workspace` fails, by design —
+a UI test that quietly skips is worse than no UI test.
+
+The end-to-end suite (`cargo test -p tc-app --test ui`) drives the real
+binary with real key presses on a private X server and takes about half a
+minute; it runs one app at a time on purpose. See
+[docs/ui-shell.md](docs/ui-shell.md).
 
 The full sequence must be green before every commit — see
 [docs/skills/25-green-suite-before-commit.md](docs/skills/25-green-suite-before-commit.md).
@@ -51,7 +61,7 @@ The project is in its build-up phase; this table grows with the code.
 | What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 (phases 1 and 2 done; phase 3 next) |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
 | Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
-| Verify a keystroke really works end to end | `scripts/smoke-keys.sh` (see [docs/keymap.md](docs/keymap.md)) |
+| Verify a keystroke really works end to end | `crates/tc-app/tests/ui.rs` (see [docs/ui-shell.md](docs/ui-shell.md)) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |
 | New plan document | `docs/plans/YYYY-MM-DD-<topic>.md` (skill [10](docs/skills/10-plan-lifecycle.md)) |
 

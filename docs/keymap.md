@@ -134,14 +134,12 @@ What the text in the target field means is unit-tested too, in `jobs.rs`,
 including that the prefilled value round-trips back to "into that directory".
 
 The wiring *between* a physical keypress and those functions used to have no
-automated coverage at all. It now has
-[`scripts/smoke-keys.sh`](../scripts/smoke-keys.sh): a real X server delivers
-real key events to the real binary, and the checks are on the filesystem
-afterwards. It covers Tab, the cursor keys and Enter in passing, and F5, F7
-and F8 with their dialogs directly.
+automated coverage at all. It is now covered by the end-to-end suite in
+`crates/tc-app/tests/ui.rs`, where a real X server delivers real key events to
+the real binary and the checks are on the filesystem afterwards. Every binding
+in the table above is exercised there except `Ctrl+Q` and `Backspace`, and the
+cursor keys and Tab are used by every test to get anywhere at all.
 
-Run it after touching the controller, the keymap or a dialog:
-
-```bash
-cargo build --release && scripts/smoke-keys.sh
-```
+It is part of `cargo test --workspace`, so touching the controller, the keymap
+or a dialog cannot silently break them. How it works and what it needs
+installed: [ui-shell.md](ui-shell.md).

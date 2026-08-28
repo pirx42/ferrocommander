@@ -457,8 +457,9 @@ decisions and `Listing::load_nearest` are unit tested.
 
 *The widget wiring does **not** inherit the manual-verification gap, which is
 the biggest deviation in this plan.* The implementation environment turned out
-to have `Xvfb` and `xdotool`, so `scripts/smoke-keys.sh` now drives the real
-binary with real X key events and checks the filesystem afterwards — Tab, the
+to have `Xvfb` and `xdotool`, so a smoke script drove the real binary with
+real X key events and checked the filesystem afterwards (superseded shortly
+after by the `cargo test` suite in `crates/tc-app/tests/ui.rs`) — Tab, the
 cursor keys and Enter in passing, F5, F7 and F8 with their dialogs directly.
 It earned its keep on the first run by finding a defect no test could see: the
 conflict dialog opened with no focused button and could only be answered with

@@ -201,3 +201,53 @@ output is one harmless "Unable to acquire session bus" warning.
 attempt at scroll-to-cursor was a silent no-op for exactly this reason, and
 the clean smoke run said nothing. When verifying a GTK call that returns a
 `Result` the code discards, print the result once and look at it.
+
+## End-to-end tests
+
+`crates/tc-app/tests/ui.rs` starts a private X server, launches the built
+binary on it, sends real key presses through the X server, and then asserts on
+the filesystem. Nothing is mocked; the only thing standing in for a person is
+`xdotool`.
+
+They exist because this is the layer where every bug in this project has
+lived. Phase 1 shipped three past a green suite — the cursor landing on `..`
+after stepping up, a stale selection after Page Down, a cursor that walked off
+screen — and phase 2 added two more that only appeared when the program ran: a
+conflict dialog with no focused button, and a symlink that aborted a whole
+copy. None of those were reachable from a unit test.
+
+**Needs `xvfb` and `xdotool`**, and a missing tool fails the test with a
+message naming the package rather than skipping. A test that quietly does not
+run is worse than no test.
+
+**One app at a time.** Cargo would run them in parallel, and sixteen X servers
+with sixteen GTK apps between them do not fit comfortably in a container: the
+suite went from all-green to eight failures and back between runs, always with
+apps dying at startup on a display that had just answered. A suite that fails
+randomly teaches people to ignore red, so a mutex makes them queue. The cost
+is about half a minute.
+
+Three things the harness learned the hard way, each now a check rather than a
+sleep:
+
+- **Wait for the display to be *usable*, not just present.** Xvfb accepts a
+  connection slightly before its screen is ready, and an app that connects in
+  that window dies with "Failed to open display". The probe requires the
+  geometry to come back at the size that was asked for, which cannot pass
+  early.
+- **Asking for the focus is not getting it.** Without confirming the focus
+  landed, a key press reaches the window that *used* to have it — which is how
+  a directory name typed into a dialog ended up in the main window, where
+  every letter is unbound and silently does nothing.
+- **A window closes on GTK's schedule, not on the keystroke's.** Checking that
+  a dialog is gone the instant after dismissing it is a race the test loses
+  about a third of the time; `await_dialog_closed` polls instead.
+
+Each test was checked against its own bug: unbinding F7, giving the conflict
+dialog no focused button, and letting operations act on the `..` row each turn
+the matching test red.
+
+*A caution from writing them.* The claim that a dialog needed a capture-phase
+key controller for Escape to work turned out to be false — removing the phase
+left every test green, so the line went and the comment with it. A test suite
+is also how you find out which of your explanations were guesses.

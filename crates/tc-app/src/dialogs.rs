@@ -48,6 +48,12 @@ fn shell(parent: &impl IsA<gtk::Window>, title: &str) -> (gtk::Window, gtk::Box)
     // Escape closes it. A modal `gtk::Window` does not do this on its own,
     // and a dialog with no way out but the mouse is a trap in a
     // keyboard-first program.
+    //
+    // The default bubble phase is enough, unlike on the main window where the
+    // column view fights for the arrow keys: nothing inside a dialog consumes
+    // Escape before the window sees it, not even a focused entry that has
+    // just been typed into. A UI test dismisses a dialog in exactly that
+    // state, so the claim is checked rather than assumed.
     let controller = gtk::EventControllerKey::new();
     let closing = window.clone();
     controller.connect_key_pressed(move |_, key, _, _| {

@@ -55,24 +55,21 @@ provide. Nothing has been *run* on Windows.
 
 ## Testing
 
-**The keypress-to-pane path is covered end to end, but only for some keys.**
-This was a total gap until phase 2. It now has
-[`scripts/smoke-keys.sh`](../scripts/smoke-keys.sh), where a real X server
-delivers real key events to the real binary and the checks are on the
-filesystem afterwards — it covers Tab, the cursor keys and Enter in passing,
-and F5, F7 and F8 with their dialogs directly.
+**Two bindings have no end-to-end coverage.**
+`crates/tc-app/tests/ui.rs` drives the real binary with real key events and
+covers every binding except `Ctrl+Q` and `Backspace` — quitting would end the
+app the test is driving, and going up a directory has no filesystem effect to
+assert on. Both were verified by hand.
 
-Not covered: F6, Shift+Delete, Backspace, `Ctrl+Q`, the Page Up/Down adoption
-path, and the conflict dialog's Overwrite, Keep both and Abort buttons (the
-script answers with the focused Skip). Those were driven by hand and behave as
-specified.
+Also uncovered: the Page Up/Down selection-adoption path, which needs a
+directory taller than the viewport and an assertion about which row the cursor
+is on — neither of which the filesystem can answer. That one wants a way to
+read the pane's state from outside.
 
-The gap this replaces was not theoretical. Phase 1's manual pass found three
-bugs that 74 green tests missed, all in the composition between GTK and the
-model; the phase-2 smoke run found a fourth — the conflict dialog opened with
-no focused button, so it could only be answered with the mouse.
-*Home:* extend the script as bindings are added; the phase that gives a dialog
-a keyboard path is the phase that should cover it.
+The gap this replaces was total until phase 2, and it was not theoretical:
+phase 1's manual pass found three bugs that 74 green tests missed, all in the
+composition between GTK and the model, and the phase-2 suite found two more.
+*Home:* extend the suite as bindings are added.
 *From:* [keymap.md](keymap.md), [ui-shell.md](ui-shell.md).
 
 **Entry-building test helpers are duplicated.**
