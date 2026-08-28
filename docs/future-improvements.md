@@ -32,7 +32,12 @@ provide. Nothing has been *run* on Windows.
 **The keypress-to-pane path has no automated coverage.**
 The keymap table and the navigation targets are unit-tested, but the wiring
 between a physical keypress and those functions — the GTK controller, its
-capture phase, the focus handling — is verified only by using the program.
+capture phase, the focus handling — has no test behind it.
+
+Manually confirmed working by the owner on 2026-08-28: `Tab`, `Enter`,
+`Backspace` and the arrow cursors. `Home`/`End` and `Ctrl+Q` have not been
+exercised. So the wiring is known good today; what is missing is a regression
+net, and a future refactor could break it silently.
 *Home:* would need a way to synthesize keystrokes in the session, or
 `gtk::test` smoke tests as the design doc's testing section anticipates.
 *From:* [keymap.md](keymap.md).

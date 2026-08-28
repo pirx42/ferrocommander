@@ -71,4 +71,6 @@ binding.
 
 The wiring *between* a physical keypress and those functions — the GTK
 controller, its capture phase, the focus handling — is not covered by an
-automated test and is verified by using the program.
+automated test. It was verified by hand on 2026-08-28: `Tab`, `Enter`,
+`Backspace` and the arrow cursors behave as specified. Keep that in mind when
+touching the controller — nothing will fail the gate if it breaks.
