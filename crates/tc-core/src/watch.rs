@@ -59,8 +59,12 @@ impl Watch {
         let (raw_sender, raw_receiver) = mpsc::channel();
         let mut watcher =
             notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-                // The event itself is discarded: the pane re-reads the whole
-                // directory, so what changed is of no use to it.
+                // *What* changed is discarded — the pane re-reads the whole
+                // directory, so a list of paths is of no use to it. Whether
+                // anything changed at all is not: see [`is_a_change`].
+                if event.as_ref().is_ok_and(|event| !is_a_change(&event.kind)) {
+                    return;
+                }
                 let _ = raw_sender.send(event.is_ok());
             })
             .ok()?;
@@ -87,6 +91,25 @@ impl Watch {
     pub fn changes(&self) -> Changes {
         self.changes.clone()
     }
+}
+
+/// Whether an event means the directory is different now.
+///
+/// **Reading a directory is not a change to it.** `inotify` reports an access
+/// to any child — including another program, or this one, merely listing a
+/// subdirectory — and treating that as a change makes a pane re-read itself
+/// for work it did on its own behalf.
+///
+/// That was not a theory. The folder-size scan
+/// (`docs/keymap.md`) reads every subdirectory of the pane it is counting,
+/// which nudged the watch, which re-read the pane, which threw the counted
+/// sizes away — reliably, every time, so the feature never worked at all
+/// until this line existed.
+///
+/// An error is treated as a change, deliberately: a watcher that has lost
+/// track of a directory is exactly when a re-read is worth doing.
+fn is_a_change(kind: &notify::EventKind) -> bool {
+    !matches!(kind, notify::EventKind::Access(_))
 }
 
 /// Turns a burst of events into one nudge, once the burst stops.

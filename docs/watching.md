@@ -23,6 +23,23 @@ case and the one where "the same position" has no better answer.
 A directory that has gone falls back to the nearest ancestor that can still be
 read, the same as after a job.
 
+## Reading a directory is not a change to it
+
+`inotify` reports an **access** to any child of the watched directory —
+another program listing a subdirectory, or this one doing it on its own
+behalf. The watcher discards `EventKind::Access` for that reason: a pane that
+re-read itself because something read the tree below it would be doing work
+nobody asked for, over and over.
+
+That was not a precaution. The folder-size scan ([keymap.md](keymap.md)) reads
+every subdirectory of the pane it is counting, which nudged the watch, which
+re-read the pane, which threw the counted sizes away — reliably, every time,
+so the feature did not work at all until this filter existed. It was found by
+building the feature, not by reading the watcher.
+
+An **error** from the watcher still counts as a change. A watcher that has
+lost track of a directory is precisely when a re-read is worth doing.
+
 ## The watcher is coalesced, not streamed
 
 `tc-core::watch` holds one `notify` watcher per pane — inotify on Linux,

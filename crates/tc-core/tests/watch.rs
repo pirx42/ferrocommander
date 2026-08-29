@@ -79,6 +79,31 @@ fn a_quiet_directory_says_nothing() {
 }
 
 #[test]
+fn reading_a_subdirectory_is_not_a_change_to_the_directory() {
+    // `inotify` reports an access to any child, so listing a subdirectory
+    // looks like an event on the parent. Treating that as a change makes a
+    // pane re-read itself for work it did on its own behalf — which is
+    // exactly what threw away every folder size the `Alt+Shift+Enter` scan
+    // produced, reliably, until this was filtered out.
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir(dir.path().join("sub")).unwrap();
+    std::fs::write(dir.path().join("sub/inside.txt"), "x").unwrap();
+    let watch = Watch::start(&path_of(&dir)).expect("a watch");
+    let changes = watch.changes();
+
+    // Read the subdirectory and its file, the way a size scan does.
+    for _ in 0..3 {
+        let _ = std::fs::read_dir(dir.path().join("sub")).unwrap().count();
+        let _ = std::fs::read(dir.path().join("sub/inside.txt")).unwrap();
+    }
+
+    assert!(
+        !nudged_within(&changes, QUIET_PERIOD * 4),
+        "reading the tree woke the watcher"
+    );
+}
+
+#[test]
 fn a_burst_of_changes_is_one_nudge_and_not_a_hundred() {
     // The property the whole design turns on: an unpacking archive fires an
     // event per file, and a re-read of a large directory per event would make
