@@ -38,17 +38,29 @@ how to find.
 
 ## Dialogs
 
-Every dialog is built from one shell in `dialogs.rs`, so three dialogs do not
-become three layouts. Each takes a callback rather than returning an answer:
+Every dialog is built from one shell in `dialogs/mod.rs`, so ten dialogs do not
+become ten layouts. Each takes a callback rather than returning an answer:
 GTK4 has no blocking dialog, and the shell must keep running the main loop
 while one is open.
 
 | Dialog | Opened by | Answers |
 |---|---|---|
 | target | F5, F6 | a line of text — see [keymap.md](keymap.md) |
-| name | F7 | a line of text |
+| name | F7, Shift+F4, Alt+F5 | a line of text |
 | delete confirmation | F8, Shift+F8 | yes / no |
 | conflict | a job that hit an existing target | overwrite / skip / keep both / abort, each with *apply to all* |
+| a list to pick from | Alt+F1/F2, Ctrl+↓, Num +/− | one row |
+| failures | a job that could not finish everything | nothing; it reports |
+| output | a command that printed something, and the refusals inside an archive | nothing; it reports |
+| progress | a job that outlives `PROGRESS_DELAY` | cancel |
+| viewer | F3 | its own keys — see [viewer.md](viewer.md) |
+| search | Alt+F7 | a result to go to — see [search.md](search.md) |
+| multi-rename | Ctrl+M | rules, and a preview of them — see [multi-rename.md](multi-rename.md) |
+
+The last four have a lifetime of their own — a bar being driven, an offset
+being paged, a list filling as results arrive, a preview redrawn on every
+keystroke — so each is a file under `dialogs/` rather than a function that
+opens a window.
 
 **Escape closes all of them.** A modal `gtk::Window` does not do this on its
 own, and a dialog with no way out but the mouse is a trap in a keyboard-first
@@ -132,10 +144,11 @@ cooperates on, not four pretending not to know about each other.
 
 ## Where the logic lives
 
-Only one thing in this crate is real logic — turning an `Entry` into the four
-column strings — so that is the part that is pure, GTK-widget-free, and
-tested: `row.rs`. Everything else is widget assembly, verified by running the
-program.
+Three things in this crate are real logic, and all three are pure,
+GTK-widget-free and unit-tested: turning an `Entry` into the four column
+strings (`row.rs`), where a navigation keystroke leads (`navigation.rs`), and
+what the text typed into a dialog asks for (`jobs.rs`). Everything else is
+widget assembly, verified by running the program.
 
 Rendering rules:
 

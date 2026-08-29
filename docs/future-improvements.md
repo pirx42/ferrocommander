@@ -53,13 +53,15 @@ One batch is what the multi-rename tool actually needs to be safe to use.
 *Home:* whenever an operation history is worth its own phase; it is not in v1.
 *From:* [multi-rename.md](multi-rename.md), phase 5 sub-phase D.
 
-**A move assumes a single store.**
-`ops` tries one `rename` for a whole tree and falls back to copy + delete only
-on `CrossDevice`. Both address one backend. Phase 2's UI has exactly one, so
-the assumption holds today.
-*Home:* design phase 6, which introduces the archive backend and therefore the
-first cross-store move.
-*From:* [ops.md](ops.md), phase 2 sub-phase B.
+**The keymap table in the docs is kept by hand.**
+`docs/keymap.md` lists every binding, and nothing checks it against the
+`BINDINGS` table it describes — the only doc-and-code pair in the repository
+with no test between them. A test could read the file and insist every action
+appears, but only if the doc carried action names beside the keys, which is a
+column for the program's benefit rather than the reader's.
+*Home:* generating the table from `BINDINGS` at build time, if it ever drifts
+in practice rather than in principle.
+*From:* the phase 7 audit.
 
 ## Platform coverage
 

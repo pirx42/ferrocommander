@@ -9,20 +9,30 @@ The UI never calls `std::fs`; it holds a `VirtualFs` and asks that.
 
 ```rust
 pub trait VirtualFs: Send + Sync {
+    // what this backend is
+    fn store(&self) -> Store;
+    fn read_only(&self) -> bool { false }
     // reading
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError>;
     fn stat(&self, path: &VfsPath) -> Result<Entry, VfsError>;
+    fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError>;
+    fn read_at(&self, path: &VfsPath, offset: u64, len: usize) -> Result<Vec<u8>, VfsError>;
     // writing
     fn create_dir(&self, path: &VfsPath) -> Result<(), VfsError>;
     fn remove_dir(&self, path: &VfsPath) -> Result<(), VfsError>;
     fn remove_file(&self, path: &VfsPath) -> Result<(), VfsError>;
     fn rename(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError>;
-    fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError>;
     fn create_file(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError>;
     fn set_modified(&self, path: &VfsPath, time: SystemTime) -> Result<(), VfsError>;
+    fn set_attributes(&self, path: &VfsPath, attributes: Attributes) -> Result<(), VfsError>;
     fn trash(&self, path: &VfsPath) -> Result<(), VfsError>;
 }
 ```
+
+`read_at` is random access rather than a seekable reader, because a seekable
+reader is a promise not every backend can keep: an entry inside a compressed
+[archive](archives.md) has no cheap seek. It is what the [viewer](viewer.md)
+is built on.
 
 Object-safe on purpose: a pane holds a `dyn VirtualFs` and swaps it when the
 user steps into an archive, without knowing which backend answers.
@@ -30,10 +40,10 @@ user steps into an archive, without knowing which backend answers.
 ## Why the write side looks like this
 
 **`Send + Sync` is a bound, not a feature.** A file operation runs on a worker
-thread and holds its source and target backends across it. Declaring it costs
-nothing today — `LocalFs` is a unit struct — and it tells phase 6's
-`ArchiveFs`, which owns an open archive handle, that it needs interior
-mutability *before* it is half written rather than after.
+thread and holds its source and target backends across it. It costs `LocalFs`,
+a unit struct, nothing, and it is what shaped `ArchiveFs`: a reader that
+borrowed a shared archive could never be `Send`, so every reader owns its
+range of the container instead ([archives.md](archives.md)).
 
 **`remove_dir` refuses a non-empty directory.** Recursion is the operation
 engine's walk. Only the engine can report per-file progress, log a per-file
@@ -46,8 +56,9 @@ copy+delete degradation is a decision with a progress bar and a rollback
 attached, which makes it engine policy, not backend behavior.
 
 **Streams, not a `copy_file` method.** One `Read`/`Write` pair means the copy
-loop exists once and works local→local today and local→archive in phase 6
-without a second code path.
+loop exists once. It is what makes unpacking an archive the ordinary copy
+engine reading one backend and writing another, with no second code path and
+no idea that it is unpacking ([archives.md](archives.md)).
 
 **`create_file` truncates an existing file.** Whether overwriting is allowed
 is decided before the call — the engine has to ask the user anyway, and a
@@ -224,10 +235,12 @@ mingw toolchain.
 **`set_modified` cannot stamp a directory.** Stamping needs a handle opened
 for writing, which no platform hands out for a directory, so a copied
 directory carries the time it was created rather than the original's. Files —
-which is what the size and date columns are about — keep their date.
+which is what the size and date columns are about — keep their date. Packing
+an archive is the exception that can: it writes the date into the entry rather
+than onto the filesystem, so it reads the source directory's date with one
+extra `stat` ([archives.md](archives.md)).
 
-Both live in [future-improvements.md](future-improvements.md) with their
-reasons.
+It lives in [future-improvements.md](future-improvements.md) with its reason.
 
 ## Which drive a path is on
 

@@ -5,7 +5,7 @@
 //! that is what Total Commander's select-by-pattern accepts and what a person
 //! types into it.
 //!
-//! Lives here rather than in `listing` because phase 5's search needs the same
+//! Lives here rather than in `listing` because the search needs the same
 //! matcher, and two implementations of "does this name match" is one too many.
 
 /// Any run of characters, including none.

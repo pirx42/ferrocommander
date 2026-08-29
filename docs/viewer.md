@@ -18,9 +18,10 @@ read the first megabyte and stopped would be lying about what is in the file.
 
 That needs random access, which is `VirtualFs::read_at` — added for this, and
 random access rather than a seekable reader because a seekable reader is a
-promise phase 6 cannot keep: an entry inside a compressed archive has no cheap
-seek, and a trait method some backends must fake is worse than one they
-implement honestly and slowly.
+promise not every backend can keep. That turned out to be exactly right: an
+entry inside a compressed [archive](archives.md) has no cheap seek, and its
+`read_at` decodes from the entry's start — honest and slow, rather than a
+`Seek` that would have had to be faked.
 
 **Paging is by byte offset, not by line.** A line index over four gigabytes is
 the thing being avoided. Moving a line forward is a scan of the window for a

@@ -130,9 +130,10 @@ impl Job {
 ///
 /// **Move and Rename are single-store operations.** They try one `rename` for
 /// a whole tree and fall back to copy + delete only on
-/// [`VfsError::CrossDevice`]. Phase 2's UI has a single backend, so that
-/// holds; phase 6, which introduces a second one, is where a cross-store move
-/// has to be told apart.
+/// [`VfsError::CrossDevice`] — **within one store**. Across two, the rename is
+/// skipped entirely, because the source's path handed to the target backend
+/// addresses a different file that happens to be spelled the same. See
+/// [`Store`](crate::vfs::Store).
 pub fn run(
     job: &Job,
     source_fs: &dyn VirtualFs,

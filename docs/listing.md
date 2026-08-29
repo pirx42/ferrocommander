@@ -14,7 +14,7 @@ The design sketch had the listing own its backend. It does not, because the
 *pane* owns the backend: stepping into an archive swaps the `VirtualFs` while
 the pane lives on. Keeping the handle out of the model also means a `Listing`
 can be built straight from a `Vec<Entry>` — which is how nearly every test
-constructs one, and how streaming search results will feed a pane in phase 5.
+constructs one.
 
 That a `Listing` can be built with no filesystem at all is what proves
 sorting, filtering and cursor movement never touch the disk.
@@ -160,7 +160,7 @@ spent.
 
 Pattern selection uses `tc-core::glob` — `*` and `?`, case-insensitive, which
 is what Total Commander accepts and what a person types. It lives outside
-`listing` because phase 5's search needs the same matcher.
+`listing` because the [search](search.md) uses the same matcher.
 
 ### Files-only is the default, directories the opt-in
 

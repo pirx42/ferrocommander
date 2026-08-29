@@ -5,7 +5,8 @@ Total Commander (ghisler.com), built from scratch in Rust + GTK4.
 Design and v1 scope: [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md).
 
 **Stack:** Rust + GTK4 (gtk4-rs) · Cargo workspace: `tc-core` (UI-free
-engine: VFS, file ops, search, multi-rename, listing) + `tc-app` (GTK shell)
+engine: VFS, listing, file ops, archives, search, multi-rename) + `tc-app`
+(GTK shell)
 **Target platforms:** Linux (X11/Wayland) **and** Windows — both are
 supported build targets; platform differences are confined to dedicated
 `platform` modules (see [docs/vfs.md](docs/vfs.md))
@@ -86,11 +87,11 @@ The project is in its build-up phase; this table grows with the code.
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
 | Noticing external changes: the watcher, `Ctrl+R` | [docs/watching.md](docs/watching.md) |
 | Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
-| What is being built right now | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) § 6 (phases 1–6 done, plus 3b and 3c; phase 7 — the refactoring audit — next) |
+| What is being built right now | [docs/plans/2026-08-29-phase7-refactoring-audit.md](docs/plans/2026-08-29-phase7-refactoring-audit.md) — the closing audit; phases 1–6 done |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
 | How fast things are, and what is still slow | [docs/performance.md](docs/performance.md) |
 | What "reliable" means, and where the tests live | [docs/reliability.md](docs/reliability.md) |
-| Which crate does a thing belong in | [crates/CLAUDE.md](crates/CLAUDE.md) |
+| Which crate — and which module — a thing belongs in | [crates/CLAUDE.md](crates/CLAUDE.md) |
 | Verify a keystroke really works end to end | `crates/tc-app/tests/ui.rs` (see [docs/ui-shell.md](docs/ui-shell.md)) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |
 | New plan document | `docs/plans/YYYY-MM-DD-<topic>.md` (skill [10](docs/skills/10-plan-lifecycle.md)) |

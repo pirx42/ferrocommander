@@ -258,8 +258,8 @@ pub struct PaneView {
     /// The archives this pane has walked into, outermost first.
     ///
     /// The one piece of state entering an archive adds to the shell, and the
-    /// phase 6 plan says so out loud so the audit can check that nothing else
-    /// crept in. It is what `..` at an archive's root needs: which backend to
+    /// phase 6 plan said so out loud so the audit could check that nothing
+    /// else crept in; it had not. It is what `..` at an archive's root needs: which backend to
     /// go back to, and which file to put the cursor on.
     ///
     /// A stack rather than one slot, because an archive inside an archive is
@@ -279,7 +279,7 @@ impl PaneView {
     /// Builds a pane showing `dir`.
     ///
     /// The pane owns its filesystem, because navigation re-reads through it
-    /// and phase 6 swaps it for an archive backend while the pane lives on.
+    /// and walking into an archive swaps it while the pane lives on.
     ///
     /// A directory that cannot be read falls back to the nearest ancestor that
     /// can, the way a re-read does. The remembered directory is somebody

@@ -1,9 +1,6 @@
-//! Virtual filesystems: one interface over local directories and, from
-//! phase 6 on, archives.
+//! Virtual filesystems: one interface over local directories and archives.
 //!
 //! Everything in this project that touches a filesystem goes through here.
-//! The read half arrived in phase 1; the mutating half arrived in phase 2
-//! together with the operation engine that uses and tests it.
 
 pub mod constants;
 mod local;
@@ -86,9 +83,9 @@ pub fn render_attributes(attributes: Attributes) -> String {
 /// `Send + Sync` because a file operation runs on a worker thread and holds
 /// its source and target backends across it. That is a bound rather than a
 /// method, so it costs nothing today — `LocalFs` is a unit struct — while
-/// phase 6's `ArchiveFs`, which owns an open archive handle, now knows up
-/// front that it needs interior mutability instead of discovering it half
-/// written.
+/// `ArchiveFs`, which reads through a container rather than holding a handle,
+/// was shaped by it: a reader borrowing a shared archive could never be
+/// `Send`, so every reader owns its range instead.
 pub trait VirtualFs: Send + Sync {
     /// Which storage this backend addresses — see [`Store`].
     ///
@@ -181,8 +178,8 @@ pub trait VirtualFs: Send + Sync {
     /// Moves a path to the platform's trash, from where the user can undo it.
     ///
     /// A backend capability rather than an engine step: only the backend
-    /// knows whether its storage has such a thing. Phase 6's archives will
-    /// not.
+    /// knows whether its storage has such a thing. An archive does not, and
+    /// says so like every other write.
     fn trash(&self, path: &VfsPath) -> Result<(), VfsError>;
 }
 
