@@ -1,8 +1,8 @@
 # An Ubuntu package, built on every commit to `main`
 
-**Status:** Draft — awaiting approval, nothing implemented
-**Wants its own topic branch**, per skill
-[10](../skills/10-plan-lifecycle.md).
+**Status:** Implemented — all five phases, except the one that needs GitHub
+(`git log --grep "ubuntu-package"`)
+**Branch:** `claude/next-phase-plan-design-lah4v5`
 
 A `.deb` somebody can download and install, rebuilt whenever `main` moves.
 
@@ -56,7 +56,7 @@ Six more decisions had no reason to bother the owner with:
 ## 2. What this costs the existing code
 
 Checked against the repository rather than guessed
-(skill [65](../skills/65-verify-or-ask-never-assume.md)):
+(skill [65](../../skills/65-verify-or-ask-never-assume.md)):
 
 | | State |
 |---|---|
@@ -109,7 +109,7 @@ and the parts that cannot are as small as possible.
 ## 4. Phases — one phase, one commit
 
 Docs ride in the commit that changes the behaviour
-(skill [28](../skills/28-docs-in-same-commit.md)).
+(skill [28](../../skills/28-docs-in-same-commit.md)).
 
 ### Phase 0 — the three things packaging finds
 
@@ -153,7 +153,7 @@ source. Plus `docs/packaging.md` for how the package is made, and the
 
 ### Phase 4 — refactoring audit
 
-Skill [49](../skills/49-final-phase-refactoring-audit.md), and the one
+Skill [49](../../skills/49-final-phase-refactoring-audit.md), and the one
 question this plan cannot answer from a laptop: **watch the first real run**,
 and fix what it says. A plan that ends before its workflow has ever run has
 not finished.
@@ -174,7 +174,7 @@ not finished.
 
 ## 6. Effort
 
-Factor 0.25 per skill [45](../skills/45-calibrate-effort-estimates.md).
+Factor 0.25 per skill [45](../../skills/45-calibrate-effort-estimates.md).
 
 | Phase | Raw | Corrected |
 |---|---|---|
@@ -193,3 +193,75 @@ claim. This one ends in a system that cannot be run before it is pushed —
 and the release upload are each a thing that can be wrong in a way no local
 check will reveal. Phase 2 is thirty minutes of writing and possibly an hour
 of watching runs fail for reasons a laptop cannot reproduce.
+
+## 7. What was actually done
+
+| Phase | Commit | Deviation |
+|---|---|---|
+| 0 — the three prerequisites | `fffae6b` | none; all three were as § 2 described |
+| 1 — the package and its script | `ef8a374` | none |
+| 2 — the workflow | `ef42ba2` | none |
+| 3 — README and packaging doc | `92d15dc` | **the README found a design mistake in phase 1** — see below |
+| 4 — audit | this one | two findings |
+
+### More was verifiable than the plan expected
+
+The plan warned that this ends in a system that cannot be run before it is
+pushed, and that phase 2 might be "an hour of watching runs fail". Less of it
+turned out to be unverifiable than that suggests:
+
+- `cargo-deb` installs here, so the **package was built, installed with
+  `dpkg -i`, started under Xvfb, and removed with `dpkg -r`** — the window
+  came up titled `FerroCommander #121 (fffae6b)` while `dpkg -l` said
+  `0.1.0-121`, which is the version-agreement claim observed rather than
+  asserted.
+- `dpkg-shlibdeps` derived `libgtk-4-1 (>= 4.12.0)` from the built ELF —
+  the same floor the manifest documents, arrived at from the other direction.
+- The workflow **parses**, every `run:` block is **valid shell**, and the
+  release step was **dry-run with `gh` stubbed out**, on both its paths.
+
+What is genuinely left: the runner's package list, and whether the `gh`
+sequence behaves against the real API.
+
+### The README found a bug the code review had not
+
+Writing the install line is what exposed it. The first draft said
+`wget …/ferrocommander_0.1.0-121_amd64.deb` — a URL that changes on every
+commit, in a README about a *rolling* release. The fix (hard-link to a
+version-less name) then exposed a second bug in the same script: it found its
+output with `ls target/debian/*.deb | head -1`, which after two builds picks
+whichever sorts *first* — the **older** package. It would have checked,
+linked and published a version it had not just built.
+
+Neither was found by reading the script. Both were found by using it.
+
+### Audit phase
+
+- **A cancelled run could have left no release at all.** The publish step
+  deleted the release and created it again, and `cancel-in-progress` can fire
+  in the second between the two — leaving the README's URL a 404 until
+  somebody commits. It now creates-or-edits and clobbers the asset, which is
+  never absent; `edit --target` moves the tag, which is the one thing
+  `--clobber` alone would have left stale.
+- **The build number is computed twice**, in `build.rs` and in
+  `package-deb.sh`, and cannot be shared: one runs inside a Rust build script
+  that must work on Windows with no shell, the other runs before cargo is
+  invoked. The rule they share is now stated once in
+  [packaging.md](../../packaging.md), and each file points at the other. A
+  duplication that is documented and checked by eye, rather than one nobody
+  noticed.
+
+One line was also removed during phase 2 by reading rather than running: the
+gate had been wrapped in `xvfb-run`, and the end-to-end harness starts an
+`Xvfb` of its own per test — so the outer server would have been one nothing
+connects to. That is precisely the class of line the "the workflow holds
+almost nothing" rule exists to prevent, and I had written it.
+
+### The one phase that cannot finish here
+
+**Watch the first real run.** The plan says a plan that ends before its
+workflow has ever run has not finished, and that is still true: this branch
+has to reach `main` before the workflow exists to be triggered. What to watch,
+in order — the `apt-get` line against the real runner image, `fetch-depth: 0`
+actually giving `build.rs` a commit count, and the `gh` create-or-edit
+sequence against the real API.

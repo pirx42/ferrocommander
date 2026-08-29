@@ -15,6 +15,12 @@ use std::process::Command;
 
 /// The commit count, which is what makes a build *number* rather than another
 /// hash: it goes up, so two builds can be told apart at a glance.
+///
+/// **`scripts/package-deb.sh` computes the same number the same way**, so the
+/// package version and this title agree about which build somebody is
+/// running. Written twice because neither can call the other — this runs in a
+/// build script that must work on Windows with no shell — and the rule they
+/// share is in `docs/packaging.md`.
 const BUILD_NUMBER_ARGS: &[&str] = &["rev-list", "--count", "HEAD"];
 
 /// Short enough to read off a title bar, long enough to find the commit.

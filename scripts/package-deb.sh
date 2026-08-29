@@ -13,8 +13,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # The version the window title already carries, so `dpkg -l` and a screenshot
-# agree about which build somebody is running. `build.rs` computes the same
-# number the same way — see `crates/tc-app/build.rs`.
+# agree about which build somebody is running.
+#
+# **The same one-line rule as `crates/tc-app/build.rs`, written twice**, and
+# deliberately: that one runs inside a Rust build script that must work on
+# Windows with no shell, this one runs before cargo is invoked at all, and
+# neither can call the other. What they share is the rule — the build number
+# is `git rev-list --count HEAD` — which is stated in `docs/packaging.md` and
+# is the thing to change in two places if it ever changes at all. The two
+# agreeing was checked by eye: `0.1.0-121` in `dpkg -l`, `#121` in the title.
 #
 # Zero when git cannot answer (a source tarball, an image with no git), which
 # is a version that sorts below every real build rather than a failure.

@@ -67,18 +67,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         # One release, replaced every time, so the download URL is stable and
-        # yesterday's builds do not accumulate. Deleted and recreated rather
-        # than edited: `gh release upload --clobber` leaves the old notes and
-        # the old tag target behind, pointing at a commit that is no longer
-        # what the asset was built from.
+        # yesterday's builds do not accumulate.
+        #
+        # **Never deleted first.** The obvious way to replace a release is to
+        # delete it and create it again, and it leaves a window — a second or
+        # two, at the very end of a long job — in which there is no release at
+        # all. `cancel-in-progress` above can fire exactly there, and then the
+        # URL in the README is a 404 until somebody commits again. Creating or
+        # editing, then clobbering the asset, is never absent; `edit --target`
+        # is what moves the tag onto this commit, which is the one thing
+        # `--clobber` alone would have left stale.
         run: |
-          gh release delete main --yes --cleanup-tag || true
-          gh release create main \
-            --prerelease \
-            --target "$GITHUB_SHA" \
-            --title "Latest build from main" \
-            --notes "Built from ${GITHUB_SHA}. Ubuntu 24.04 or later.
+          notes="Built from ${GITHUB_SHA}. Ubuntu 24.04 or later.
 
           Install with \`sudo apt install ./ferrocommander_amd64.deb\`, which
-          pulls in the GTK 4 runtime; \`dpkg -i\` will not." \
-            target/debian/ferrocommander_amd64.deb
+          pulls in the GTK 4 runtime; \`dpkg -i\` will not."
+
+          gh release create main --prerelease --target "$GITHUB_SHA" \
+            --title "Latest build from main" --notes "$notes" \
+          || gh release edit main --prerelease --target "$GITHUB_SHA" \
+            --title "Latest build from main" --notes "$notes"
+
+          gh release upload main \
+            target/debian/ferrocommander_amd64.deb --clobber

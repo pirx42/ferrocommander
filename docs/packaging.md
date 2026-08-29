@@ -55,6 +55,13 @@ is running — `0.1.0-121` in the package list is `#121` in the title.
 Zero when git cannot answer — a source tarball, an image with no git — which
 sorts below every real build rather than failing.
 
+**The rule lives here, because the code cannot share it.** `build.rs` runs
+inside a Rust build script that has to work on Windows with no shell;
+`package-deb.sh` runs before cargo is invoked at all. Neither can call the
+other, so the one line — `git rev-list --count HEAD` — is written in both, and
+this paragraph is the place that says they must agree. If the rule ever
+changes, it changes in two files.
+
 ## Ubuntu 24.04, and why not 22.04
 
 24.04 ships GTK 4.14; 22.04 ships 4.6, and this needs 4.12
