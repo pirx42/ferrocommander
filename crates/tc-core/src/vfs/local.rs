@@ -43,6 +43,11 @@ impl LocalFs {
 }
 
 impl VirtualFs for LocalFs {
+    /// The real thing, from the filesystem holding that path.
+    fn space(&self, path: &VfsPath) -> Option<super::Space> {
+        platform::space(&platform::to_std_path(path))
+    }
+
     /// Every `LocalFs` addresses the same files, so they are one store.
     fn store(&self) -> Store {
         Store::LOCAL

@@ -16,6 +16,11 @@ repository = "https://github.com/pirx42/ferrocommander"
 [workspace.dependencies]
 tc-core = { path = "crates/tc-core" }
 tempfile = "3"
+# How much room is left on a filesystem, which the status line shows. Unix
+# only: `statvfs` has no std equivalent, and the alternative is running `df`
+# and parsing it — a process per directory step, for a number the kernel will
+# hand over in one syscall (docs/performance.md).
+libc = "0.2"
 # Channels between a job's worker thread and whoever is watching. In tc-core
 # rather than tc-app because a channel is not a UI dependency, and because it
 # is what lets the shell await the event stream on the GLib main loop without

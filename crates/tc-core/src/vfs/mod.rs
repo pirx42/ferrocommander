@@ -13,7 +13,7 @@ use std::time::SystemTime;
 
 pub use local::LocalFs;
 pub use path::VfsPath;
-pub use types::{Attributes, Entry, EntryKind, Mount, Store, SymlinkTarget, VfsError};
+pub use types::{Attributes, Entry, EntryKind, Mount, Space, Store, SymlinkTarget, VfsError};
 
 /// A [`VfsPath`] as the operating system spells it.
 ///
@@ -92,6 +92,16 @@ pub trait VirtualFs: Send + Sync {
     /// Asked before anything hands one backend's path to another: the answer
     /// decides whether the two are talking about the same files at all.
     fn store(&self) -> Store;
+
+    /// How much room the storage behind `path` has, and how much is left.
+    ///
+    /// `None` by default, and that is the honest answer for most backends: an
+    /// archive has no free space of its own, and a status line with no figure
+    /// in it says so better than a zero would. Only a backend addressing a
+    /// real filesystem overrides this.
+    fn space(&self, _path: &VfsPath) -> Option<Space> {
+        None
+    }
 
     /// Whether nothing here can be written to at all.
     ///

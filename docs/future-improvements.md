@@ -181,3 +181,14 @@ and today the fixtures are shaped to each test's needs — the cure costs more
 than the disease.
 *Home:* revisit when design phase 2's operation tests need the same shapes.
 *From:* the walking-skeleton refactoring audit.
+
+## Free space on Windows
+
+The status line's disk figure is Unix-only. `statvfs` has no Windows
+equivalent in `std`, and `GetDiskFreeSpaceExW` would need a Windows API crate
+this workspace does not otherwise want — for one number. The Windows branch
+returns `None`, so the figure is simply absent there.
+
+A status line with nothing in it is honest; one showing a made-up number is
+not. Whoever adds the crate gets the figure for free — the trait method, the
+call site and the formatting are already there and platform-agnostic.

@@ -255,3 +255,18 @@ mod tests {
         assert_eq!(VfsError::from(err), VfsError::Io("no room".to_string()));
     }
 }
+
+/// How much room a filesystem has, and how much of it is left.
+///
+/// Both halves, because neither means much alone: "18 GB free" says nothing
+/// about whether that is a nearly empty disk or a nearly full one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Space {
+    /// Bytes a normal user could still write. The kernel reports blocks
+    /// available to an unprivileged process, not the larger figure that
+    /// includes the reserve only root may use — this is the number that
+    /// answers "will my copy fit".
+    pub free: u64,
+    /// Bytes the filesystem holds in total.
+    pub total: u64,
+}

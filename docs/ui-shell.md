@@ -94,7 +94,18 @@ Red also survives the row being the cursor at the same time, which a
 background colour would not.
 
 A status line under each pane shows `n of m selected — x of y`, which is the
-number a person checks before pressing F5. It is rendered by the same pure
+number a person checks before pressing F5, and at its other end how much room
+is left on the disk: `14.4 GiB free of 252.0 GiB`. Both figures, because
+"18 GB free" alone says nothing about whether that is a nearly empty disk or a
+nearly full one. The two ends grow in opposite directions, so a long selection
+summary and a long size cannot push each other off the line.
+
+The figure is asked of the **backend**, not of the path: an archive has no
+free space of its own and leaves it empty, rather than reporting the disk the
+archive file happens to sit on — an answer to a question nobody asked. A
+filesystem that has gone leaves it empty too, because an empty status line is
+honest where `0 B free` is a lie. On Windows it is empty for now
+([future-improvements.md](future-improvements.md)). It is rendered by the same pure
 `jobs` module that decides what an operation acts on, so the count in the
 question and the count in the status line cannot disagree.
 

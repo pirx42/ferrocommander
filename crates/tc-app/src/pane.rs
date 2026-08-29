@@ -20,7 +20,7 @@ use crate::constants::{
     BRANCH_MARKER, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
     CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME,
     COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
-    COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER, PAGE_ROWS_FALLBACK, PANE_SPACING,
+    COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER, PAGE_ROWS_FALLBACK, PANE_SPACING,
     PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, XALIGN_LEFT,
     XALIGN_RIGHT,
 };
@@ -213,6 +213,7 @@ pub struct PaneView {
     path_bar: gtk::Label,
     filter_bar: gtk::Entry,
     status: gtk::Label,
+    space: gtk::Label,
     store: gio::ListStore,
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
@@ -313,8 +314,16 @@ impl PaneView {
             .build();
         path_bar.add_css_class(CLASS_PATH_BAR);
 
-        let status = gtk::Label::builder().xalign(0.0).build();
+        let status = gtk::Label::builder().xalign(0.0).hexpand(true).build();
         status.add_css_class(CLASS_STATUS_LINE);
+        // The disk figure sits at the other end of the same line: the two grow
+        // from opposite ends, so a long selection summary and a long size
+        // cannot push each other off.
+        let space = gtk::Label::builder().xalign(1.0).build();
+        space.add_css_class(CLASS_STATUS_LINE);
+        let status_line = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        status_line.append(&status);
+        status_line.append(&space);
 
         // Hidden until Ctrl+S asks for it, so a pane that is not being
         // filtered looks exactly as it did.
@@ -329,7 +338,7 @@ impl PaneView {
         root.append(&path_bar);
         root.append(&filter_bar);
         root.append(&scroller);
-        root.append(&status);
+        root.append(&status_line);
 
         let mut pane = PaneView {
             shown: Contents {
@@ -344,6 +353,7 @@ impl PaneView {
             path_bar,
             filter_bar,
             status,
+            space,
             store,
             selection,
             column_view,
@@ -596,6 +606,7 @@ impl PaneView {
             Some(reason) => format!("{path}{PATH_BAR_ERROR_SEPARATOR}{reason}"),
             None => path,
         });
+        self.show_space();
 
         // Emptying and refilling the store makes the widget move its own
         // selection, which `adopt_selection` would then read back as the
@@ -1271,6 +1282,23 @@ impl PaneView {
         self.filter_bar.set_visible(false);
         self.focus_on_arrival = focus;
         self.wanted = Some(dir);
+    }
+
+    /// Puts how much room is left on the disk at the end of the status line.
+    ///
+    /// Asked of the *backend*, so an archive — which has no free space of its
+    /// own — leaves the figure empty rather than reporting the disk the
+    /// archive file happens to sit on, which would be an answer to a question
+    /// nobody asked. A filesystem that has gone leaves it empty too: an empty
+    /// status line is honest where "0 B free" is a lie.
+    fn show_space(&self) {
+        let space = self.shown.fs.space(self.shown.listing.dir());
+        self.space.set_text(&match space {
+            Some(space) => DISK_SPACE
+                .replace("{free}", &crate::format::human_bytes(space.free))
+                .replace("{total}", &crate::format::human_bytes(space.total)),
+            None => String::new(),
+        });
     }
 
     /// Writes down where the directory on screen is scrolled to.

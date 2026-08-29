@@ -29,7 +29,7 @@
 use std::path::{Path, PathBuf};
 
 use super::path::VfsPath;
-use super::types::{Attributes, Entry, Mount, VfsError};
+use super::types::{Attributes, Entry, Mount, Space, VfsError};
 
 #[cfg(unix)]
 mod imp {
@@ -210,6 +210,36 @@ mod imp {
         mounts
     }
 
+    /// How much room the filesystem holding `path` has, and how much is left.
+    ///
+    /// One `statvfs` rather than running `df`: a process per directory step is
+    /// not what a status line costs (`docs/performance.md`). `f_bavail` and
+    /// not `f_bfree` — the first is what an unprivileged process may still
+    /// write, the second includes the reserve only root may touch, and the
+    /// question the status line answers is "will my copy fit".
+    ///
+    /// `None` when the path cannot be asked about at all: a filesystem that
+    /// has gone is a status line with nothing in it, not a zero.
+    pub fn space(path: &Path) -> Option<Space> {
+        use std::os::unix::ffi::OsStrExt;
+
+        let native = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+        // SAFETY: `statvfs` fills the struct or fails; the path is a valid
+        // NUL-terminated C string for the length of the call.
+        let stats = unsafe {
+            let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+            match libc::statvfs(native.as_ptr(), stats.as_mut_ptr()) {
+                0 => stats.assume_init(),
+                _ => return None,
+            }
+        };
+        let block = stats.f_frsize as u64;
+        Some(Space {
+            free: stats.f_bavail as u64 * block,
+            total: stats.f_blocks as u64 * block,
+        })
+    }
+
     /// `$XDG_CONFIG_HOME`, or `~/.config` when it is unset — the freedesktop
     /// rule, and the one every other program on the machine follows.
     pub fn config_dir() -> Option<PathBuf> {
@@ -372,6 +402,16 @@ mod imp {
     }
 
     /// `%APPDATA%`, where per-user settings belong on Windows.
+    /// Not answered on Windows yet.
+    ///
+    /// `GetDiskFreeSpaceExW` is the call, and it would need a Windows API
+    /// crate this workspace does not otherwise want. A status line with no
+    /// figure in it is honest; a made-up one is not
+    /// (`docs/future-improvements.md`).
+    pub fn space(_path: &Path) -> Option<Space> {
+        None
+    }
+
     pub fn config_dir() -> Option<PathBuf> {
         std::env::var_os("APPDATA")
             .map(PathBuf::from)
@@ -388,7 +428,7 @@ mod imp {
 
 pub use imp::{
     attributes, attributes_from_unix_mode, config_dir, from_std_path, home_dir, is_hidden,
-    mount_points, render_attributes, root_entries, set_attributes, to_std_path, trash_error,
+    mount_points, render_attributes, root_entries, set_attributes, space, to_std_path, trash_error,
     unix_mode_of,
 };
 

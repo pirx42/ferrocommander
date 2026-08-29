@@ -565,3 +565,35 @@ mod read_at {
         );
     }
 }
+
+mod space {
+    use super::*;
+
+    #[test]
+    fn a_real_filesystem_reports_a_total_and_something_free() {
+        // Not asserted against a number — the disk under a test machine is
+        // whatever it is. What must hold is the shape: a filesystem that
+        // exists has a size, and what is free is part of it.
+        let dir = tempfile::tempdir().unwrap();
+        let path = LocalFs::vfs_path(dir.path());
+
+        let space = LocalFs
+            .space(&path)
+            .expect("a real directory has a filesystem");
+        assert!(space.total > 0, "a filesystem with no size at all");
+        assert!(
+            space.free <= space.total,
+            "more free than exists: {space:?}"
+        );
+    }
+
+    #[test]
+    fn a_path_that_is_not_there_reports_nothing_rather_than_zero() {
+        // The difference that matters: a status line showing "0 B free" for a
+        // disk that was unplugged is a lie, and an empty one is not.
+        let dir = tempfile::tempdir().unwrap();
+        let gone = LocalFs::vfs_path(&dir.path().join("no-such-directory"));
+
+        assert_eq!(LocalFs.space(&gone), None);
+    }
+}

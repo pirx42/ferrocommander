@@ -254,6 +254,12 @@ pub const DELETE_PROMPT_PERMANENT: &str =
 pub const SUBJECT_MANY: &str = "{count} selected entries";
 
 /// What the status line under a pane says.
+/// What the right end of the status line says about the disk.
+///
+/// Both figures: "18.2 GB free" alone says nothing about whether that is a
+/// nearly empty disk or a nearly full one.
+pub const DISK_SPACE: &str = "{free} free of {total}";
+
 pub const SELECTION_STATUS: &str =
     "{marked} of {total} selected \u{2014} {marked_bytes} of {total_bytes}";
 
