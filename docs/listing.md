@@ -97,6 +97,18 @@ an answer for anywhere else is a navigation that has since been superseded, and
 applying it would make two quick steps land in whichever order the reads
 happened to finish.
 
+**The thread is here; the choice of backend is not.** `spawn` takes a closure
+and runs it on a thread of its own, and everything a pane waits for goes
+through it — so a read that forgot to be a thread cannot happen. What that
+closure *does* is the caller's: `spawn_load` reads a directory, and
+[`archive::spawn_enter`](archives.md) opens an archive first and then reads its
+root. Both are one arrival, because each is one thing the user did.
+
+That split is deliberate. Opening an archive belongs on the worker thread —
+it is the slow half — but putting it *here* would make the directory model
+name a concrete backend, which is exactly what `VirtualFs` exists to prevent.
+The model supplies the thread; the backend supplies what to do on it.
+
 ### A pane is about where it is *going*
 
 Keys arrive faster than listings. Press Enter and then F7 quickly enough and

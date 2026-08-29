@@ -15,7 +15,6 @@ mod sort;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::archive::ArchiveFs;
 use crate::glob;
 use crate::vfs::constants::PARENT;
 use crate::vfs::{Attributes, Entry, EntryKind, VfsError, VfsPath, VirtualFs};
@@ -103,21 +102,6 @@ impl Listing {
         spawn(move || {
             let listing = Listing::load(fs.as_ref(), dir)?;
             Ok((fs, listing))
-        })
-    }
-
-    /// Opens the archive at `path` and reads its root, on a thread.
-    ///
-    /// One step from the pane's side, and one arrival, because it is one
-    /// thing the user did. Opening the archive is the slow half — a zip's
-    /// central directory, or a whole `.tar.gz` decompressed
-    /// (`docs/performance.md`) — so it belongs on the same worker thread as
-    /// the read rather than in front of it on the UI thread.
-    pub fn spawn_enter(fs: Arc<dyn VirtualFs>, path: VfsPath) -> Loading {
-        spawn(move || {
-            let archive: Arc<dyn VirtualFs> = Arc::new(ArchiveFs::open(fs, &path)?);
-            let listing = Listing::load(archive.as_ref(), VfsPath::root())?;
-            Ok((archive, listing))
         })
     }
 
@@ -583,9 +567,17 @@ impl Listing {
 
 /// Runs `read` on a thread of its own and says where its answer will arrive.
 ///
-/// One place rather than three, so a read that forgot to be a thread cannot
+/// One place rather than several, so a read that forgot to be a thread cannot
 /// happen: everything a pane waits for goes through here.
-fn spawn(read: impl FnOnce() -> Arrival + Send + 'static) -> Loading {
+///
+/// Public because **which backend to read from is not this module's
+/// business**. Walking into an archive opens one on the way — the slow half,
+/// a zip's central directory or a whole `.tar.gz` decompressed, which belongs
+/// on this thread rather than in front of it on the UI thread — and putting
+/// that here would make the directory model name a concrete backend, which is
+/// the one thing `VirtualFs` exists to prevent. The caller supplies the
+/// opening; this supplies the thread.
+pub fn spawn(read: impl FnOnce() -> Arrival + Send + 'static) -> Loading {
     let (sender, receiver) = async_channel::bounded(1);
     std::thread::spawn(move || {
         let _ = sender.send_blocking(read());

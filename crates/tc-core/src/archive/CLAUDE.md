@@ -9,7 +9,7 @@ outside this directory, and the two formats after the first cost none.
 
 | File | |
 |---|---|
-| `mod.rs` | `Format`, `format_for`, and `ArchiveFs` — the read-only `VirtualFs` |
+| `mod.rs` | `Format`, `format_for`, `spawn_enter`, and `ArchiveFs` — the read-only `VirtualFs` |
 | `index.rs` | what an archive contains, read once at open: paths, offsets, and the sanitising that makes an escaping name impossible |
 | `reader.rs` | `Container` and `Region` — bytes out of a container that is itself only a `VfsPath`; `Wrapper` for a gzipped one |
 | `entry.rs` | one entry's decoded bytes, with its checksum verified |
@@ -21,6 +21,10 @@ outside this directory, and the two formats after the first cost none.
 
 ## Rules that hold here
 
+- **The dependency points this way.** This module knows `listing` (it hands
+  `spawn` a closure that opens an archive and reads its root); `listing` does
+  not know this one. A directory model that named a backend would be the one
+  thing `VirtualFs` exists to prevent.
 - **The read side is a `VirtualFs` and nothing else.** If browsing an archive
   ever needs a special case in the pane, the listing, the viewer or `ops`, the
   abstraction did not hold and the honest thing is to write that down rather

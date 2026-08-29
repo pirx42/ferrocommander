@@ -25,6 +25,7 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use crate::listing::{self, Listing, Loading};
 use crate::vfs::{Attributes, Entry, Store, VfsError, VfsPath, VirtualFs};
 
 pub use pack::{packer, Packer, Sink};
@@ -71,6 +72,22 @@ pub fn format_for(name: &str) -> Option<Format> {
         TGZ_EXTENSION => Some(Format::TarGz),
         _ => None,
     }
+}
+
+/// Opens the archive at `path` and reads its root, on a worker thread.
+///
+/// Here rather than on `Listing`, so that the directory model never names a
+/// backend: [`listing::spawn`] supplies the thread and this supplies what to
+/// do on it. One step from the pane's side, and one arrival, because it is
+/// one thing the user did — and opening the archive is the slow half (a zip's
+/// central directory, or a whole `.tar.gz` decompressed —
+/// `docs/performance.md`), so it belongs on the same thread as the read.
+pub fn spawn_enter(fs: Arc<dyn VirtualFs>, path: VfsPath) -> Loading {
+    listing::spawn(move || {
+        let archive: Arc<dyn VirtualFs> = Arc::new(ArchiveFs::open(fs, &path)?);
+        let listing = Listing::load(archive.as_ref(), VfsPath::root())?;
+        Ok((archive, listing))
+    })
 }
 
 /// A read-only [`VirtualFs`] over one archive.

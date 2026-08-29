@@ -89,7 +89,9 @@ because they are the whole cost of this phase outside `tc-core::archive`:
   full parse — a zip's central directory, or an entire `.tar.gz` — which is the
   same unbounded wait a directory read is, so it happens on the same worker
   thread. A pane that had already swapped backends would be pointing at an
-  archive it could not yet show, or at one that turned out not to open.
+  archive it could not yet show, or at one that turned out not to open. The
+  thread comes from [`listing::spawn`](listing.md) and the opening from
+  `archive::spawn_enter`, so the directory model never names a backend.
 - **The pane remembers what it entered.** A stack of `(backend, archive path)`,
   outermost first, so an archive inside an archive needs no thought. It is the
   only state entering an archive adds to the shell.

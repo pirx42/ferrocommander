@@ -1012,7 +1012,7 @@ impl PaneView {
         });
         self.start(VfsPath::root(), None);
         self.transition = Transition::Adopt(stack);
-        Listing::spawn_enter(outer, archive)
+        tc_core::archive::spawn_enter(outer, archive)
     }
 
     /// Leaves the current directory. Does nothing at the root of the outermost
