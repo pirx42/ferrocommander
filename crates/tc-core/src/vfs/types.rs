@@ -50,7 +50,21 @@ impl Attributes {
 /// One entry in a directory listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
-    /// Final path component. Never contains a separator.
+    /// What this entry is called, which is normally its final path component
+    /// and contains no separator.
+    ///
+    /// **One thing widens that**, deliberately: a row of a
+    /// [branch view](crate::branch) is named by its path *relative to the
+    /// listing's directory* — `nested/inner.txt` — because a flat list of a
+    /// whole tree has to say which file it means. Every reader of this field
+    /// was visited when that arrived and goes on working: `split_name` splits
+    /// off the real extension, `dir.child(name)` is still the right path
+    /// because `VfsPath` normalises component by component, a copy's
+    /// destination is built from `file_name()` and so lands flat, and marks
+    /// survive a re-walk by name as they survive a reload. The two that did
+    /// not are the two that treat a name as something to *write*: the Alt+F5
+    /// prefill takes the last component, and an inline rename refuses such a
+    /// row outright.
     pub name: String,
     pub kind: EntryKind,
     /// Size in bytes. Directories report 0 — see [`Entry::is_dir`].

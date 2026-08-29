@@ -213,6 +213,37 @@ since the selection being restored is the one the last operation consumed.
 `selected_names` reports in **display order**, so a sort legitimately reorders
 it; what survives a round trip is the set, not the sequence.
 
+## A branch view is the same model with different rows
+
+`Ctrl+B` fills a listing with every file below the directory instead of the
+files in it ([keymap.md](keymap.md)). It is deliberately **not a mode**: what
+comes back is an ordinary `Listing`, so the sort, the hidden-file flag, the
+quick filter, the marks and every file operation go on meaning what they
+meant. A branch view that had rules of its own would be a second file manager
+inside the first.
+
+Three things make that possible, and each has a price worth naming:
+
+- **A row is named by its path relative to the directory** — `sub/deep/c.txt`.
+  That is what tells two files called `mod.rs` apart, and it makes a sort by
+  name keep each directory's files together, because their names share a
+  prefix. It also widens `Entry::name`, which is documented as a final path
+  component everywhere else; the field's own comment lists every reader that
+  was visited when this arrived.
+- **Files only, never directories.** A flat list is a list of leaves, and a
+  directory row in one would be a row whose contents are also rows.
+- **A file is hidden if it or any directory above it is.** Decided during the
+  walk and carried on the row, so `Ctrl+H` stays what it is everywhere else: a
+  rearrangement of what is already loaded, costing no filesystem access.
+
+The walk itself is [`branch::walk`](../crates/tc-core/src/branch.rs) — over a
+queue rather than recursion, for the reason [search.md](search.md) gives —
+and it costs about what listing the same number of files in one directory
+costs ([performance.md](performance.md)). A listing knows it came from one:
+`is_branch()`, which a caller asks before reaching for `reload`, since that
+re-reads a single directory and would silently turn a branch listing back into
+a plain one.
+
 ## The quick filter
 
 `set_filter` narrows the visible rows to names containing a string, ignoring

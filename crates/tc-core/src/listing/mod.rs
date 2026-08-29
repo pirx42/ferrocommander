@@ -56,6 +56,14 @@ pub struct Listing {
     entries: Vec<Entry>,
     /// The synthetic `..` row, absent at the root.
     parent: Option<Entry>,
+    /// Whether the rows came from a walk of everything below `dir` rather
+    /// than from one `read_dir` of it.
+    ///
+    /// The model is the same either way — that is the point of the branch
+    /// view. What differs is how a fresh copy is obtained, which is why this
+    /// is readable but does nothing here: `reload` re-reads one directory,
+    /// and a caller holding a branch listing has to walk instead.
+    branch: bool,
     /// Indices into `entries`, sorted and filtered — the visible rows after
     /// `parent`.
     view: Vec<usize>,
@@ -147,6 +155,7 @@ impl Listing {
             entries,
             parent,
             view: Vec::new(),
+            branch: false,
             cursor: 0,
             sort: Sort::new(DEFAULT_SORT_KEY, DEFAULT_SORT_ORDER),
             show_hidden: DEFAULT_SHOW_HIDDEN,
@@ -154,6 +163,28 @@ impl Listing {
         };
         listing.rebuild(None);
         listing
+    }
+
+    /// The model over a walk of everything below `dir`.
+    ///
+    /// The rows are files only — a flat list is a list of leaves, and a
+    /// directory row in one would be a row whose contents are also rows — and
+    /// each is named by its path relative to `dir`. Everything else about the
+    /// listing is unchanged, which is what makes the sort, the filter, the
+    /// marks and the file operations go on working.
+    pub fn branch(dir: VfsPath, entries: Vec<Entry>) -> Self {
+        let mut listing = Listing::new(dir, entries);
+        listing.branch = true;
+        listing
+    }
+
+    /// Whether these rows came from a walk rather than from one directory.
+    ///
+    /// What a caller asks before deciding how to get a fresh copy:
+    /// [`reload`](Self::reload) re-reads one directory and would silently
+    /// turn a branch listing back into a plain one.
+    pub fn is_branch(&self) -> bool {
+        self.branch
     }
 
     /// Gives this listing a `..` row even though it is at a root.

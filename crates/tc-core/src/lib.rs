@@ -6,6 +6,7 @@
 //! enough to be verified by hand.
 
 pub mod archive;
+pub mod branch;
 pub mod command;
 pub mod config;
 pub mod glob;

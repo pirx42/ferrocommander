@@ -38,6 +38,19 @@ the ratios and what dominates — not the absolute numbers.
 | — of which reading the directory | 78 ms | 67 ms |
 | — of which sorting and building the view | 153 ms | **22 ms** |
 | Move 20 000 files within one filesystem | 57 ms | **6 µs** |
+| Branch view (`Ctrl+B`) of a 20 000-file tree | — | **31 ms** |
+| — the same 20 000 files in *one* directory, for comparison | — | 32 ms |
+
+**Walking 200 directories costs no more than reading one.** The branch view
+of a tree of 20 000 files takes 31 ms; a plain listing of 20 000 files in a
+single directory takes 32 ms. That is the useful shape: the cost is *per
+entry* — one `stat` each, which the table above already names as the
+unavoidable floor — and the directory boundaries between them are free. So
+`Ctrl+B` costs about what looking at the same number of files costs anyway,
+and the reason it is on a worker thread with a cancel is the tree that holds
+a million of them, not the one that holds twenty thousand.
+
+Reproduced with `cargo run --release -p tc-core --example bench_branch -- <dir>`.
 
 ### Where the wins came from
 
