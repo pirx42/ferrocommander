@@ -42,28 +42,11 @@ pub fn listing(fs: &dyn VirtualFs, root: VfsPath, cancel: &CancelToken) -> Listi
 
 /// Every file below `root`, named by its path relative to it.
 ///
-/// **Breadth-first through a queue rather than recursively**, for the reason
-/// [`crate::search`] gives: a directory tree is user input, and a deep enough
-/// one turns recursion into a stack overflow — a crash in a file manager,
-/// over somebody else's directory layout.
-///
-/// **Unreadable is skipped, not fatal.** One subdirectory nobody may enter
-/// must not cost the view, which is the rule the copy engine keeps about a
-/// tree it cannot fully read.
-///
-/// **The cancel is checked per directory, not per entry** — the one place
-/// this deliberately differs from [`crate::search`]'s walk, which checks both.
-/// There the per-entry work may open and read the file, so a directory of
-/// fifty thousand entries is fifty thousand chances to be slow; here it is a
-/// string join and a push, and the only unbounded step is the `read_dir`
-/// itself, which neither walk can interrupt.
-///
-/// The two loops were compared rather than merged. They share a skeleton and
-/// diverge in what the queue carries (a path, against a path with its
-/// relative prefix and inherited hidden flag) and in what each entry becomes
-/// (a test and a send, against a rewrite and a collect). A walker general
-/// enough for both is a closure with three parameters and a descend decision
-/// — more shape than the fifteen lines it saves.
+/// A queue rather than recursion, unreadable skipped, the cancel checked per
+/// directory: the walk shape this crate keeps, and why, is in
+/// `tc-core/src/CLAUDE.md`. What is particular to this one is what the queue
+/// carries — each directory's relative prefix, and whether anything above it
+/// was hidden.
 ///
 /// **A cancel yields what was found so far** rather than nothing. The caller
 /// asked to stop, and the caller decides whether a partial answer is worth

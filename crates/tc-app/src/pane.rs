@@ -1127,8 +1127,9 @@ impl PaneView {
     /// Fills this pane with every file below where it is — `Ctrl+B`.
     ///
     /// The pane keeps showing what it has until the walk lands, exactly as it
-    /// does for a slow directory read, and [`abandon_walk`](Self::abandon_walk)
-    /// is why the key is not a trap on a huge tree.
+    /// does for a slow directory read, and
+    /// [`abandon_background`](Self::abandon_background) is why the key is not
+    /// a trap on a huge tree.
     #[must_use = "the caller has to await the listing, or the pane never changes"]
     pub fn branch(&mut self) -> Loading {
         let root = self.target_dir();
@@ -1204,7 +1205,7 @@ impl PaneView {
     /// listing, which is worse than none — a tree half shown looks like a
     /// tree. Forgetting `wanted` is what makes [`arrived`](Self::arrived)
     /// drop the answer when it comes.
-    pub fn abandon_walk(&mut self) -> bool {
+    fn abandon_walk(&mut self) -> bool {
         let Some(cancel) = self.walking.take() else {
             return false;
         };

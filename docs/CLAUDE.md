@@ -69,10 +69,9 @@ cross-references instead of duplication.
   | [architecture and redundancy review](plans/archive/2026-08-29-architecture-and-redundancy-review.md) | what a whole-codebase read found after phase 7: nine findings, all implemented, plus what it checked and found sound, the one candidate finding that did not survive checking, and a § 7 report card on where the work deviated from the proposal |
   | [favourite directories](plans/archive/2026-08-29-favourite-directories.md) | Total Commander's `Ctrl+D` hotlist: the `[[favourites]]` setting, the window that edits its own list, and what the probes were worth |
   | [branch view](plans/archive/2026-08-29-branch-view.md) | Total Commander's `Ctrl+B`: the walk, the listing that is not a mode, the two keys that read a row's name as something to write, and three tests that were wrong before they were right |
+  | [folder sizes](plans/archive/2026-08-29-folder-sizes.md) | Total Commander's `Alt+Shift+Enter`: the scan, the size that goes where the status total and the sort already look — and the watcher bug that made the feature not work at all |
 
-  One plan is **active**:
-  [folder sizes](plans/2026-08-29-folder-sizes.md) — `Alt+Shift+Enter`,
-  what a directory row says instead of `<DIR>`.
+  No plan is currently active.
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.

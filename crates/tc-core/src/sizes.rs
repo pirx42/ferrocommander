@@ -66,14 +66,15 @@ pub fn spawn(
 
 /// Everything below `root`, added up.
 ///
-/// **Breadth-first through a queue rather than recursively**, for the reason
-/// [`crate::search`] gives: a directory tree is user input, and a deep enough
-/// one turns recursion into a stack overflow.
+/// A queue rather than recursion, unreadable skipped, the cancel checked per
+/// directory: the walk shape this crate keeps, and why the three walks are
+/// not one function, is in `tc-core/src/CLAUDE.md`. This is the smallest of
+/// them — it keeps no per-entry output at all, only a running total, which is
+/// also why it costs less than a branch view of the same tree
+/// (`docs/performance.md`).
 ///
-/// The third walk of this shape in the crate, after [`crate::search`] and
-/// [`crate::branch`], and the smallest: it keeps no per-entry output at all,
-/// only a running total. Whether the three become one is decided in the
-/// plan's audit phase, with all three on screen.
+/// What is particular to this one: a refusal and a cancel both make the
+/// answer **incomplete** rather than merely smaller.
 pub fn measure(fs: &dyn VirtualFs, root: &VfsPath, cancel: &CancelToken) -> Measured {
     let mut measured = Measured {
         bytes: 0,

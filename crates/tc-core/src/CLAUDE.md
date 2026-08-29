@@ -30,3 +30,21 @@ with a plain `cargo test`.
   it never names the channel crate.
 - **Constants live in a `constants` module per subsystem**, not inline at the
   use site.
+- **A recursive read is a queue, never recursion.** `search`, `branch` and
+  `sizes` each walk a tree, and each does it by popping from a `Vec` of
+  pending directories. A directory tree is user input, and a deep enough one
+  turns recursion into a stack overflow — a crash in a file manager, over
+  somebody else's directory layout. Two more rules come with the shape:
+  **unreadable is skipped, not fatal**, because one directory nobody may
+  enter must not cost the whole answer; and **the cancel is checked at least
+  once per directory**, more often only where the per-entry work can itself
+  be slow (`search` opens and reads files; the other two do not).
+
+  The three are **not** one function, and that was decided with all three on
+  screen rather than assumed. What they share is those six lines and these
+  rules; what differs is everything interesting — what the queue carries, what
+  each entry becomes, and what a refusal or a cancel means to the answer. A
+  walker general enough for all three needs a payload type, a descend closure,
+  a per-entry closure and a control-flow enum, which is more shape than the
+  duplication costs. So the *reasoning* is shared, here, and each walk owns
+  its own loop.

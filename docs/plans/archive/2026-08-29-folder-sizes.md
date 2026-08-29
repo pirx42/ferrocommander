@@ -1,6 +1,7 @@
 # Folder sizes — `Alt+Shift+Enter`
 
-**Status:** In Progress — approved 2026-08-29; phase 0 done, phases 1–4 to go
+**Status:** Implemented — all five phases, plus a fix the work uncovered
+(`git log --grep "folder-sizes"`)
 **Branch:** `claude/next-phase-plan-design-lah4v5`
 
 A directory row says `<DIR>` because nobody has counted it. `Alt+Shift+Enter`
@@ -40,12 +41,12 @@ Five more decisions had no reason to bother the owner with:
 - **One arrived size splices one row.** `refresh_marks` already exists for
   "what a row *says* changed, not which rows there are", and its whole
   argument is that rebuilding fifty thousand rows to change one is 69 ms
-  against 3 µs ([performance.md](../performance.md)). A size arriving is the
+  against 3 µs ([performance.md](../../performance.md)). A size arriving is the
   same case, one row at a time.
 - **Inside an archive it works.** `ArchiveFs` answers `read_dir` like any
   backend, so the scan needs no special case and gets one for free.
 - **In a branch view it does nothing**, because a branch view has no
-  directory rows at all ([listing.md](../listing.md)).
+  directory rows at all ([listing.md](../../listing.md)).
 - **`Escape` gains a third job**, after stopping a branch walk and before
   clearing a filter. The order is what a person means: the newest thing they
   started is the thing they want stopped.
@@ -53,7 +54,7 @@ Five more decisions had no reason to bother the owner with:
 ## 2. What this costs the existing code
 
 Checked against the code rather than guessed
-(skill [65](../skills/65-verify-or-ask-never-assume.md)):
+(skill [65](../../skills/65-verify-or-ask-never-assume.md)):
 
 | | State |
 |---|---|
@@ -72,7 +73,7 @@ listing with the one method that sets it, the key, and the arrival loop.
 
 This would be the **third** breadth-first `read_dir` loop in `tc-core`, after
 `search` and `branch`. Two was a considered decision — the
-[branch-view plan](archive/2026-08-29-branch-view.md) recorded why they stayed
+[branch-view plan](2026-08-29-branch-view.md) recorded why they stayed
 separate — and three is not the same question. Two similar loops are a
 coincidence; three is a shape.
 
@@ -114,11 +115,11 @@ million files is a lot of memory for a `u64`.
 ## 4. Phases — one phase, one commit
 
 Docs ride in the commit that changes the behaviour
-(skill [28](../skills/28-docs-in-same-commit.md)).
+(skill [28](../../skills/28-docs-in-same-commit.md)).
 
 ### Phase 0 — coverage pre-check
 
-Skill [43](../skills/43-coverage-before-implementation.md), probes rather than
+Skill [43](../../skills/43-coverage-before-implementation.md), probes rather than
 reading. What this touches is mostly code that already works, so the question
 is whether that code is pinned:
 
@@ -181,9 +182,9 @@ scanned, the second press.
 
 ### Phase 4 — refactoring audit
 
-Skill [49](../skills/49-final-phase-refactoring-audit.md), and **the third
+Skill [49](../../skills/49-final-phase-refactoring-audit.md), and **the third
 walk is decided here** if phase 1 left it open. Plus the cookbook row in
-`CLAUDE.md`, [listing.md](../listing.md), [keymap.md](../keymap.md), and
+`CLAUDE.md`, [listing.md](../../listing.md), [keymap.md](../../keymap.md), and
 `scripts/check-links.py`.
 
 ## 5. What is deliberately not in this
@@ -200,7 +201,7 @@ walk is decided here** if phase 1 left it open. Plus the cookbook row in
 
 ## 6. Effort
 
-Factor 0.25 per skill [45](../skills/45-calibrate-effort-estimates.md).
+Factor 0.25 per skill [45](../../skills/45-calibrate-effort-estimates.md).
 
 | Phase | Raw | Corrected |
 |---|---|---|
@@ -216,3 +217,67 @@ that may be **sorted by size** is the one place this feature can make the
 view move under the cursor, and the branch-view plan hit the same class of
 problem from the other side. If that turns out to need more than splicing a
 row, it is phase 2 that grows.
+
+## 7. What was actually done
+
+One commit per phase, every behavioural claim probed — and **one commit that
+was not in the plan at all**, because building phase 2 uncovered a bug two
+modules away.
+
+| Phase | Commit | Deviation |
+|---|---|---|
+| 0 — coverage | `1265649` | one real gap found: the status line's bytes were unpinned |
+| 1 — the scan and the listing | `44c4a1e` | none; `Measured` gained a `complete` flag, as § 3 required a decision on |
+| — | `cc6a4e3` | **not planned**: the directory watcher had to stop treating a read as a change |
+| 2 — the key and the arrivals | `77b54ac` | none |
+| 3 — the corners | `84988ae` | the mid-scan `Escape` is deliberately untested — see § 3 |
+| 4 — audit | this one | the third-walk question, answered |
+
+### The bug the feature found
+
+The feature did not work at all, and the reason was nowhere near it. The scan
+reads every subdirectory of the pane it is counting; `inotify` reports an
+**access** to a child as an event on the parent; the watcher discarded the
+event kind entirely and nudged on anything; the nudge re-read the pane; the
+re-read threw away every size just counted. Reliably, every time.
+
+It was found by instrumenting the running program, not by reading — the sizes
+arrived and were recorded, and then vanished before the sort could see them.
+`cc6a4e3` filters `EventKind::Access` out, which is worth having on its own:
+until it, every pane in the program re-read its whole directory whenever
+anything read a file in it.
+
+### The third walk, decided
+
+`search`, `branch` and `sizes` each walk a tree, and the plan promised to
+decide with all three on screen rather than assume. **They stay three.** What
+they share is six lines — a queue, a `read_dir`, a descend, a per-entry step
+— and three rules; what differs is everything interesting: what the queue
+carries, what each entry becomes, and what a refusal or a cancel means to the
+answer. A walker general enough for all three needs a payload type, a descend
+closure, a per-entry closure and a control-flow enum, which is more shape than
+the duplication costs.
+
+So **the reasoning is shared instead of the code**: the walk shape and its
+three rules are written once, in `crates/tc-core/src/CLAUDE.md`, and each of
+the three modules points at it and states only what is particular to it. That
+replaced three paragraphs that had been restating the same argument at each
+other.
+
+### Two probes that were wrong before they were right
+
+- A probe of the arrival loop edited a call `cargo fmt` had since reflowed,
+  so the replacement silently did nothing and the probe "passed". The edit
+  asserts its match now. A probe that cannot fail proves nothing.
+- The re-sort test passed with answers landing **by position** instead of by
+  name, because the row it checked happened to be the first one — which is
+  where the broken version writes. Rebuilt so the target is deliberately
+  never first.
+
+### What the end-to-end suite cannot see
+
+The size column, like every label. Both size tests observe it through the one
+thing that reacts to it — sorting by size — and the re-read test says plainly
+which half of its claim that does *not* cover. The `+` on a partial count, and
+`0` for an empty folder, are pinned by unit tests over `Row` and by nothing
+end to end.

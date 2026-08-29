@@ -93,6 +93,7 @@ The project is in its build-up phase; this table grows with the code.
 | Widgets, row rendering, GTK version floor | [docs/ui-shell.md](docs/ui-shell.md) |
 | Key bindings, navigation actions | [docs/keymap.md](docs/keymap.md) |
 | The whole tree as one flat list (Ctrl+B) | [docs/listing.md](docs/listing.md) + [docs/keymap.md](docs/keymap.md) |
+| Counting what a folder holds (Alt+Shift+Enter) | [docs/keymap.md](docs/keymap.md) + [docs/listing.md](docs/listing.md) |
 | Favourite directories (Ctrl+D): the list, and where it lives | [docs/keymap.md](docs/keymap.md) + [docs/config.md](docs/config.md) |
 | Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
