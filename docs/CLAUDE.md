@@ -81,6 +81,10 @@ cross-references instead of duplication.
   [archive/2026-08-28-phase6-archives.md](plans/archive/2026-08-28-phase6-archives.md)
   (design phase 6: archives as browsable directories, unpacking through the
   copy pipeline, and packing with `Alt+F5`).
+  Also active:
+  [2026-08-29-phase7-refactoring-audit.md](plans/2026-08-29-phase7-refactoring-audit.md)
+  (design phase 7: the closing audit — correctness that drifted, files whose
+  names stopped describing them, and the documentation pass).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
   (trigger table in the root CLAUDE.md).
 

@@ -175,7 +175,8 @@ every phase ships its tests alongside the code (skill
    [49](../skills/49-final-phase-refactoring-audit.md): audit the whole
    implementation for architecture drift and redundancy
    ([44](../skills/44-no-redundancy.md)), apply corrections. The plan counts
-   as "Implemented" only after this phase. *(~1 day)*
+   as "Implemented" only after this phase. *(~1 day)* Plan:
+   [2026-08-29-phase7-refactoring-audit.md](2026-08-29-phase7-refactoring-audit.md).
 
 Each phase leaves a usable, testable program. Effort estimates are already
 calibrated per skill [45](../skills/45-calibrate-effort-estimates.md)
