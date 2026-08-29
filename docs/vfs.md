@@ -245,6 +245,29 @@ extra `stat` ([archives.md](archives.md)).
 
 It lives in [future-improvements.md](future-improvements.md) with its reason.
 
+## Which mounts get a drive button
+
+`parse_mount_table` decides, and the bar for inclusion is "somewhere a person
+navigates to". Two filters: a list of pseudo **filesystem types**, and a list
+of pseudo **roots** — `/proc`, `/sys`, `/dev`, `/run` — matched as "this path
+or a path inside it".
+
+**That second list used to carry trailing slashes**, so it excluded the
+children of `/run` and not `/run` itself. `/run` is a `tmpfs`, and `tmpfs` is
+not a pseudo type, so it passed both filters and got a button. On the machine
+where this was found it took the *first* one, ahead of `/` — which is what
+five tests indexing the drive list positionally then walked into.
+
+**`tmpfs` is deliberately not a pseudo type**, which would have been the other
+way to exclude `/run` and is the wrong one: `/tmp` is a `tmpfs` on plenty of
+machines and is somewhere people go daily. A test pins that.
+
+**`squashfs` is one**, since this: every snap on an Ubuntu desktop is a
+read-only squashfs image, a stock machine has twenty-six of them, and left in
+they push the actual disks off the end of a bar that is supposed to be a
+shortcut. A squashfs somebody loop-mounted to look inside is still reachable
+by typing its path.
+
 ## Which drive a path is on
 
 `mount_for(path, mounts)` answers it, and answers with the **longest** mount

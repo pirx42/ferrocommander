@@ -117,7 +117,7 @@ mod imp {
 
     /// Filesystem types that are the kernel talking to itself. None of them
     /// is a place a person navigates to, and a machine has dozens.
-    const PSEUDO_FILESYSTEMS: [&str; 21] = [
+    const PSEUDO_FILESYSTEMS: [&str; 22] = [
         "autofs",
         "binfmt_misc",
         "bpf",
@@ -137,13 +137,32 @@ mod imp {
         "pstore",
         "ramfs",
         "securityfs",
+        // Every snap on the machine is one of these, read-only, and a stock
+        // Ubuntu desktop has twenty-six. They are application images rather
+        // than places, and left in they push the actual disks off the end of
+        // the drive bar — which is the failure the "a machine has dozens"
+        // line above is about. A squashfs somebody loop-mounted to look
+        // inside is still reachable by typing its path; the bar is a
+        // shortcut list, not the only way in.
+        "squashfs",
         "sysfs",
         "tracefs",
     ];
 
-    /// Mount points below these are the same story: kernel plumbing with a
-    /// path, and `/run` in particular is full of them.
-    const PSEUDO_PREFIXES: [&str; 4] = ["/proc/", "/sys/", "/dev/", "/run/"];
+    /// These directories, **and everything below them**: kernel plumbing with
+    /// a path, and `/run` in particular is full of it.
+    ///
+    /// Written without the trailing slash, and matched as "this path or a
+    /// path inside it". With the slash they excluded only the children:
+    /// `/run` is a `tmpfs` and is not in [`PSEUDO_FILESYSTEMS`], so it passed
+    /// both filters and took a place in the drive bar — the first place, on
+    /// the machine where it was found, which is what a test indexing the list
+    /// positionally then walked into.
+    ///
+    /// `tmpfs` is deliberately *not* in the type list, which would have been
+    /// the other way to exclude `/run`: `/tmp` is a `tmpfs` on many machines
+    /// and is somewhere people very much do navigate to.
+    const PSEUDO_ROOTS: [&str; 4] = ["/proc", "/sys", "/dev", "/run"];
 
     /// Reads the mount table.
     pub fn mount_points() -> Vec<Mount> {
@@ -169,9 +188,9 @@ mod imp {
             if PSEUDO_FILESYSTEMS.contains(&kind) {
                 continue;
             }
-            if PSEUDO_PREFIXES
+            if PSEUDO_ROOTS
                 .iter()
-                .any(|prefix| point.starts_with(prefix))
+                .any(|root| point == *root || point.starts_with(&format!("{root}/")))
             {
                 continue;
             }
@@ -417,6 +436,51 @@ cgroup2 /sys/fs/cgroup cgroup2 rw 0 0
         assert_eq!(points, ["/", "/mnt/backup", "/media/My Stick"]);
         assert_eq!(mounts[0].label, "/", "the root labels itself");
         assert_eq!(mounts[2].label, "My Stick", "and an escaped space is one");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stock_ubuntu_desktop_offers_its_disks_and_nothing_else() {
+        // The table a real machine reported, trimmed. Everything here passed
+        // both filters once: `/run` because the prefixes carried a trailing
+        // slash and so matched only its children, and the snaps because
+        // `squashfs` was not in the type list. The drive bar was then
+        // twenty-eight buttons with the two disks somewhere inside it, and
+        // `/run` — not `/` — was the first.
+        let table = "\
+tmpfs /run tmpfs rw,nosuid,nodev 0 0
+/dev/nvme0n1p2 / ext4 rw,relatime 0 0
+/dev/loop1 /snap/bare/5 squashfs ro,nodev 0 0
+/dev/loop2 /snap/core22/2411 squashfs ro,nodev 0 0
+/dev/loop3 /snap/code/258 squashfs ro,nodev 0 0
+tmpfs /run/user/1000 tmpfs rw,nosuid 0 0
+/dev/nvme0n1p1 /boot/efi vfat rw,relatime 0 0
+";
+        let points: Vec<String> = imp::parse_mount_table(table)
+            .iter()
+            .map(|mount| mount.path.as_str().to_string())
+            .collect();
+
+        assert_eq!(points, ["/", "/boot/efi"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tmp_survives_even_when_it_is_a_tmpfs() {
+        // The other way to have excluded `/run` was to call every `tmpfs`
+        // plumbing. This is why that would have been wrong: `/tmp` is a
+        // `tmpfs` on plenty of machines and is somewhere people go daily.
+        let table = "\
+/dev/vda1 / ext4 rw 0 0
+tmpfs /tmp tmpfs rw,nosuid,nodev 0 0
+tmpfs /run tmpfs rw,nosuid,nodev 0 0
+";
+        let points: Vec<String> = imp::parse_mount_table(table)
+            .iter()
+            .map(|mount| mount.path.as_str().to_string())
+            .collect();
+
+        assert_eq!(points, ["/", "/tmp"]);
     }
 
     #[cfg(unix)]
