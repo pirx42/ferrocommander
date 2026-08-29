@@ -218,12 +218,23 @@ pub(crate) fn run_command(shell: &Rc<RefCell<Shell>>) {
 
     match command_line::read(&line) {
         command_line::Typed::ChangeDirectory(argument) => {
+            // Remembered exactly as a spawned command is, and for the same
+            // reason: what the history is for is getting a line back, and a
+            // `cd` into somewhere long is the line most worth not typing
+            // twice. That it moves a pane rather than starting a process is
+            // an implementation detail of how this program reads it — the
+            // person typed a command either way.
+            shell.borrow_mut().remember_command(&line);
             let target = command_line::destination(&directory, &argument, LocalFs::home_dir());
             if let Some(target) = target {
                 let index = shell.borrow().active;
                 let loading = shell.borrow_mut().panes[index].go_to(target);
                 await_listing(shell, index, Some(loading));
             }
+            // Scheduled here for the reason the shell arm gives: a command
+            // does not come through `dispatch`, so the one save at the end of
+            // a keystroke never runs for it.
+            remember(shell);
             finish_command(shell);
         }
         command_line::Typed::Shell(line) => {

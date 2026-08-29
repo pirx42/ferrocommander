@@ -158,6 +158,12 @@ pub const CLASS_PATH_BAR: &str = "path-bar";
 pub const CLASS_SUGGESTED: &str = "suggested-action";
 pub const CLASS_DESTRUCTIVE: &str = "destructive-action";
 
+/// What a stylesheet rule GTK cannot parse is reported as, on stderr.
+///
+/// GTK drops such a rule and carries on silently, so without this the only
+/// symptom is a style that never applied.
+pub const STYLESHEET_REJECTED: &str = "stylesheet rule rejected";
+
 /// The shell's stylesheet.
 ///
 /// The active pane is marked on its path bar rather than by dimming the whole
@@ -212,6 +218,19 @@ pub const STYLESHEET: &str = "
     background-color: #3584e4;
     color: #ffffff;
     font-weight: bold;
+}
+/* The inactive pane's cursor is the same rectangle, unfilled.
+   Two solid blue bars say nothing about which one the keys reach, and a
+   pane with no cursor at all forgets where it was. An outline keeps the
+   row readable — which is why the inactive side was never dimmed — while
+   still saying where a Tab would land you.
+   `inset` rather than a border: a border changes the row's height, and a
+   row that grew when it lost focus would move every row under it. */
+.pane:not(.pane-active) columnview listview > row:selected {
+    background-image: none;
+    background-color: transparent;
+    color: inherit;
+    box-shadow: inset 0 0 0 1px #3584e4;
 }
 ";
 

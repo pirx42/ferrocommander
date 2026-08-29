@@ -233,6 +233,16 @@ impl App {
         self.home.path()
     }
 
+    /// Everything the app has written to stdout and stderr so far.
+    ///
+    /// GTK reports a stylesheet it cannot parse here and then carries on with
+    /// the rule dropped, so a selector with a typo in it costs nothing at
+    /// startup and shows up as "the colour did not change" much later. The
+    /// log is the only place that says so.
+    pub fn log(&self) -> String {
+        std::fs::read_to_string(self.home.path().join(APP_LOG)).unwrap_or_default()
+    }
+
     /// Closes the app and waits for it to go, so whatever it writes on the
     /// way out has been written.
     ///

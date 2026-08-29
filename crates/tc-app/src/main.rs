@@ -35,7 +35,7 @@ use tc_core::vfs::{LocalFs, VfsPath};
 use actions::{dispatch, go_to_drive, run_command};
 use constants::{
     APP_ID, APP_TITLE, CLASS_DRIVE_BAR, DRIVE_BAR_SPACING, PANE_COUNT, PANE_SPACING,
-    PANE_SPLIT_RATIO, SETTINGS_UNREADABLE, STYLESHEET,
+    PANE_SPLIT_RATIO, SETTINGS_UNREADABLE, STYLESHEET, STYLESHEET_REJECTED,
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
@@ -50,6 +50,14 @@ fn main() -> glib::ExitCode {
 
 fn load_stylesheet() {
     let provider = gtk::CssProvider::new();
+    // GTK drops a rule it cannot parse and says nothing: the signal is the
+    // only report there is, and with nobody connected to it a selector with a
+    // typo costs nothing at startup and turns up much later as "that colour
+    // never worked". Said once, on stderr, like every other thing this
+    // program cannot do but survives.
+    provider.connect_parsing_error(|_, section, error| {
+        eprintln!("{STYLESHEET_REJECTED}: {} ({error})", section.to_str());
+    });
     provider.load_from_string(STYLESHEET);
     if let Some(display) = gdk::Display::default() {
         gtk::style_context_add_provider_for_display(

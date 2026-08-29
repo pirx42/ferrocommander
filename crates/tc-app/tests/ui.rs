@@ -54,6 +54,10 @@ const DIALOG_PACK: &str = "Pack";
 /// are: a test that asks the code where it saves can only agree with it.
 const SETTINGS_FILE: &str = ".config/ferrocommander/config.toml";
 
+/// What the app prints when GTK will not parse a rule. Spelled out rather
+/// than imported, like every other string these tests look for.
+const STYLESHEET_REJECTED: &str = "stylesheet rule rejected";
+
 /// A home with `src/` to work in and `dst/` to land in.
 fn arrange(home: &Path) {
     use std::fs;
@@ -3297,6 +3301,71 @@ fn ctrl_down_offers_a_command_that_was_run_before() {
     app.key("Return");
 
     app.await_exists("src/first-again");
+}
+
+#[test]
+fn the_stylesheet_is_one_gtk_accepts_whole() {
+    // A selector GTK cannot parse costs nothing at startup: the rule is
+    // dropped, the app runs, and the effect is missing somewhere nobody is
+    // looking. That is how the inactive pane's outline cursor would fail —
+    // silently — so the parse is asserted rather than assumed.
+    let app = in_src_and_dst(arrange);
+    let log = app.log();
+    assert!(
+        !log.contains(STYLESHEET_REJECTED),
+        "GTK rejected part of the stylesheet: {log}"
+    );
+}
+
+#[test]
+fn a_cd_is_remembered_the_way_a_command_is() {
+    // Reported from the field: `cd ..` moved the pane and then could not be
+    // got back with Ctrl+Down. The two arms of `read` sat twelve lines apart
+    // and only one of them called `remember_command`.
+    //
+    // Asserted on the settings file rather than by reopening the dialog: the
+    // file is where the history lives between runs, so a `cd` that reaches it
+    // is a `cd` the next run can offer too.
+    let app = in_src_and_dst(arrange);
+    app.type_text("cd ..");
+    app.key("Return");
+    // The pane moved, which is the half that always worked.
+    await_panes_at(&app, "", "/dst");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let history = recorded_command_history(&app);
+        if history.iter().any(|line| line == "cd ..") {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the history never recorded the cd: {history:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+}
+
+/// The command lines the settings file has kept, newest first.
+///
+/// Block extraction rather than a grep for the text: `cd ..` would match a
+/// pane directory or a favourite just as happily, and a test that passes on
+/// the wrong line is worse than one that fails (skill 58).
+fn recorded_command_history(app: &App) -> Vec<String> {
+    let written = std::fs::read_to_string(app.path(SETTINGS_FILE)).unwrap_or_default();
+    let Some(start) = written.find("command_history = [") else {
+        return Vec::new();
+    };
+    let rest = &written[start..];
+    let end = rest.find(']').unwrap_or(rest.len());
+    // The array is written inline — `command_history = ["cd ..", "touch a"]`
+    // — so the entries are the quoted runs inside it, not one per line.
+    rest[..end]
+        .split('"')
+        .skip(1)
+        .step_by(2)
+        .map(|entry| entry.to_string())
+        .collect()
 }
 
 #[test]
