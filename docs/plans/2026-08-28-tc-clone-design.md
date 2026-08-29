@@ -167,8 +167,10 @@ every phase ships its tests alongside the code (skill
    subsystem docs [search.md](../search.md) and
    [multi-rename.md](../multi-rename.md).
 6. **Archives** — archive VFS read, then pack/unpack via the same copy pipeline;
-   pack→unpack roundtrip invariant tests. *(~2 days)* Plan:
-   [2026-08-28-phase6-archives.md](2026-08-28-phase6-archives.md).
+   pack→unpack roundtrip invariant tests. ✅ **Implemented**; plan archived at
+   [archive/2026-08-28-phase6-archives.md](archive/2026-08-28-phase6-archives.md),
+   subsystem doc [archives.md](../archives.md) — which also carries the report
+   card this design's central claim earned.
 7. **Refactoring audit** — final phase per skill
    [49](../skills/49-final-phase-refactoring-audit.md): audit the whole
    implementation for architecture drift and redundancy

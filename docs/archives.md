@@ -10,6 +10,37 @@ This is the claim the two-crate split was made for — *"archives become
 browsable folders for free"* ([crates/CLAUDE.md](../crates/CLAUDE.md)) — so
 this file keeps score of what it actually cost.
 
+## The report card
+
+The plan for this phase said its own measure of success would be how few lines
+it took **outside** `tc-core::archive`, so here is the count. Added lines of
+code, comments and blanks excluded, per step:
+
+| | Inside `archive/` | Outside | Tests |
+|---|---|---|---|
+| Reading a zip as a filesystem | 464 | **16** | 444 |
+| Adding tar and tar.gz | 109 | **0** | 91 |
+| Walking in and out of one | 0 | 204 | 99 |
+| Unpacking | 6 | 30 | 311 |
+| Packing (`Alt+F5`) | 210 | 203 | 193 |
+
+The first two rows are the claim being collected. Sixteen lines — one pair of
+`VfsError` variants, a platform function for the mode an archive records, and
+a `mod` line — bought a pane that lists a zip, a viewer that reads inside one,
+and a search that walks it. The next two formats cost nothing outside at all.
+
+The third row is the honest price, and it is all shell: a read has to arrive
+with the backend it was read from, the pane has to remember what it walked
+into, and a listing has to be able to offer a `..` row it did not earn.
+Browsing an archive is free; *entering* one is not.
+
+The fourth row is not integration at all — it is a bug the second backend
+exposed. See the `Store` section below.
+
+The fifth is a new feature rather than a cost of the abstraction: packing is
+work that did not exist before, and 203 of its lines are the job, the key, the
+dialog and the name it offers.
+
 ## Read-only, and why that is not a compromise
 
 `VirtualFs` promises a `create_file` that can be called on any path in any

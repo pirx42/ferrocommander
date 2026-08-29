@@ -16,10 +16,7 @@ use std::time::SystemTime;
 
 use crate::vfs::{unix_mode_of, Attributes, VfsError};
 
-use super::constants::{
-    DAYS_CIVIL_TO_EPOCH, DAYS_PER_ERA, MARCH_SHIFT_DENOMINATOR, MARCH_SHIFT_NUMERATOR,
-    SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_MINUTE, YEARS_PER_ERA, ZIP_EPOCH_YEAR,
-};
+use super::date::zip_date;
 use super::reader::Wrapper;
 use super::Format;
 
@@ -211,74 +208,4 @@ impl Packer for TarPacker {
 
 fn failed(err: zip::result::ZipError) -> VfsError {
     VfsError::Io(err.to_string())
-}
-
-/// A `SystemTime` as a zip date, or `None` for one zip cannot express.
-///
-/// Zip counts from 1980 and has no zone, so this writes the UTC calendar date
-/// — the same reading the reader gives it back. A file dated before 1980, or
-/// after the format's own end, gets no date rather than a wrong one.
-fn zip_date(modified: SystemTime) -> Option<zip::DateTime> {
-    let seconds = modified
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .ok()?
-        .as_secs() as i64;
-    let days = seconds.div_euclid(SECONDS_PER_DAY);
-    let rest = seconds.rem_euclid(SECONDS_PER_DAY);
-    let (year, month, day) = civil_from_days(days);
-    if year < ZIP_EPOCH_YEAR {
-        return None;
-    }
-    zip::DateTime::from_date_and_time(
-        u16::try_from(year).ok()?,
-        u8::try_from(month).ok()?,
-        u8::try_from(day).ok()?,
-        (rest / SECONDS_PER_HOUR) as u8,
-        (rest % SECONDS_PER_HOUR / SECONDS_PER_MINUTE) as u8,
-        (rest % SECONDS_PER_MINUTE) as u8,
-    )
-    .ok()
-}
-
-/// The proleptic-Gregorian date `days` after 1970-01-01, by Howard Hinnant's
-/// `civil_from_days` — the exact inverse of `days_from_civil` in
-/// [`super::zip`], and pinned as one by a round-trip test.
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let shifted = days + DAYS_CIVIL_TO_EPOCH;
-    let era = shifted.div_euclid(DAYS_PER_ERA);
-    let day_of_era = shifted.rem_euclid(DAYS_PER_ERA);
-    let year_of_era =
-        (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146_096) / 365;
-    let year = year_of_era + era * YEARS_PER_ERA;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let shifted_month = (MARCH_SHIFT_DENOMINATOR * day_of_year + 2) / MARCH_SHIFT_NUMERATOR;
-    let day =
-        day_of_year - (MARCH_SHIFT_NUMERATOR * shifted_month + 2) / MARCH_SHIFT_DENOMINATOR + 1;
-    let month = shifted_month + if shifted_month < 10 { 3 } else { -9 };
-    (year + i64::from(month <= 2), month as u32, day as u32)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::zip::days_from_civil;
-    use super::*;
-
-    #[test]
-    fn the_two_date_conversions_are_each_other() {
-        // The reader turns a calendar date into a day count and the writer
-        // turns it back. A pair that disagreed anywhere would move every date
-        // in an archive that was unpacked and repacked.
-        //
-        // Every day from 1901 to 2099, which covers every leap rule the
-        // calendar has: the four-year one, the hundred-year exception, and the
-        // four-hundred-year exception to that.
-        for days in -25_000i64..47_000 {
-            let (year, month, day) = civil_from_days(days);
-            assert_eq!(
-                days_from_civil(year, month, day),
-                days,
-                "{year}-{month}-{day}"
-            );
-        }
-    }
 }

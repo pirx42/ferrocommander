@@ -77,12 +77,20 @@ cross-references instead of duplication.
   [archive/2026-08-28-phase5-search-and-rename.md](plans/archive/2026-08-28-phase5-search-and-rename.md)
   (design phase 5: Alt+F7 search with streaming results, and the Ctrl+M
   multi-rename tool).
-  Also active:
-  [2026-08-28-phase6-archives.md](plans/2026-08-28-phase6-archives.md)
+  and
+  [archive/2026-08-28-phase6-archives.md](plans/archive/2026-08-28-phase6-archives.md)
   (design phase 6: archives as browsable directories, unpacking through the
   copy pipeline, and packing with `Alt+F5`).
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
   (trigger table in the root CLAUDE.md).
+
+Code directories carry their own `CLAUDE.md` beside the code:
+[crates/CLAUDE.md](../crates/CLAUDE.md) →
+[tc-core/src/](../crates/tc-core/src/CLAUDE.md) →
+[vfs/](../crates/tc-core/src/vfs/CLAUDE.md),
+[listing/](../crates/tc-core/src/listing/CLAUDE.md),
+[ops/](../crates/tc-core/src/ops/CLAUDE.md),
+[archive/](../crates/tc-core/src/archive/CLAUDE.md).
 
 ## Conventions
 

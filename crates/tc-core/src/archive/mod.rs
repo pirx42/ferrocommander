@@ -13,6 +13,7 @@
 //! and every mutating call here reports [`VfsError::ReadOnly`].
 
 pub mod constants;
+mod date;
 mod entry;
 mod index;
 mod pack;

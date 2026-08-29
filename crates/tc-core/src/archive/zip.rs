@@ -8,16 +8,14 @@
 //! records, because a decoder that owns its range can be handed to a worker
 //! thread and one that borrows an open archive cannot.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 use zip::{CompressionMethod, ZipArchive};
 
 use crate::vfs::{attributes_from_unix_mode, VfsError};
 
-use super::constants::{
-    DAYS_CIVIL_TO_EPOCH, DAYS_PER_ERA, MARCH_SHIFT_DENOMINATOR, MARCH_SHIFT_NUMERATOR,
-    NOT_AN_ARCHIVE, SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_MINUTE, YEARS_PER_ERA,
-};
+use super::constants::NOT_AN_ARCHIVE;
+use super::date::as_system_time;
 use super::index::{Bytes, Index, Method};
 use super::reader::Container;
 
@@ -84,44 +82,4 @@ fn method_of(entry: &zip::read::ZipFile<'_, std::io::BufReader<Container>>) -> M
         CompressionMethod::Deflated => Method::Deflated,
         other => Method::Unsupported(format!("{other:?}")),
     }
-}
-
-/// A zip date as a `SystemTime`.
-///
-/// Zip stores a local wall-clock time with no zone in it, so this reads it as
-/// UTC. Being an hour or two out in a date column is a smaller lie than
-/// refusing to show a date at all, and there is nothing in the file to do
-/// better with.
-///
-/// Converted by hand rather than by pulling in a date library for six fields:
-/// `zip`'s own conversion lives behind a feature that would add one.
-fn as_system_time(stamp: zip::DateTime) -> Option<SystemTime> {
-    let days = days_from_civil(
-        i64::from(stamp.year()),
-        u32::from(stamp.month()),
-        u32::from(stamp.day()),
-    );
-    let seconds = days * SECONDS_PER_DAY
-        + i64::from(stamp.hour()) * SECONDS_PER_HOUR
-        + i64::from(stamp.minute()) * SECONDS_PER_MINUTE
-        + i64::from(stamp.second());
-    u64::try_from(seconds)
-        .ok()
-        .map(|seconds| UNIX_EPOCH + Duration::from_secs(seconds))
-}
-
-/// Days from 1970-01-01 to a proleptic-Gregorian date, by Howard Hinnant's
-/// `days_from_civil`. Shifting the year to start in March makes the leap day
-/// the last day of the year, which is what removes every special case.
-pub(super) fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
-    let year = year - i64::from(month <= 2);
-    let era = year.div_euclid(YEARS_PER_ERA);
-    let year_of_era = year.rem_euclid(YEARS_PER_ERA);
-    let month = i64::from(month);
-    let day_of_year = (MARCH_SHIFT_NUMERATOR * (month + if month > 2 { -3 } else { 9 }) + 2)
-        / MARCH_SHIFT_DENOMINATOR
-        + i64::from(day)
-        - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * DAYS_PER_ERA + day_of_era - DAYS_CIVIL_TO_EPOCH
 }

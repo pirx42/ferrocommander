@@ -1,14 +1,14 @@
 # Phase 6 — archives as directories
 
-**Status:** Planned
-**Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) § 6, phase 6.
+**Status:** Implemented
+**Design:** [2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md) § 6, phase 6.
 
 ## 1. Why
 
 This is the phase the whole architecture was built for. The design doc's
 justification for putting a `VirtualFs` trait between the UI and the disk was
 that *"archives become browsable folders for free — a pane just holds a
-different `VirtualFs`"* ([crates/CLAUDE.md](../../crates/CLAUDE.md)). Phase 6
+different `VirtualFs`"* ([crates/CLAUDE.md](../../../crates/CLAUDE.md)). Phase 6
 is where that claim is either collected or exposed as wishful thinking.
 
 Concretely, what a Total Commander user expects:
@@ -33,14 +33,14 @@ sequential stream with an index at the end; a tar is a sequential stream with
 no index at all. Pretending otherwise — by rewriting the whole archive on every
 call — would be a `VirtualFs` implementation that is technically correct and
 useless, and it would be slow in exactly the way the prime directive forbids
-([performance.md](performance.md)). So **the archive backend is read-only**,
+([performance.md](../../performance.md)). So **the archive backend is read-only**,
 and packing is its own job with its own writer, reusing the engine's scan,
 progress, cancel and failure reporting rather than its per-file write step.
 
 **A corrupt archive is ordinary input.** Every entry name in a zip is written
 by whoever made the zip, including `../../etc/passwd` and absolute paths. An
 unpack that trusts them writes outside the destination — the "zip slip"
-failure, and precisely the kind of thing [reliability.md](reliability.md)
+failure, and precisely the kind of thing [reliability.md](../../reliability.md)
 exists for: a job that reports success over a file it destroyed. Name
 sanitising is therefore in the backend, tested, and not a nicety.
 
@@ -70,13 +70,13 @@ Genuinely new: the archive index, the entry readers, the pack writer, and the
 `deflate` alone, rather than zip's default feature set: bzip2, zstd and lzma
 each add a compressor this project has no evidence anybody needs, and two of
 them want a C toolchain — which the Windows target does not have in this
-repository's build story ([vfs.md](../vfs.md)). An entry compressed by a method
+repository's build story ([vfs.md](../../vfs.md)). An entry compressed by a method
 that is not enabled is reported as unsupported, by name, rather than silently
 producing wrong bytes.
 
 `.rar` is out because no freely licensed extractor exists; `.7z` because its
 decoder is large and its demand here is unproven. Both are named in
-[future-improvements.md](../future-improvements.md) rather than left as a
+[future-improvements.md](../../future-improvements.md) rather than left as a
 silent gap.
 
 ## 5. Sub-phases
@@ -115,7 +115,7 @@ worth writing down:
 
 - **A tar has no index.** Opening one is a full scan of its headers, and
   opening a `.tar.gz` decompresses the whole stream to do it. Measured, and
-  recorded in [performance.md](../performance.md) as deliberately slow.
+  recorded in [performance.md](../../performance.md) as deliberately slow.
 - **A gz member has no cheap seek.** `read_at` decompresses from the member's
   start. A one-entry cache makes paging through the viewer bearable; past a cap
   it re-reads rather than holding the file in memory, because a file manager
@@ -126,7 +126,7 @@ worth writing down:
 Enter on a file whose name matches a known extension puts the pane on an
 `ArchiveFs` at its root. `..` at that root puts the pane back in the containing
 directory of the archive file, with the cursor on it — the way `..` always
-lands on where you came from ([listing.md](../listing.md)).
+lands on where you came from ([listing.md](../../listing.md)).
 
 The pane therefore remembers what it entered from. That is the one piece of
 state this phase adds to the UI, and the plan says so plainly so that the audit
@@ -173,10 +173,10 @@ The tests that matter here are conservation, not value asserts:
 ### G. Docs and the audit
 
 `docs/archives.md`, plus the paragraphs this phase changes in
-[vfs.md](../vfs.md), [ops.md](../ops.md), [keymap.md](../keymap.md),
-[performance.md](../performance.md) and
-[future-improvements.md](../future-improvements.md); then skill
-[49](../skills/49-final-phase-refactoring-audit.md) — which for this phase has
+[vfs.md](../../vfs.md), [ops.md](../../ops.md), [keymap.md](../../keymap.md),
+[performance.md](../../performance.md) and
+[future-improvements.md](../../future-improvements.md); then skill
+[49](../../skills/49-final-phase-refactoring-audit.md) — which for this phase has
 a specific question to answer: **how many lines outside `tc-core::archive` did
 it take?** That number is the design's report card and belongs in the doc.
 
@@ -193,7 +193,7 @@ it take?** That number is the design's report card and belongs in the doc.
 
 ## 7. Effort
 
-Factor 0.25 per skill [45](../skills/45-calibrate-effort-estimates.md). The
+Factor 0.25 per skill [45](../../skills/45-calibrate-effort-estimates.md). The
 largest phase in the project.
 
 | Sub-phase | Corrected |
@@ -206,3 +206,40 @@ largest phase in the project.
 | F. Roundtrip invariants | ~1.5 h |
 | G. Docs + audit | ~1 h |
 | **Total** | **~10 h** |
+
+## 8. Outcome
+
+Implemented across five commits (`b60c401`…`760ef1a`). The plan's own question
+— how many lines outside `tc-core::archive` — is answered in
+[archives.md](../../archives.md); the short version is 16 for browsing a zip,
+0 for the two formats after it, and 204 for walking in and out, which is all
+shell.
+
+What the plan did not foresee:
+
+- **The `zip` crate is better as a parser than as a reader.** `open_read`
+  promises a `Send` reader and a job holds its backends across a worker
+  thread, so a reader borrowing an open archive cannot exist. Decoding the raw
+  range with `flate2` instead is what made a streaming, owned reader possible
+  at all — and made the crate's compression features unnecessary.
+- **Buffering the *index* pass is worth 30% of the opening time, and only at
+  8 KiB.** The parse seeks constantly, and a 64 KiB buffer is three times
+  slower than none. Measured rather than guessed, and pinned by a read count
+  rather than a time.
+- **Sub-phase A's zip-slip test could not tell its two mechanisms apart.**
+  `VfsPath::new` already collapses `..`, so the archive layer's own filtering
+  was redundant; the sanitiser is now one call to `VfsPath::new` plus the
+  backslash, and the doc says which half the test bites on.
+- **A second backend exposed a live bug in the engine.** A move's fast path is
+  one `rename`, and `ops` handed the *source's* path to the *target* backend —
+  which for an archive means `/packed.txt` naming a file at the root of the
+  disk. That is what `Store` is for, and it was not in the plan.
+- **Restoring a pane exposed another.** A pane opened with a plain load and
+  showed an error where a listing belongs; it now falls back to the nearest
+  readable ancestor, and the settings are rewritten to say where it really is.
+- **Sub-phase G found the repository not following its own rule** that every
+  directory with its own semantics carries a `CLAUDE.md`. Four were missing
+  under `crates/tc-core/src/`; they are there now.
+
+Effort was close to the estimate: roughly a full day against the corrected
+~10 h, with sub-phase A the largest by some way.

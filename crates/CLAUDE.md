@@ -7,7 +7,7 @@ central boundary: **the UI never touches the filesystem directly.**
 
 | Crate | Kind | Contents |
 |---|---|---|
-| [tc-core](tc-core/) | lib | VFS, listing model, file operations, search, multi-rename. **No GTK dependency** — headless-testable with `cargo test`. |
+| [tc-core](tc-core/src/CLAUDE.md) | lib | VFS, listing model, file operations, archives, search, multi-rename. **No GTK dependency** — headless-testable with `cargo test`. |
 | [tc-app](tc-app/) | bin | GTK4 shell: main window with two panes, dialogs, viewer, keymap, config. |
 
 ## Why the split
@@ -18,6 +18,11 @@ holds a different `VirtualFs`), copying between local and archive falls out of
 a single code path, and the entire engine is testable without a display
 server. Details:
 [docs/plans/2026-08-28-tc-clone-design.md](../docs/plans/2026-08-28-tc-clone-design.md).
+
+**The first claim has now been collected and counted.** Browsing a zip cost
+sixteen lines outside `tc-core::archive`; the two formats after it cost none;
+entering and leaving one cost 204, all of them in the shell. The full report
+card is in [docs/archives.md](../docs/archives.md).
 
 ## Conventions
 
