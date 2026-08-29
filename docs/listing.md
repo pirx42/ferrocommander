@@ -29,6 +29,12 @@ Navigation needs no special case for it: `VfsPath` normalizes lexically, so
 `path_at` is `dir.child(name)` for every row and `dir.child("..")` *is* the
 parent.
 
+**A root can be given the row anyway.** `offer_parent` adds one where there is
+no parent to point at, which is what the root of an [archive](archives.md)
+needs: nothing above it inside the archive, and somewhere to go all the same.
+Where the row leads is then the pane's business — `dir.child("..")` still
+normalizes to the root, and a pane that sees that answer knows it means "out".
+
 ## Ordering
 
 `Sort` is a `SortKey` (`Name`, `Ext`, `Size`, `Modified`) plus a `SortOrder`.

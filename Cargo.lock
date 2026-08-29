@@ -905,6 +905,7 @@ dependencies = [
  "gtk4",
  "tc-core",
  "tempfile",
+ "zip",
 ]
 
 [[package]]

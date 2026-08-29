@@ -44,6 +44,59 @@ It also means the container is read *through* whatever backend holds it,
 rather than as an operating-system file. An archive on any backend works,
 including, when there is a reason for it, one inside another.
 
+## Walking in and out
+
+`Enter` on a file whose name says it is an archive opens one and shows its
+root. `Enter` on `..` there, or `Backspace`, comes back out — to the backend the
+archive was opened from, in the directory holding it, **with the cursor on the
+archive file**. That is what `..` has always meant here: where you came from.
+
+Three small things had to be true for that to work, and they are worth naming
+because they are the whole cost of this phase outside `tc-core::archive`:
+
+- **A read arrives with the backend it was read from.** Opening an archive is a
+  full parse — a zip's central directory, or an entire `.tar.gz` — which is the
+  same unbounded wait a directory read is, so it happens on the same worker
+  thread. A pane that had already swapped backends would be pointing at an
+  archive it could not yet show, or at one that turned out not to open.
+- **The pane remembers what it entered.** A stack of `(backend, archive path)`,
+  outermost first, so an archive inside an archive needs no thought. It is the
+  only state entering an archive adds to the shell.
+- **A listing can be given a `..` row it did not earn.** An archive's root has
+  no parent *inside* the archive, and still has somewhere to go. Where the row
+  leads is the pane's business; that it is there is the listing's.
+
+## Where an archive is, as far as everything else is concerned
+
+Two different paths mean two different things, and keeping them apart is what
+stops a job addressing the wrong filesystem:
+
+- **What a job uses** is the path in the backend's own coordinates — `/deeper`
+  inside the archive. An operation is handed that backend, so that is the only
+  path it can mean.
+- **What a person reads** is the two composed: `…/bundle.zip/deeper`. That is
+  what the path bar shows and what the settings file records, because `/` in a
+  settings file would send the next start to the filesystem root.
+
+Restoring such a path needs no special case. Reading a directory inside an
+archive off the local filesystem fails, and the pane already walks up to the
+nearest ancestor that reads — which is the directory holding the archive. So a
+restart lands beside the archive rather than inside it, and the settings are
+rewritten to say so.
+
+## What does not work inside an archive, and says so
+
+- **The directory watcher is off.** There is no operating-system path to watch,
+  and registering an inotify watch on one that happens to look like a real path
+  would be worse than not watching. `Ctrl+R` still re-reads — from the index,
+  so it will not notice the archive being replaced underneath.
+- **The command line refuses.** A path inside an archive is not somewhere a
+  process can run, and running the command against whatever that path means on
+  the real filesystem is how something meant for an archive acts on a home
+  directory instead.
+- **Everything that writes fails with `ReadOnly`**: `F7`, `F8`, `Shift+F6`,
+  and the target side of `F5` or `F6`.
+
 ## An archive cannot express a path outside itself
 
 Every entry name in an archive was written by whoever made the archive,

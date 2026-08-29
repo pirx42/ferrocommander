@@ -3,19 +3,43 @@
 //! Pure functions over a [`Listing`], so the decisions a pane makes when the
 //! user presses Enter or Backspace are testable without a window.
 
+use tc_core::archive::format_for;
 use tc_core::listing::Listing;
 use tc_core::vfs::VfsPath;
 
+/// What pressing Enter on the cursor row means.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Step {
+    /// A directory on the backend the pane already has.
+    Into(VfsPath),
+    /// An archive, which needs a backend of its own opened over it.
+    Enter(VfsPath),
+    /// The `..` row at a root that has no parent on this backend — which
+    /// means the root of an archive, and leads back out of it.
+    Out,
+}
+
 /// Where activating the cursor row leads, or `None` when it leads nowhere.
 ///
-/// Files are `None`: opening one is F3 or F4, not Enter. The `..` row
-/// needs no special case — it is a directory like any other, and `VfsPath`
-/// normalization makes its target the parent.
-pub fn activation_target(listing: &Listing) -> Option<VfsPath> {
-    if !listing.current()?.is_dir() {
-        return None;
+/// An ordinary file is `None`: opening one is F3 or F4, not Enter. An archive
+/// is not an ordinary file — walking into it is what Enter has always meant in
+/// Total Commander, and what the [archive backend](tc_core::archive) exists
+/// for. The `..` row needs no special case: it is a directory like any other,
+/// and `VfsPath` normalization makes its target the parent.
+pub fn activation_step(listing: &Listing) -> Option<Step> {
+    let entry = listing.current()?;
+    let path = listing.current_path()?;
+    if entry.is_dir() {
+        // `..` at a root leads to the root itself, because that is what
+        // `VfsPath` normalization makes of it. A pane showing such a row is a
+        // pane inside an archive — the listing was given the row precisely
+        // because there is somewhere to go — and where it goes is out.
+        if path == *listing.dir() {
+            return Some(Step::Out);
+        }
+        return Some(Step::Into(path));
     }
-    listing.current_path()
+    format_for(&entry.name).map(|_| Step::Enter(path))
 }
 
 /// Where leaving the current directory leads, or `None` at the root.
@@ -74,15 +98,18 @@ mod tests {
         listing.set_cursor(1);
 
         assert_eq!(
-            activation_target(&listing),
-            Some(VfsPath::new("/home/pirx/projects"))
+            activation_step(&listing),
+            Some(Step::Into(VfsPath::new("/home/pirx/projects")))
         );
     }
 
     #[test]
     fn activating_the_parent_row_leads_out_of_the_directory() {
         let listing = Listing::new(VfsPath::new("/home/pirx"), Vec::new());
-        assert_eq!(activation_target(&listing), Some(VfsPath::new("/home")));
+        assert_eq!(
+            activation_step(&listing),
+            Some(Step::Into(VfsPath::new("/home")))
+        );
     }
 
     #[test]
@@ -93,13 +120,34 @@ mod tests {
         );
         listing.set_cursor(1);
 
-        assert_eq!(activation_target(&listing), None);
+        assert_eq!(activation_step(&listing), None);
     }
 
     #[test]
     fn activating_an_empty_listing_leads_nowhere() {
         let listing = Listing::new(VfsPath::root(), Vec::new());
-        assert_eq!(activation_target(&listing), None);
+        assert_eq!(activation_step(&listing), None);
+    }
+
+    #[test]
+    fn activating_an_archive_leads_into_it_rather_than_nowhere() {
+        // The one file Enter does something with, and the whole point of the
+        // archive backend.
+        let mut listing = Listing::new(
+            VfsPath::new("/home/pirx"),
+            vec![
+                entry("backup.tar.gz", EntryKind::File),
+                entry("notes.txt", EntryKind::File),
+            ],
+        );
+        listing.focus_entry("backup.tar.gz");
+        assert_eq!(
+            activation_step(&listing),
+            Some(Step::Enter(VfsPath::new("/home/pirx/backup.tar.gz")))
+        );
+
+        listing.focus_entry("notes.txt");
+        assert_eq!(activation_step(&listing), None);
     }
 
     #[test]
@@ -162,11 +210,19 @@ mod tests {
         listing.set_cursor(1);
         assert_eq!(listing.current().unwrap().name, "sub");
 
-        let target = activation_target(&listing).expect("a directory is enterable");
+        let target = into(&listing).expect("a directory is enterable");
         let entered = Listing::load(&LocalFs, target).unwrap();
 
         assert_eq!(entered.current().unwrap().name, "..");
         assert!(entered.iter().any(|entry| entry.name == "inner.txt"));
+    }
+
+    /// Where the cursor row leads when it leads into an ordinary directory.
+    fn into(listing: &Listing) -> Option<VfsPath> {
+        match activation_step(listing)? {
+            Step::Into(path) => Some(path),
+            other => panic!("{other:?} is not an ordinary directory"),
+        }
     }
 
     /// Walks down and back up exactly the way `PaneView::navigate_to` does.
@@ -189,7 +245,7 @@ mod tests {
         // Descend from a row that is neither the first nor the last.
         listing.focus_entry("beta");
 
-        let inside = step(&listing, activation_target(&listing).unwrap());
+        let inside = step(&listing, into(&listing).unwrap());
         let back = step(&inside, parent_target(&inside).unwrap());
 
         assert_eq!(back.current().unwrap().name, "beta");
@@ -203,7 +259,7 @@ mod tests {
         fs::create_dir(dir.path().join("alpha")).unwrap();
         let mut listing = Listing::load(&LocalFs, LocalFs::vfs_path(dir.path())).unwrap();
         listing.focus_entry("alpha");
-        let inside = step(&listing, activation_target(&listing).unwrap());
+        let inside = step(&listing, into(&listing).unwrap());
 
         let plain = Listing::load(&LocalFs, parent_target(&inside).unwrap()).unwrap();
 
@@ -218,7 +274,7 @@ mod tests {
         let mut listing = Listing::load(&LocalFs, start.clone()).unwrap();
         listing.set_cursor(1);
 
-        let down = Listing::load(&LocalFs, activation_target(&listing).unwrap()).unwrap();
+        let down = Listing::load(&LocalFs, into(&listing).unwrap()).unwrap();
         let up = parent_target(&down).unwrap();
 
         assert_eq!(up, start);

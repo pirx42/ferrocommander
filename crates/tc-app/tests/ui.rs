@@ -22,6 +22,10 @@ const SOURCE_TEXT: &str = "hello from the source";
 /// What a colliding target holds before the job touches it.
 const EXISTING_TEXT: &str = "already here";
 
+/// Contents of the file inside `src/bundle.zip`, so an assertion can tell an
+/// unpacked copy from anything else with that name.
+const ARCHIVED_TEXT: &str = "this one came out of the zip";
+
 /// Titles the dialogs are found by. Kept here rather than shared with the
 /// crate: a test that reads its expectations out of the code under test can
 /// only ever agree with it.
@@ -52,6 +56,19 @@ fn arrange(home: &Path) {
     fs::write(home.join("src/notes.txt"), SOURCE_TEXT).unwrap();
     fs::write(home.join("src/data.bin"), vec![9u8; 4096]).unwrap();
     fs::write(home.join("src/nested/inner.txt"), "deep").unwrap();
+}
+
+/// Same, with `src/bundle.zip` holding two files and a nested directory.
+fn with_an_archive(home: &Path) {
+    arrange(home);
+    let mut writer =
+        zip::ZipWriter::new(std::fs::File::create(home.join("src/bundle.zip")).unwrap());
+    let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+    for (name, contents) in [("packed.txt", ARCHIVED_TEXT), ("deeper/also.txt", "also")] {
+        writer.start_file(name, options).unwrap();
+        std::io::Write::write_all(&mut writer, contents.as_bytes()).unwrap();
+    }
+    writer.finish().unwrap();
 }
 
 /// Same, with a second `.txt` so the extension keys have something to pick
@@ -607,6 +624,145 @@ fn a_search_that_finds_nothing_says_so_and_stays_open() {
 
     app.settle();
     assert!(app.has_dialog(DIALOG_SEARCH), "the search window closed");
+}
+
+#[test]
+fn enter_on_an_archive_walks_into_it_and_f5_unpacks_from_it() {
+    // The claim the whole two-crate split was made for: a pane holds a
+    // different backend and every key goes on meaning what it meant. F5 is
+    // the copy engine reading one filesystem and writing another, with no
+    // idea that it is unpacking.
+    let app = in_src_and_dst(with_an_archive);
+    // `..`, nested, bundle.zip, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    // Inside: `..`, deeper, packed.txt. The `..` row is there even though the
+    // archive's root has no parent inside it.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/packed.txt", ARCHIVED_TEXT);
+}
+
+#[test]
+fn leaving_an_archive_lands_back_on_the_archive_file() {
+    // `..` at an archive's root means what `..` always means here: where you
+    // came from. Landing in the containing directory but at the top of it
+    // would be half the job, so this checks the cursor as well — with F5,
+    // which acts on the row under it.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.key("BackSpace");
+    await_panes_at(&app, "/src", "/dst");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/bundle.zip");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "the cursor landed at the top of the directory rather than on the archive"
+    );
+}
+
+#[test]
+fn a_directory_inside_an_archive_is_a_directory() {
+    // Nested entries and their synthesised directories, through the real
+    // shell rather than through the index's own tests.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    // `..`, deeper, packed.txt — `deeper` exists only because an entry is
+    // named `deeper/also.txt`.
+    app.keys(&["Home", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip/deeper", "/dst");
+
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/also.txt", "also");
+}
+
+#[test]
+fn enter_on_the_parent_row_at_an_archive_root_leaves_the_archive() {
+    // Backspace is not the only way out. The root of an archive has no parent
+    // inside it, so the row exists only because there is somewhere to go.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.keys(&["Home", "Return"]);
+
+    await_panes_at(&app, "/src", "/dst");
+}
+
+#[test]
+fn a_command_typed_inside_an_archive_is_refused_rather_than_run() {
+    // A path inside an archive is not somewhere a process can run, and running
+    // it against whatever that path means on the real filesystem is how a
+    // command meant for an archive acts on a home directory instead.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.type_text("touch escaped.txt");
+    app.key("Return");
+
+    app.focus_dialog(DIALOG_OUTPUT);
+    app.key("Return");
+    app.settle();
+    for nowhere in ["src/escaped.txt", "escaped.txt"] {
+        assert!(
+            !app.path(nowhere).exists(),
+            "the command ran anyway: {nowhere}"
+        );
+    }
+}
+
+#[test]
+fn a_pane_left_inside_an_archive_reopens_beside_it() {
+    // The settings file records the path the pane was actually showing, which
+    // only the archive understands. Restoring it is the ordinary walk up to
+    // the nearest readable ancestor, so the next start lands in the directory
+    // holding the archive rather than failing to open one.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    let home = app.close();
+    let app = App::relaunch(home);
+
+    // The walk up happens on the reading thread, so the pane is briefly still
+    // "about" the archive path it was told to open — this waits for where it
+    // actually landed, exactly as every test that starts in two directories
+    // does.
+    await_panes_at(&app, "/src", "/dst");
+
+    // And it is a directory that can be worked in, not just a string in a
+    // settings file: F7 makes its directory in the active pane.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("landed-here");
+    app.key("Return");
+
+    app.await_exists("src/landed-here");
 }
 
 #[test]

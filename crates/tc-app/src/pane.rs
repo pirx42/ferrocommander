@@ -9,8 +9,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use tc_core::listing::{split_name, Listing, Loading, Sort, SortKey, SortOrder};
-use tc_core::vfs::{VfsError, VfsPath, VirtualFs};
+use tc_core::listing::{split_name, Arrival, Listing, Loading, Sort, SortKey, SortOrder};
+use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
     CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
@@ -20,7 +20,7 @@ use crate::constants::{
     PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, XALIGN_LEFT,
     XALIGN_RIGHT,
 };
-use crate::navigation::{activation_target, adopted_cursor, focus_after_move, parent_target};
+use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
 
 /// The columns a pane shows.
@@ -255,6 +255,22 @@ pub struct PaneView {
     /// Shared rather than owned: a running job holds the same backend on its
     /// worker thread while the pane goes on using it.
     fs: Arc<dyn VirtualFs>,
+    /// The archives this pane has walked into, outermost first.
+    ///
+    /// The one piece of state entering an archive adds to the shell, and the
+    /// phase 6 plan says so out loud so the audit can check that nothing else
+    /// crept in. It is what `..` at an archive's root needs: which backend to
+    /// go back to, and which file to put the cursor on.
+    ///
+    /// A stack rather than one slot, because an archive inside an archive is
+    /// then not a case anybody has to think about.
+    entered: Vec<Entered>,
+    /// What the read in flight will do to that stack when it lands.
+    ///
+    /// Applied on arrival rather than when the key was pressed: opening an
+    /// archive happens on a worker thread and can fail, and a pane that had
+    /// already changed backends would be pointing at something it cannot show.
+    transition: Transition,
     /// Why the last navigation attempt failed, shown beside the path.
     error: Option<String>,
 }
@@ -265,14 +281,16 @@ impl PaneView {
     /// The pane owns its filesystem, because navigation re-reads through it
     /// and phase 6 swaps it for an archive backend while the pane lives on.
     ///
-    /// A directory that cannot be read yields an empty pane rather than
-    /// failing construction — a window with one broken pane is still a usable
-    /// program, and the reason is shown in the path bar.
+    /// A directory that cannot be read falls back to the nearest ancestor that
+    /// can, the way a re-read does. The remembered directory is somebody
+    /// else's filesystem by the time it is used again — deleted, unmounted, or
+    /// a path inside an archive that only means something with the archive
+    /// open — and a pane that opened showing an error would strand the user
+    /// somewhere they cannot navigate out of on the one screen where they have
+    /// not done anything yet.
     pub fn new(fs: Arc<dyn VirtualFs>, dir: VfsPath) -> Self {
-        let (listing, error) = match Listing::load(fs.as_ref(), dir.clone()) {
-            Ok(listing) => (listing, None),
-            Err(reason) => (Listing::new(dir, Vec::new()), Some(reason.to_string())),
-        };
+        let listing = Listing::load_nearest(fs.as_ref(), dir);
+        let error = None;
 
         let store = gio::ListStore::new::<PaneEntry>();
         let selection = gtk::SingleSelection::new(Some(store.clone()));
@@ -329,6 +347,8 @@ impl PaneView {
             scroller,
             wanted: None,
             focus_on_arrival: None,
+            entered: Vec::new(),
+            transition: Transition::Stay,
             watch: None,
             watched: None,
             renaming: None,
@@ -386,6 +406,14 @@ impl PaneView {
         // Set even when the watch could not be started, so a directory that
         // cannot be watched is not retried on every keystroke.
         self.watched = Some(self.listing.dir().clone());
+        // Inside an archive there is nothing to watch: the path is one this
+        // backend understands and the operating system does not, and starting
+        // an inotify watch on it would either fail or, worse, register a real
+        // directory that happens to have the same name. `Ctrl+R` still
+        // re-reads (`docs/archives.md`).
+        if self.in_archive() {
+            return None;
+        }
         // The old one goes on a thread of its own. Dropping a watcher joins
         // the worker inside it, and that worker sits in a poll with a timeout
         // — so letting the drop happen here stalled every navigation by up to
@@ -513,7 +541,8 @@ impl PaneView {
     /// re-read. Anything that only changes what a row says goes through
     /// [`refresh_marks`](Self::refresh_marks) instead.
     pub fn refresh(&mut self) {
-        let path = self.listing.dir().as_str();
+        let shown = self.shown_dir();
+        let path = shown.as_str();
         self.path_bar.set_text(&match &self.error {
             Some(reason) => format!("{path}{PATH_BAR_ERROR_SEPARATOR}{reason}"),
             None => path.to_string(),
@@ -598,8 +627,47 @@ impl PaneView {
     }
 
     /// What this pane would want back next time.
+    ///
+    /// A pane inside an archive records the path it is actually showing, which
+    /// is a path only that archive understands. Restoring it is
+    /// [`Listing::load_nearest`]'s ordinary business: reading a directory
+    /// inside an archive off the local filesystem fails, and it walks up until
+    /// something reads — which is the directory holding the archive. So a
+    /// restart lands beside the archive rather than inside it, without a
+    /// special case for saying so (`docs/archives.md`).
     pub fn state(&self) -> (VfsPath, Sort, bool) {
-        (self.listing.dir().clone(), self.sort, self.show_hidden)
+        (self.shown_dir(), self.sort, self.show_hidden)
+    }
+
+    /// Where this pane is, spelled so a person can read it.
+    ///
+    /// Inside an archive the listing's own directory is `/` — the archive's
+    /// root, which is all the archive backend knows about. What the user is
+    /// looking at is `…/bundle.zip/deeper`, and that is what the path bar and
+    /// the settings file want: one is unreadable without the archive in it,
+    /// and the other would send the next start to the filesystem root.
+    ///
+    /// Composed across the whole stack, so an archive inside an archive reads
+    /// the way it looks.
+    ///
+    /// **Not** what an operation uses. A job addresses its backend, and this
+    /// path means nothing to one — [`target_dir`](Self::target_dir) is that.
+    fn shown_dir(&self) -> VfsPath {
+        if self.entered.is_empty() {
+            return self.target_dir();
+        }
+        let mut path = VfsPath::root();
+        for step in self
+            .entered
+            .iter()
+            .map(|entered| &entered.archive)
+            .chain(std::iter::once(&self.target_dir()))
+        {
+            for component in step.components() {
+                path = path.child(component);
+            }
+        }
+        path
     }
 
     /// Puts this pane's ordering, hidden-file flag and filter onto a listing
@@ -901,17 +969,58 @@ impl PaneView {
         self.navigate_to(dir)
     }
 
-    /// Enters the directory under the cursor. Does nothing on a file, which
-    /// is what F3 and F4 are for.
+    /// Enters what is under the cursor: a directory, or an archive as if it
+    /// were one. Does nothing on any other file, which is what F3 and F4 are
+    /// for.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     pub fn activate(&mut self) -> Option<Loading> {
-        activation_target(&self.listing).map(|target| self.navigate_to(target))
+        match activation_step(&self.listing)? {
+            Step::Into(target) => Some(self.navigate_to(target)),
+            Step::Enter(archive) => Some(self.enter_archive(archive)),
+            Step::Out => self.go_parent(),
+        }
     }
 
-    /// Leaves the current directory. Does nothing at the root.
+    /// Opens the archive at `archive` and shows its root.
+    #[must_use = "the caller has to await the listing, or the pane never moves"]
+    fn enter_archive(&mut self, archive: VfsPath) -> Loading {
+        let outer = Arc::clone(&self.fs);
+        self.start(VfsPath::root(), None);
+        self.transition = Transition::Enter(Entered {
+            fs: outer,
+            archive: archive.clone(),
+        });
+        Listing::spawn_enter(Arc::clone(&self.fs), archive)
+    }
+
+    /// Leaves the current directory. Does nothing at the root of the outermost
+    /// filesystem.
+    ///
+    /// At the root of an *archive* it leaves the archive: back to the backend
+    /// the archive was opened from, in the directory holding it, with the
+    /// cursor on the archive file. That is what `..` has always meant here —
+    /// where you came from ([`focus_after_move`]) — and it is why the pane
+    /// remembers what it entered.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     pub fn go_parent(&mut self) -> Option<Loading> {
-        parent_target(&self.listing).map(|target| self.navigate_to(target))
+        if let Some(target) = parent_target(&self.listing) {
+            return Some(self.navigate_to(target));
+        }
+        let entered = self.entered.last()?;
+        let (outer, archive) = (Arc::clone(&entered.fs), entered.archive.clone());
+        let containing = archive.parent()?;
+        self.start(containing.clone(), archive.file_name().map(str::to_string));
+        self.transition = Transition::Leave;
+        Some(Listing::spawn_load(outer, containing))
+    }
+
+    /// Whether this pane is looking inside an archive.
+    ///
+    /// Asked by the things that only make sense on a real filesystem — the
+    /// directory watcher and the command line — because an archive has no path
+    /// the operating system knows (`docs/archives.md`).
+    pub fn in_archive(&self) -> bool {
+        !self.entered.is_empty()
     }
 
     /// Shows `dir`, or stays put and reports why it could not.
@@ -926,13 +1035,20 @@ impl PaneView {
     /// nothing to put there that is more true than what is already on screen.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     fn navigate_to(&mut self, dir: VfsPath) -> Loading {
+        let focus = focus_after_move(self.listing.dir(), &dir);
+        self.start(dir.clone(), focus);
+        self.transition = Transition::Stay;
+        Listing::spawn_load(Arc::clone(&self.fs), dir)
+    }
+
+    /// Records that a move to `dir` is in flight, whatever backend answers it.
+    fn start(&mut self, dir: VfsPath, focus: Option<String>) {
         // A filter belongs to the directory it was typed in. Carrying it into
         // the next one would show an empty pane and no reason why.
         self.filter_bar.set_text("");
         self.filter_bar.set_visible(false);
-        self.focus_on_arrival = focus_after_move(self.listing.dir(), &dir);
-        self.wanted = Some(dir.clone());
-        Listing::spawn_load(Arc::clone(&self.fs), dir)
+        self.focus_on_arrival = focus;
+        self.wanted = Some(dir);
     }
 
     /// Puts the cursor on `path` when the listing being read arrives.
@@ -975,13 +1091,33 @@ impl PaneView {
     /// else drops it on the floor: two quick steps would otherwise land in
     /// whichever order the reads happened to finish, which is a pane that
     /// sometimes goes back.
-    pub fn arrived(&mut self, dir: &VfsPath, listing: Result<Listing, VfsError>) {
+    pub fn arrived(&mut self, dir: &VfsPath, arrival: Arrival) {
         if self.wanted.as_ref() != Some(dir) {
             return;
         }
         self.wanted = None;
-        match listing {
-            Ok(mut listing) => {
+        let transition = std::mem::replace(&mut self.transition, Transition::Stay);
+        match arrival {
+            Ok((fs, mut listing)) => {
+                // The backend arrives with the listing, so a step that changed
+                // it — into an archive, or back out of one — takes effect at
+                // the moment there is something to show, and a step that
+                // failed leaves the pane exactly where it was.
+                self.fs = fs;
+                match transition {
+                    Transition::Stay => {}
+                    Transition::Enter(entered) => self.entered.push(entered),
+                    Transition::Leave => {
+                        self.entered.pop();
+                    }
+                }
+                // At the root of an archive there is no parent inside it, and
+                // still somewhere to go: back out. The row is offered here
+                // rather than by the listing, which has no idea it is an
+                // archive's root rather than a filesystem's.
+                if self.in_archive() && listing.dir().is_root() {
+                    listing.offer_parent();
+                }
                 self.adopt(&mut listing);
                 if let Some(name) = self.focus_on_arrival.take() {
                     listing.focus_entry(&name);
@@ -1142,6 +1278,22 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
 fn list_item(item: &glib::Object) -> &gtk::ListItem {
     item.downcast_ref::<gtk::ListItem>()
         .expect("a column view factory always yields ListItems")
+}
+
+/// An archive this pane walked into, and where it came from.
+struct Entered {
+    /// The backend the archive file itself lives on.
+    fs: Arc<dyn VirtualFs>,
+    /// Where the archive file is on that backend.
+    archive: VfsPath,
+}
+
+/// What the read in flight will do to the pane's archive stack.
+enum Transition {
+    /// An ordinary move: the backend does not change.
+    Stay,
+    Enter(Entered),
+    Leave,
 }
 
 #[cfg(test)]

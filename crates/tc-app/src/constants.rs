@@ -363,6 +363,14 @@ pub const TITLE_HISTORY: &str = "Command history";
 /// Title of the window a command's output lands in.
 pub const TITLE_OUTPUT: &str = "Command output";
 
+/// What the command line says when the active pane is inside an archive.
+///
+/// A path inside an archive is not somewhere a process can run, and running
+/// the command against whatever that path means on the real filesystem is how
+/// something meant for an archive acts on a home directory instead.
+pub const COMMAND_IN_ARCHIVE: &str =
+    "This pane is inside an archive, which is not a directory a command can run in.";
+
 /// Separates the prompt from the entry: the directory a command will run in,
 /// then the usual shell mark.
 pub const COMMAND_PROMPT_SUFFIX: &str = "$";

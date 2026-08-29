@@ -174,6 +174,13 @@ mutation probe demonstrated before this test existed.
 - **A missing pane entry is defaulted, not fatal.** A file written when there
   were three panes must not cost you the two you have.
 - **An unknown sort key falls back** instead of failing.
+- **A directory that has gone opens at the nearest one that has not.** The
+  remembered path is somebody else's filesystem by the time it is used again —
+  deleted, unmounted, or a path inside an archive that is not open any more —
+  and a pane that opened showing an error would strand the user on the one
+  screen where they have not done anything yet. The file is rewritten to say
+  where the pane really is, so a session that ends without a keystroke does not
+  restore to the same missing place again.
 - **Failing to save is reported and otherwise ignored.** Refusing to work on,
   or to quit, because a settings file could not be written is a worse bargain
   than starting up in the wrong directory next time.

@@ -27,12 +27,13 @@ use tc_core::ops::{DeleteMode, Destination, Job, JobHandle, JobQueue};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
-    APP_ID, APP_TITLE, CLASS_DRIVE_BAR, CONFLICT_PROMPT, DRIVE_BAR_SPACING, LEFT_PANE,
-    NEW_FILE_DEFAULT, PANE_COUNT, PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT, PROGRESS_DELAY,
-    PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PATTERN, RIGHT_PANE,
-    SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT,
-    TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY,
-    TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_UNMARK_PATTERN,
+    APP_ID, APP_TITLE, CLASS_DRIVE_BAR, COMMAND_IN_ARCHIVE, CONFLICT_PROMPT, DRIVE_BAR_SPACING,
+    LEFT_PANE, NEW_FILE_DEFAULT, PANE_COUNT, PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT,
+    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE,
+    PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE,
+    STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE,
+    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT,
+    TITLE_UNMARK_PATTERN,
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
@@ -364,6 +365,18 @@ fn run_command(shell: &Rc<RefCell<Shell>>) {
         let mut state = shell.borrow_mut();
         let line = state.command_line.text();
         if line.trim().is_empty() {
+            return;
+        }
+        // A directory inside an archive is not a place a process can run.
+        // Refused with the reason on screen rather than run in whatever the
+        // path happens to mean on the real filesystem, which is how a command
+        // meant for an archive ends up acting on somebody's home directory.
+        if state.active_pane().in_archive() {
+            let window = state.window.upgrade();
+            drop(state);
+            if let Some(window) = window {
+                dialogs::show_output(&window, TITLE_OUTPUT, COMMAND_IN_ARCHIVE);
+            }
             return;
         }
         (line, state.active_pane().target_dir())
@@ -868,6 +881,12 @@ fn build_window(app: &gtk::Application) {
     }
     remember_on_close(&window, &shell);
     remember_window_size(&window, &shell);
+    // A remembered directory that has gone — deleted, unmounted, or a path
+    // inside an archive that is not open any more — puts the pane at the
+    // nearest ancestor instead. The file still says otherwise until something
+    // writes it, so a session that ends without a keystroke would restore to
+    // the same missing place again. A no-op when nothing fell back.
+    remember(&shell);
     window.add_controller(key_controller(&window, shell));
     window.present();
 }

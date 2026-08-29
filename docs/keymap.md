@@ -50,7 +50,9 @@
 | any unbound letter | Starts a command — see [command-line.md](command-line.md) |
 
 Activating a *file* does nothing: `F3` views it and `F4` edits it
-([viewer.md](viewer.md)).
+([viewer.md](viewer.md)) — **except an archive**, which Enter walks into as if
+it were a directory, and which `..` or Backspace comes back out of
+([archives.md](archives.md)).
 
 **Two keys for each delete**, because Total Commander has both and muscle
 memory splits evenly between them. Shift is the only place in the keymap where

@@ -15,6 +15,7 @@ mod sort;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::archive::ArchiveFs;
 use crate::glob;
 use crate::vfs::constants::PARENT;
 use crate::vfs::{Attributes, Entry, EntryKind, VfsError, VfsPath, VirtualFs};
@@ -27,7 +28,18 @@ pub use sort::{Sort, SortKey, SortOrder};
 /// Where a directory read started by [`Listing::spawn_load`] arrives.
 ///
 /// Named here so the shell can hold one without naming the channel crate.
-pub type Loading = async_channel::Receiver<Result<Listing, VfsError>>;
+pub type Loading = async_channel::Receiver<Arrival>;
+
+/// What comes back from a read: the listing, and **the backend it was read
+/// from**.
+///
+/// The backend travels with the listing because a step can change it. Entering
+/// an archive opens a new [`VirtualFs`] on a worker thread — opening one is a
+/// full parse, which is the same unbounded wait a directory read is — and a
+/// pane that adopted the new backend before the listing arrived would be
+/// pointing at an archive it could not yet show, or at one that turned out not
+/// to open at all.
+pub type Arrival = Result<(Arc<dyn VirtualFs>, Listing), VfsError>;
 
 /// A count of rows and the bytes they hold.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -88,11 +100,25 @@ impl Listing {
     /// them down while the user is looking at it. One swap moves the list
     /// once (`docs/listing.md`).
     pub fn spawn_load(fs: Arc<dyn VirtualFs>, dir: VfsPath) -> Loading {
-        let (sender, receiver) = async_channel::bounded(1);
-        std::thread::spawn(move || {
-            let _ = sender.send_blocking(Listing::load(fs.as_ref(), dir));
-        });
-        receiver
+        spawn(move || {
+            let listing = Listing::load(fs.as_ref(), dir)?;
+            Ok((fs, listing))
+        })
+    }
+
+    /// Opens the archive at `path` and reads its root, on a thread.
+    ///
+    /// One step from the pane's side, and one arrival, because it is one
+    /// thing the user did. Opening the archive is the slow half — a zip's
+    /// central directory, or a whole `.tar.gz` decompressed
+    /// (`docs/performance.md`) — so it belongs on the same worker thread as
+    /// the read rather than in front of it on the UI thread.
+    pub fn spawn_enter(fs: Arc<dyn VirtualFs>, path: VfsPath) -> Loading {
+        spawn(move || {
+            let archive: Arc<dyn VirtualFs> = Arc::new(ArchiveFs::open(fs, &path)?);
+            let listing = Listing::load(archive.as_ref(), VfsPath::root())?;
+            Ok((archive, listing))
+        })
     }
 
     /// Reads `dir` on a thread, falling back to the nearest readable ancestor.
@@ -100,11 +126,10 @@ impl Listing {
     /// What a pane needs after a job or a re-read, for the reason
     /// [`load_nearest`](Self::load_nearest) gives.
     pub fn spawn_load_nearest(fs: Arc<dyn VirtualFs>, dir: VfsPath) -> Loading {
-        let (sender, receiver) = async_channel::bounded(1);
-        std::thread::spawn(move || {
-            let _ = sender.send_blocking(Ok(Listing::load_nearest(fs.as_ref(), dir)));
-        });
-        receiver
+        spawn(move || {
+            let listing = Listing::load_nearest(fs.as_ref(), dir);
+            Ok((fs, listing))
+        })
     }
 
     /// Reads `dir`, or the nearest ancestor that can still be read.
@@ -131,14 +156,7 @@ impl Listing {
 
     /// Builds the model from entries that are already in hand.
     pub fn new(dir: VfsPath, entries: Vec<Entry>) -> Self {
-        let parent = dir.parent().map(|_| Entry {
-            name: PARENT.to_string(),
-            kind: EntryKind::Dir,
-            size: 0,
-            modified: PARENT_MODIFIED,
-            attributes: Attributes::default(),
-            hidden: false,
-        });
+        let parent = dir.parent().map(|_| parent_row());
         let mut listing = Listing {
             selected: vec![false; entries.len()],
             dir,
@@ -152,6 +170,24 @@ impl Listing {
         };
         listing.rebuild(None);
         listing
+    }
+
+    /// Gives this listing a `..` row even though it is at a root.
+    ///
+    /// What a pane at the **root of an archive** needs. The archive's root has
+    /// no parent inside the archive, and yet there is somewhere to go from it:
+    /// back out to the directory holding the archive file. A pane that offered
+    /// no `..` there would leave Backspace as the only way out of an archive,
+    /// which is not how anybody navigates (`docs/archives.md`).
+    ///
+    /// Where the row *leads* is the pane's business, not the listing's.
+    pub fn offer_parent(&mut self) {
+        if self.parent.is_some() {
+            return;
+        }
+        let focused = self.current().map(|entry| entry.name.clone());
+        self.parent = Some(parent_row());
+        self.rebuild(focused);
     }
 
     /// Re-reads the directory, keeping the cursor on the same entry when it
@@ -542,5 +578,29 @@ impl Listing {
             self.cursor = self.index_of(&name).unwrap_or(self.cursor);
         }
         self.set_cursor(self.cursor);
+    }
+}
+
+/// Runs `read` on a thread of its own and says where its answer will arrive.
+///
+/// One place rather than three, so a read that forgot to be a thread cannot
+/// happen: everything a pane waits for goes through here.
+fn spawn(read: impl FnOnce() -> Arrival + Send + 'static) -> Loading {
+    let (sender, receiver) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let _ = sender.send_blocking(read());
+    });
+    receiver
+}
+
+/// The `..` row, which is a directory as far as everything above here knows.
+fn parent_row() -> Entry {
+    Entry {
+        name: PARENT.to_string(),
+        kind: EntryKind::Dir,
+        size: 0,
+        modified: PARENT_MODIFIED,
+        attributes: Attributes::default(),
+        hidden: false,
     }
 }

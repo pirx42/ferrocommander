@@ -61,6 +61,11 @@ Starting one is cheap by comparison — under 300 µs for a start-and-drop pair.
   still works, which is most of why that key exists.
 - **A watch is replaced on navigation**, and a nudge that crosses a navigation
   is dropped: it is about a directory nobody is looking at any more.
+- **It does not watch inside an archive.** There is no operating-system path
+  there to watch, and registering one anyway would either fail or watch a real
+  directory that happens to have the same name. `Ctrl+R` still re-reads, from
+  the archive's index — so it will not notice the archive itself being
+  replaced ([archives.md](archives.md)).
 
 ## What is not covered by a test
 

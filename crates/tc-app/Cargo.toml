@@ -13,3 +13,7 @@ tc-core.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# The end-to-end tests build an archive to walk into. Written here rather than
+# committed as a fixture, so what is in it is visible next to the assertions
+# about it.
+zip.workspace = true
