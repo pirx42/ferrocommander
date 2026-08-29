@@ -418,6 +418,14 @@ pub const PACK_FALLBACK_NAME: &str = "archive";
 pub const EDIT_IN_ARCHIVE: &str =
     "This file is inside an archive. F3 shows it; editing it needs it unpacked first.";
 
+/// What `Enter` says when the file is inside an archive.
+///
+/// Separate from [`EDIT_IN_ARCHIVE`] rather than shared: they are different
+/// questions with different ways out, and a message naming F4 when the user
+/// pressed Enter sends them to the wrong key.
+pub const OPEN_IN_ARCHIVE: &str =
+    "This file is inside an archive. F3 shows it; opening it needs it unpacked first.";
+
 /// Why the favourites list refuses to keep where a pane is standing.
 ///
 /// A path inside an archive belongs to that archive's own store, where the

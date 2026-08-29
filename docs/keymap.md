@@ -9,7 +9,7 @@
 | `Tab` | Switch to the other pane |
 | `↑` / `↓` | Move the cursor one row |
 | `Home` / `End` | Move the cursor to the first / last row |
-| `Enter`, keypad `Enter` | Enter the directory under the cursor |
+| `Enter`, keypad `Enter` | Enter the directory under the cursor, or open the file with the desktop's handler |
 | `Backspace` | Leave the current directory |
 | `F3` | Look inside the file under the cursor — see [viewer.md](viewer.md) |
 | `F4` | Hand it to the editor |
@@ -53,11 +53,22 @@
 | `Ctrl+Q` | Quit |
 | any unbound letter | Starts a command — see [command-line.md](command-line.md) |
 
-Activating a *file* does nothing: `F3` views it and `F4` edits it
-([viewer.md](viewer.md)) — **except an archive**, which Enter walks into as if
-it were a directory, and which `..` or Backspace comes back out of
-([archives.md](archives.md)). Inside an archive `F3` still works and `F4` says
-why it cannot.
+Activating a *file* hands it to the desktop's own handler — `xdg-open`, the
+same thing a double-click in a file manager does. `F3` still views it and `F4`
+still edits it with the editor from the settings ([viewer.md](viewer.md)):
+Enter is "open this", `F4` is "edit this", and they stay different questions
+even when one program answers both.
+
+**Enter never executes the file**, whatever its permission bits say. Enter is
+how somebody walks a tree, the cursor lands on every row on the way past, and
+a manager that started programs when the cursor stopped on one is not one you
+could browse with.
+
+**An archive** is walked into as if it were a directory, and `..` or Backspace
+comes back out ([archives.md](archives.md)). Inside an archive `F3` still
+works, while `F4` and Enter both say why they cannot: a handler is given an
+operating-system path and an entry in an archive has none, so handing over
+what the archive calls it would open something of that name on the disk.
 
 **Two keys for each delete**, because Total Commander has both and muscle
 memory splits evenly between them. Shift is the only place in the keymap where

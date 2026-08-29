@@ -87,6 +87,15 @@ const XVFB_LOG: &str = "xvfb.log";
 const CONFIG_HOME: &str = ".config";
 const DATA_HOME: &str = ".local/share";
 
+/// Where a fixture puts a stand-in for a program the app shells out to.
+/// Ahead of the real `PATH`, so the stand-in is the one that runs.
+///
+/// Hidden, and under `.local` where such a thing conventionally lives: a
+/// plain `bin/` in the home is a row in the pane, and the fixtures that
+/// navigate by counting rows would be counting a directory the test itself
+/// put there. That cost two failing tests before it cost a thought.
+pub const PRIVATE_BIN: &str = ".local/bin";
+
 /// How long one resize request is given to take effect before it is re-sent.
 ///
 /// Short, because a resize that arrived is applied in a frame; the point of
@@ -675,6 +684,20 @@ fn spawn_app(home: &Path, display: &str) -> Child {
         // mistake as `DISPLAY` without `GDK_BACKEND`, one line above.
         .env("XDG_CONFIG_HOME", home.join(CONFIG_HOME))
         .env("XDG_DATA_HOME", home.join(DATA_HOME))
+        // A private `bin` ahead of the real one, for the same isolation
+        // reason as the two above. Enter hands a file to the desktop's
+        // handler, so without this a test that presses Enter on a file runs
+        // the *developer's* `xdg-open` and opens their image viewer — which
+        // is not a test failure, just somebody's afternoon. A fixture that
+        // wants to observe the handler puts a script of that name here.
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                home.join(PRIVATE_BIN).display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
         .stdout(Stdio::from(
             std::fs::File::create(&log).expect("a log file"),
         ))

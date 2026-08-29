@@ -12,7 +12,7 @@ mod harness;
 
 use std::path::Path;
 
-use harness::App;
+use harness::{App, PRIVATE_BIN};
 use tc_core::vfs::{LocalFs, VfsPath};
 
 /// Contents of the file most tests move around, so an assertion can tell the
@@ -492,6 +492,33 @@ fn f5_with_both_panes_in_one_directory_will_not_copy_a_file_onto_itself() {
     // The refusal has to reach the user, not just the log.
     app.focus_dialog(DIALOG_FAILURES);
     app.await_contents("precious.txt", SOURCE_TEXT);
+}
+
+/// A home whose `PATH` holds an `xdg-open` that records what it was given.
+///
+/// Enter hands a file to the desktop's handler, which on a test machine is
+/// whatever `xdg-open` resolves to. A script of that name in the private bin
+/// proves the same two things the recording editor does — that the handler
+/// ran, and that it ran on the right file — without opening anything.
+fn with_recording_opener(home: &Path) {
+    arrange(home);
+    write_private_program(home, "xdg-open", "opened-by-handler.log");
+}
+
+/// A script in the private bin that writes its first argument to `log`.
+fn write_private_program(home: &Path, name: &str, log: &str) {
+    let bin = home.join(PRIVATE_BIN);
+    std::fs::create_dir_all(&bin).unwrap();
+    let script = bin.join(name);
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\nprintf '%s' \"$1\" > \"{}/{log}\"\n",
+            home.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
 }
 
 /// A home whose settings name an "editor" that records what it was given.
@@ -3301,6 +3328,58 @@ fn ctrl_down_offers_a_command_that_was_run_before() {
     app.key("Return");
 
     app.await_exists("src/first-again");
+}
+
+#[test]
+fn enter_on_a_file_hands_it_to_the_desktop() {
+    // Reported from the field: Enter on a file did nothing at all, which is
+    // what `keymap.md` said it did. It now opens the file the way the desktop
+    // would — never by executing it, whatever its permission bits say.
+    // `..`, nested, data.bin, notes.txt — directories first.
+    let app = in_src_and_dst(with_recording_opener);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("Return");
+
+    app.await_contents(
+        "opened-by-handler.log",
+        &format!("{}/src/notes.txt", app.home().display()),
+    );
+}
+
+#[test]
+fn enter_on_a_directory_still_enters_it() {
+    // The half that already worked, kept honest: teaching Enter to open files
+    // must not cost it the thing it was for.
+    let app = in_src_and_dst(with_recording_opener);
+    app.keys(&["Home", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/nested", "/dst");
+    assert!(
+        !app.path("opened-by-handler.log").exists(),
+        "entering a directory handed something to the desktop"
+    );
+}
+
+#[test]
+fn enter_inside_an_archive_opens_nothing_on_the_disk() {
+    // The same reason F4 is refused there: a handler takes an
+    // operating-system path and an entry in an archive has none.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    // `..`, deeper, packed.txt.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+
+    app.focus_dialog(DIALOG_OUTPUT);
+    app.key("Return");
+    app.settle();
+    assert!(
+        !app.path("packed.txt").exists(),
+        "a file was made on the disk"
+    );
 }
 
 #[test]

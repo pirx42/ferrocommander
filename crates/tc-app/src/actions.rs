@@ -21,10 +21,10 @@ use tc_core::vfs::{LocalFs, VfsError, VfsPath};
 
 use crate::constants::{
     COMMAND_IN_ARCHIVE, EDIT_IN_ARCHIVE, FAVOURITE_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT,
-    PATTERN_DEFAULT, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK,
-    PROMPT_PATTERN, RIGHT_PANE, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE,
-    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK,
-    TITLE_UNMARK_PATTERN,
+    OPEN_IN_ARCHIVE, PATTERN_DEFAULT, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE,
+    PROMPT_MOVE, PROMPT_PACK, PROMPT_PATTERN, RIGHT_PANE, TITLE_COPY, TITLE_CREATE_DIR,
+    TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE,
+    TITLE_OUTPUT, TITLE_PACK, TITLE_UNMARK_PATTERN,
 };
 use crate::jobs::Packing;
 use crate::keymap::Action;
@@ -64,7 +64,13 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::Activate => {
             let index = shell.borrow().active;
             let loading = shell.borrow_mut().panes[index].activate();
-            await_listing(shell, index, loading);
+            match loading {
+                // A directory, the parent row, or an archive walked into.
+                Some(loading) => await_listing(shell, index, Some(loading)),
+                // Nothing to load means the row is a file, which until now
+                // did nothing at all.
+                None => open_current_file(shell),
+            }
         }
         Action::GoParent => {
             let index = shell.borrow().active;
@@ -806,6 +812,38 @@ pub(crate) fn start_viewing(shell: &Rc<RefCell<Shell>>) {
     dialogs::Viewer::open(&window, fs, view);
 }
 
+/// Enter on a file: hand it to whatever the desktop opens that kind with.
+///
+/// The desktop's handler, deliberately, and never the editor from the
+/// settings: `F4` is "edit this", Enter is "open this", and the two are
+/// different questions even when one program answers both.
+///
+/// It never executes the file either, whatever its permission bits say.
+/// Enter is how somebody walks a directory tree, the cursor lands on every
+/// row on the way past, and a file manager that started programs when the
+/// cursor stopped on one would be a file manager nobody could trust to
+/// browse.
+pub(crate) fn open_current_file(shell: &Rc<RefCell<Shell>>) {
+    let mut state = shell.borrow_mut();
+    let Some(path) = state.active_pane().current_file() else {
+        return;
+    };
+    // The same reason F4 is refused here: a handler is given an
+    // operating-system path, and a file inside an archive has none. Handing
+    // over what the archive calls it would open something of that name **on
+    // the disk** (`docs/archives.md`).
+    if state.active_pane().in_archive() {
+        let window = state.window();
+        drop(state);
+        if let Some(window) = window {
+            dialogs::show_output(&window, TITLE_OUTPUT, OPEN_IN_ARCHIVE);
+        }
+        return;
+    }
+    drop(state);
+    tc_core::command::open_with(tc_core::config::DEFAULT_EDITOR, &path);
+}
+
 /// F4: hand the file under the cursor to the editor from the settings.
 pub(crate) fn start_editing(shell: &Rc<RefCell<Shell>>) {
     let mut state = shell.borrow_mut();
@@ -826,7 +864,7 @@ pub(crate) fn start_editing(shell: &Rc<RefCell<Shell>>) {
         return;
     }
     let editor = state.saved.editor().to_string();
-    tc_core::command::open_in_editor(&editor, &path);
+    tc_core::command::open_with(&editor, &path);
 }
 
 /// Shift+F4: ask for a name, create an empty file, open it in the editor.
@@ -868,7 +906,7 @@ pub(crate) fn start_create_file(shell: &Rc<RefCell<Shell>>) {
                 Writes::InThisPane,
                 move || {
                     let editor = opening.borrow().saved.editor().to_string();
-                    tc_core::command::open_in_editor(&editor, &target);
+                    tc_core::command::open_with(&editor, &target);
                 },
             );
         },

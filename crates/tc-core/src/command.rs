@@ -95,9 +95,15 @@ pub fn run(directory: &VfsPath, line: &str) -> Outcome {
 
 /// Opens `path` with `editor`, and does not wait for it.
 ///
-/// Through the shell, like a typed command: the editor is a command *line*,
-/// so `x-terminal-emulator -e vim` works and the quoting is the shell's to
-/// read. The path is appended quoted, because a filename with a space in it is
+/// Hands `path` to `program`, which is a command *line* rather than a
+/// program name.
+///
+/// Two callers with the same shape: `F4` passes the editor from the settings,
+/// and `Enter` passes the desktop's own handler. One function because the
+/// difference between them is which command line, not what happens to it.
+///
+/// Through the shell, like a typed command: so `x-terminal-emulator -e vim`
+/// works and the quoting is the shell's to read. The path is appended quoted, because a filename with a space in it is
 /// ordinary and splitting it would open two files that do not exist.
 ///
 /// Detached rather than awaited: an editor runs for as long as somebody is
@@ -105,8 +111,8 @@ pub fn run(directory: &VfsPath, line: &str) -> Outcome {
 /// Nothing comes back — an editor that fails to start is between the user and
 /// their desktop, and a window from us saying so would arrive long after they
 /// noticed.
-pub fn open_in_editor(editor: &str, path: &VfsPath) {
-    let line = format!("{editor} {}", shell_quoted(path.as_str()));
+pub fn open_with(program: &str, path: &VfsPath) {
+    let line = format!("{program} {}", shell_quoted(path.as_str()));
     let directory = path.parent().unwrap_or_else(VfsPath::root);
     std::thread::spawn(move || {
         let _ = run(&directory, &line);

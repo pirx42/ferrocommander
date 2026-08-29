@@ -1,6 +1,6 @@
 # Field report, round one — twelve findings from build 132
 
-Status: Draft
+Status: In Progress
 
 The first report from somebody *using* the program rather than testing it.
 Build `0.1.0-132` on Ubuntu 24.04, installed from the published `.deb`.
