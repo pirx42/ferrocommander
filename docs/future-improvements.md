@@ -91,6 +91,60 @@ provide. Nothing has been *run* on Windows.
 *Home:* needs a Windows or mingw toolchain in the loop.
 *From:* [vfs.md](vfs.md), [ui-shell.md](ui-shell.md).
 
+**macOS is wanted, to the standard a Mac user would accept.**
+Decided 2026-08-29. Not "it compiles" — the engine very nearly does already,
+and a second unverified platform beside Windows would make the claim weaker
+rather than stronger. The bar is a program somebody would keep.
+
+Four separate pieces of work, and the engine is the cheap one:
+
+| | What it is | Rough |
+|---|---|---|
+| `tc-core` | three Linux-only functions in the `unix` branch | ~half a day |
+| the keymap | macOS defaults, shipped as a `[keys]` layer | ~half a day |
+| packaging | an `.app` bundle with the GTK dylibs inside it | ~1–2 days |
+| the end-to-end suite | a second driver; `Xvfb` and `xdotool` are X11-only | **days, and the least certain number here** |
+
+The engine is nearly free because macOS *is* `unix`: `VfsPath`, `Entry`, the
+attribute bits, `ops`, `archive`, `listing`, `search` and the viewer compile as
+they stand, `trash_error` already carries a `macos` arm, and `notify` is
+already built with `macos_kqueue`. Three functions assume Linux specifically —
+`mount_points` reads `/proc/self/mounts`, so **the drive bar would be empty**;
+`config_dir` follows XDG where macOS puts things under `~/Library`; and
+`is_hidden` knows about the leading dot but not `UF_HIDDEN`. The
+`parse_mount_table` split already separates reading the table from judging it,
+so the macOS version is a different reader against the same filter and the
+same fixture tests.
+
+The keymap is a second *default*, not new machinery: 55 F-key bindings on a
+platform that gives F1–F12 to hardware unless the user says otherwise, and 53
+`Ctrl` bindings where a Mac user reaches for `Cmd`. The `[keys]` table
+([config.md](config.md)) already carries exactly this shape.
+
+**The test suite is the part that decides whether this is honest.** The 117
+end-to-end tests are this project's main defence — six of the defects in
+[reliability.md](reliability.md) were caught by them and by nothing else — and
+they drive a real binary through `Xvfb` and `xdotool`, both X11-only. macOS has
+no headless equivalent; the same job wants AppleScript or the Accessibility
+API against a real GUI session with screen-recording permission granted. So
+either macOS ships untested at the exact layer where every bug in this project
+has lived, or that driver gets written. Shipping without it would contradict
+[reliability.md](reliability.md), so it is not a corner to cut quietly.
+
+**The open question is GTK4 itself**, and it is a product question rather than
+an engineering one: non-native window chrome, no menu bar, and the least
+maintained of GTK's backends. If that does not clear the bar, this entry
+becomes a different one — a second front end over the same `tc-core`, which is
+the one thing the crate split makes possible at all
+([archives.md](archives.md) keeps the score on what that split is worth).
+
+*Home:* **verify Windows first.** It is already a compile target in the green
+gate, it shares the whole second-platform apparatus, and running it would
+price the platform boundary for real before a fortnight is spent on the third
+one. The estimates above were read off the code by someone with no Mac to try
+it on, and the harness number is the one to distrust.
+*From:* the phase 7 discussion, against the v1 scope's Linux-and-Windows line.
+
 ## Testing
 
 **Two bindings have no end-to-end coverage.**

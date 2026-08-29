@@ -172,7 +172,10 @@ render. The original message survives in `Io` for the job log.
 ## Platform differences
 
 All of them live in `vfs/platform.rs`. Adding a platform touches exactly one
-file.
+file **here**; what it costs in `tc-app` is a different question, and
+[future-improvements.md](future-improvements.md) prices it against macOS —
+where the engine is nearly free because macOS *is* `unix`, and the keymap, the
+packaging and the end-to-end suite are not.
 
 | | Linux | Windows |
 |---|---|---|
