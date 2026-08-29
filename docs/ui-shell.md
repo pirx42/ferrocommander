@@ -389,6 +389,28 @@ meaning under Wayland at all, and `spawn_app` now pins `GDK_BACKEND` beside
 `GDK_BACKEND=wayland` in the environment and, without the pin, every test
 fails the same way.
 
+**The per-user directories are pinned too, not just `HOME`.** The app follows
+the freedesktop rule — `$XDG_CONFIG_HOME`, or `~/.config` when it is unset —
+so an ambient `XDG_CONFIG_HOME` beats the private home and the settings file
+is written on the machine running the tests. Nothing in the harness notices:
+the app starts, the window appears, keys arrive, and only the *assertions*
+fail, because the file the tests poll for a pane's directory never appears.
+Every such test then waits out its ten seconds and reports the panes as
+`["", ""]`.
+
+That is what a GitHub runner did to all 138 tests at once, at 11.3 seconds
+each — half an hour of red saying nothing about the program. It is
+reproducible anywhere in one command: with `XDG_CONFIG_HOME` set, a test that
+passes in 3.0 s fails in 11.4 s with exactly that message.
+
+`XDG_DATA_HOME` is pinned beside it, and that one is worse than a failing
+test: the `trash` crate files deletions under it, so an `F8` test on an
+unpinned machine puts fixture files in the real user's wastebasket.
+
+Deciding the home and then leaving the variables that *override* the home to
+the ambient environment was never coherent — the same mistake as `DISPLAY`
+without `GDK_BACKEND`, and found the same way.
+
 **The drive tests ask which row they want; they never count on one.** They
 used to index the list positionally — slot 0 for "the drive the pane is
 already on", slot 1 for "somewhere else" — which is true of one machine and

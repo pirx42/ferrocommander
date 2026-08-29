@@ -79,6 +79,14 @@ const APP_LOG: &str = "app.log";
 /// Where the private X server's own output goes, for the same reason.
 const XVFB_LOG: &str = "xvfb.log";
 
+/// The two per-user directories, relative to the private home.
+///
+/// The freedesktop defaults spelled out rather than left implicit: the tests
+/// read the settings file at `.config/ferrocommander/config.toml`, so pinning
+/// the variables to anything else would move the file out from under them.
+const CONFIG_HOME: &str = ".config";
+const DATA_HOME: &str = ".local/share";
+
 /// How long one resize request is given to take effect before it is re-sent.
 ///
 /// Short, because a resize that arrived is applied in a frame; the point of
@@ -640,6 +648,23 @@ fn spawn_app(home: &Path, display: &str) -> Child {
         // environment was never coherent. `Xvfb` and `xdotool` are X11-only,
         // so this suite has no meaning under Wayland at all.
         .env("GDK_BACKEND", "x11")
+        // Pinned for the same reason `HOME` is. The freedesktop rule the app
+        // follows is "`$XDG_CONFIG_HOME`, or `~/.config` when it is unset",
+        // so an ambient `XDG_CONFIG_HOME` wins over the private home and the
+        // settings file lands on the machine running the tests. Every test
+        // that polls that file then waits out its ten seconds and reports the
+        // panes as `["", ""]` — which is what a GitHub runner, where the
+        // variable is set, did to all 138 of them at once.
+        //
+        // `XDG_DATA_HOME` is worse than a failure: the `trash` crate files
+        // deletions under it, so `F8` in a test would put fixture files in
+        // the real user's wastebasket instead of the temporary one.
+        //
+        // Deciding the home and then leaving the variables that override the
+        // home to the ambient environment was never coherent — the same
+        // mistake as `DISPLAY` without `GDK_BACKEND`, one line above.
+        .env("XDG_CONFIG_HOME", home.join(CONFIG_HOME))
+        .env("XDG_DATA_HOME", home.join(DATA_HOME))
         .stdout(Stdio::from(
             std::fs::File::create(&log).expect("a log file"),
         ))
