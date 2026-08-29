@@ -13,6 +13,7 @@ with a plain `cargo test`.
 | [archive/](archive/CLAUDE.md) | archives as filesystems, and writing new ones |
 | `search.rs` | the streaming, cancellable walk behind `Alt+F7` |
 | `branch.rs` | the whole tree below a directory as one flat listing — `Ctrl+B` |
+| `sizes.rs` | what a folder actually holds, counted — `Alt+Shift+Enter` |
 | `rename.rs` | the multi-rename rules — pure, so the preview *is* the rename |
 | `viewer.rs` | what `F3` shows, built on `read_at` and nothing else |
 | `command.rs` | running a command line, and opening an editor |

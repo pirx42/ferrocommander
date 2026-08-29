@@ -39,6 +39,7 @@ the ratios and what dominates — not the absolute numbers.
 | — of which sorting and building the view | 153 ms | **22 ms** |
 | Move 20 000 files within one filesystem | 57 ms | **6 µs** |
 | Branch view (`Ctrl+B`) of a 20 000-file tree | — | **31 ms** |
+| Folder size (`Alt+Shift+Enter`) of the same tree | — | **20 ms** |
 | — the same 20 000 files in *one* directory, for comparison | — | 32 ms |
 
 **Walking 200 directories costs no more than reading one.** The branch view
@@ -49,6 +50,14 @@ unavoidable floor — and the directory boundaries between them are free. So
 `Ctrl+B` costs about what looking at the same number of files costs anyway,
 and the reason it is on a worker thread with a cancel is the tree that holds
 a million of them, not the one that holds twenty thousand.
+
+**Counting a folder is cheaper than listing it**, which is not obvious and is
+the reason the scan needed measuring rather than assuming. The same walk over
+the same 20 000-file tree costs 20 ms for a size and 31 ms for a branch view:
+a size keeps a running `u64` where the branch view allocates an `Entry` and a
+relative-path `String` per file. That is also the argument against building
+the size out of `branch::walk` — it would pay the 31 ms *and* the memory to
+produce one number.
 
 Reproduced with `cargo run --release -p tc-core --example bench_branch -- <dir>`.
 

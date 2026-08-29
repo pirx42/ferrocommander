@@ -14,6 +14,7 @@ pub mod listing;
 pub mod ops;
 pub mod rename;
 pub mod search;
+pub mod sizes;
 pub mod vfs;
 pub mod viewer;
 pub mod watch;

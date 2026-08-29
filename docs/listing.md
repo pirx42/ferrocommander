@@ -244,6 +244,32 @@ costs ([performance.md](performance.md)). A listing knows it came from one:
 re-reads a single directory and would silently turn a branch listing back into
 a plain one.
 
+## A folder's size is an answer the listing carries
+
+A directory row says `<DIR>` because nobody has counted it. `Alt+Shift+Enter`
+counts it ([keymap.md](keymap.md)), and the answer goes into the entry's own
+`size` — which is what makes the two things people ask next come for free:
+the status line's marked-bytes total already sums that field, and sorting by
+size already compares it.
+
+**"Measured" is a flag beside the marks, not a size of zero.** An empty folder
+holds nothing, and zero is its real answer; deriving "counted" from the number
+would make the one case this feature exists to get right the one it got
+wrong. So `measured` is a `Vec<bool>` parallel to the entries, exactly as
+`selected` is.
+
+**A re-read forgets the sizes and keeps the marks.** The two travel together
+through `reload` and are entitled to different things: a mark is the user's
+own, and a count is the filesystem's answer from a moment that has passed. It
+also keeps the parallel vector the right length, which is the failure a stale
+one would cause.
+
+**Nothing is re-sorted while answers arrive.** A scan of ten folders sends ten
+answers, and re-sorting on each would move rows under the cursor one at a
+time — the opposite of what somebody watching the numbers appear wants. The
+order catches up on the next sort keystroke or re-read; until then the number
+is right even where its position is stale.
+
 ## The quick filter
 
 `set_filter` narrows the visible rows to names containing a string, ignoring

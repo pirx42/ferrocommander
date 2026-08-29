@@ -41,6 +41,17 @@ fn main() {
         list_best = list_best.min(start.elapsed().as_millis());
         assert!(!plain.is_empty());
     }
+    // The folder-size scan over the same tree: the same read_dir walk with a
+    // running total instead of a collected entry per file.
+    let mut measure_best = u128::MAX;
+    for _ in 0..5 {
+        let start = Instant::now();
+        let measured = tc_core::sizes::measure(&LocalFs, &root, &CancelToken::new());
+        measure_best = measure_best.min(start.elapsed().as_millis());
+        assert!(measured.complete && measured.bytes > 0);
+    }
+
     println!("branch walk + listing of {count} rows: {walk_best} ms");
+    println!("folder size of the same tree: {measure_best} ms");
     println!("plain listing of 20 000 in one directory: {list_best} ms");
 }

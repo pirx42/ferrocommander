@@ -136,7 +136,7 @@ cannot be pinned by anything this suite can do.**
 | `refresh_marks` splices only the changed span | made it cover every row | **Cannot bite.** See below. |
 
 The status-line gap is now closed by a unit test over `selection_status`,
-re-probed so it bites (`f6b3a97`). Worth noting *why* it was missing: the
+re-probed so it bites (`1265649`). Worth noting *why* it was missing: the
 existing test asserts `"0 of 2"` and `"1 of 2"` — the counts — and the bytes
 sit in the same rendered string with nothing checking them.
 
