@@ -49,42 +49,28 @@ cross-references instead of duplication.
 
 ## Subdirectories
 
-- [plans/](plans/2026-08-28-tc-clone-design.md) — active plan documents;
-  finished plans move to `plans/archive/`. Currently active:
-  [2026-08-28-tc-clone-design.md](plans/2026-08-28-tc-clone-design.md)
-  (v1 design: scope, architecture tc-core + tc-app, data flow, phases).
-  Implemented and archived:
-  [archive/2026-08-28-phase1-walking-skeleton.md](plans/archive/2026-08-28-phase1-walking-skeleton.md)
-  (design phase 1: workspace, read-only VFS, listing model, dual-pane window,
-  keyboard navigation) and
-  [archive/2026-08-28-phase2-core-ops.md](plans/archive/2026-08-28-phase2-core-ops.md)
-  (design phase 2: mutating VFS surface, the copy/move/delete/mkdir job
-  engine, the background queue, progress and conflict dialogs) and
-  [archive/2026-08-28-phase3-polish-browsing.md](plans/archive/2026-08-28-phase3-polish-browsing.md)
-  (design phase 3: selection, quick filter, sorting, attributes, config
-  persistence, drive bar) and
-  [archive/2026-08-28-phase3b-keys-and-keymap.md](plans/archive/2026-08-28-phase3b-keys-and-keymap.md)
-  (inserted between design phases 3 and 4: the rest of Total Commander's
-  selection keys, the pane commands, and a configurable keymap).
-  and
-  [archive/2026-08-28-phase3c-command-line.md](plans/archive/2026-08-28-phase3c-command-line.md)
-  (the command line and `Ctrl+↓` for its history — `Ctrl+↑` needs tabs, which
-  stay out of v1).
-  and
-  [archive/2026-08-28-phase4-viewer.md](plans/archive/2026-08-28-phase4-viewer.md)
-  (design phase 4: the F3 viewer and the F4 editor hook).
-  and
-  [archive/2026-08-28-phase5-search-and-rename.md](plans/archive/2026-08-28-phase5-search-and-rename.md)
-  (design phase 5: Alt+F7 search with streaming results, and the Ctrl+M
-  multi-rename tool).
-  and
-  [archive/2026-08-28-phase6-archives.md](plans/archive/2026-08-28-phase6-archives.md)
-  (design phase 6: archives as browsable directories, unpacking through the
-  copy pipeline, and packing with `Alt+F5`).
-  Also active:
-  [2026-08-29-phase7-refactoring-audit.md](plans/2026-08-29-phase7-refactoring-audit.md)
-  (design phase 7: the closing audit — correctness that drifted, files whose
-  names stopped describing them, and the documentation pass).
+- [plans/](plans/archive/) — plan documents. A plan is written before the work,
+  keeps its Status header current, and moves to `plans/archive/` with an
+  outcome section when it is done (skill
+  [10](skills/10-plan-lifecycle.md)). **All of them are archived**: v1 is
+  implemented.
+
+  | Plan | What it built |
+  |---|---|
+  | [tc-clone-design](plans/archive/2026-08-28-tc-clone-design.md) | v1 itself: scope, the tc-core/tc-app split, the phases, and what the whole thing cost |
+  | [phase 1 — walking skeleton](plans/archive/2026-08-28-phase1-walking-skeleton.md) | the workspace, a read-only VFS, the listing model, two panes, keyboard navigation |
+  | [phase 2 — core ops](plans/archive/2026-08-28-phase2-core-ops.md) | the mutating VFS, the copy/move/delete/mkdir engine, the background queue, progress and conflicts |
+  | [phase 3 — polish browsing](plans/archive/2026-08-28-phase3-polish-browsing.md) | selection, the quick filter, sorting, attributes, the settings file, the drive bar |
+  | [phase 3b — keys and keymap](plans/archive/2026-08-28-phase3b-keys-and-keymap.md) | the rest of Total Commander's marking keys, the two-pane commands, and a configurable keymap |
+  | [phase 3c — command line](plans/archive/2026-08-28-phase3c-command-line.md) | the entry at the bottom and `Ctrl+↓` for its history |
+  | [phase 4 — viewer](plans/archive/2026-08-28-phase4-viewer.md) | `F3`, `read_at`, and the `F4` editor hook |
+  | [phase 5 — search and rename](plans/archive/2026-08-28-phase5-search-and-rename.md) | `Alt+F7` with streaming results, and the `Ctrl+M` tool |
+  | [phase 6 — archives](plans/archive/2026-08-28-phase6-archives.md) | archives as directories, unpacking through the copy engine, `Alt+F5` to pack |
+  | [phase 7 — the audit](plans/archive/2026-08-29-phase7-refactoring-audit.md) | the closing sweep: rules that drifted, files whose names stopped describing them, the documentation pass |
+
+  3b and 3c were not foreseen. Each exists because a key in the phase before
+  it could not be built without them.
+
 - [skills/CLAUDE.md](skills/CLAUDE.md) — focused working-rule files
   (trigger table in the root CLAUDE.md).
 
@@ -106,3 +92,6 @@ Code directories carry their own `CLAUDE.md` beside the code:
   [10](skills/10-plan-lifecycle.md)).
 - New doc file: one topic per file, add it to this index (skill
   [29](skills/29-one-topic-per-doc.md)).
+- After moving or renaming anything: `python3 scripts/check-links.py`. Every
+  relative link in the repository, checked in a second. The phase 7 audit
+  found eleven broken at once, all of them made by archiving a plan.

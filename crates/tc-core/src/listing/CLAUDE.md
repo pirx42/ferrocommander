@@ -1,6 +1,6 @@
 # listing/
 
-← Parent: [../../CLAUDE.md](../../CLAUDE.md) ·
+← Parent: [../CLAUDE.md](../CLAUDE.md) ·
 Topic doc: [docs/listing.md](../../../../docs/listing.md)
 
 The model behind a pane: what a directory looks like once it is on screen.

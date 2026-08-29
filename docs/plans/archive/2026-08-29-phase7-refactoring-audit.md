@@ -1,8 +1,8 @@
 # Phase 7 — the refactoring audit
 
-**Status:** Planned
+**Status:** Implemented
 **Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) § 6, phase 7.
-**Skill:** [49](../skills/49-final-phase-refactoring-audit.md) — the last phase
+**Skill:** [49](../../skills/49-final-phase-refactoring-audit.md) — the last phase
 of a plan is an audit of everything the plan built. The v1 design counts as
 Implemented only after this.
 
@@ -27,7 +27,7 @@ Four things, in this order of seriousness:
    `rename`, and a pane restoring into a directory that has gone — and found
    them by asking the question, not by reading the code. The question is worth
    asking again everywhere.
-2. **Redundancy** ([44](../skills/44-no-redundancy.md)): the same logic in two
+2. **Redundancy** ([44](../../skills/44-no-redundancy.md)): the same logic in two
    places, or a value that is derived in one place and hardcoded in another.
 3. **Files that are no longer about one thing.** Size is a symptom, not the
    problem; the problem is a file whose name no longer says what is in it.
@@ -60,9 +60,9 @@ not the finding.
 ## 4. Sub-phases
 
 Each is one commit, and the whole suite is green before each
-([25](../skills/25-green-suite-before-commit.md)). **No behaviour changes**: a
+([25](../../skills/25-green-suite-before-commit.md)). **No behaviour changes**: a
 refactoring that needed a test changed is not a refactoring
-([24](../skills/24-no-silent-test-changes.md)), and the 112 end-to-end tests
+([24](../../skills/24-no-silent-test-changes.md)), and the 112 end-to-end tests
 are the proof.
 
 ### A. The correctness sweep
@@ -103,12 +103,12 @@ design's claims were collected.
 - **The temptation to improve while moving.** A move is a move. Anything worth
   changing gets its own commit, after.
 - **An audit finds more than a phase can hold.** What is not fixed is written
-  into [future-improvements.md](../future-improvements.md) with its reason,
+  into [future-improvements.md](../../future-improvements.md) with its reason,
   which is what that file is for.
 
 ## 6. Effort
 
-Factor 0.25 per skill [45](../skills/45-calibrate-effort-estimates.md).
+Factor 0.25 per skill [45](../../skills/45-calibrate-effort-estimates.md).
 
 | Sub-phase | Corrected |
 |---|---|
@@ -118,3 +118,57 @@ Factor 0.25 per skill [45](../skills/45-calibrate-effort-estimates.md).
 | D. The documentation pass | ~1 h |
 | E. Closing the plan | ~30 min |
 | **Total** | **~5.25 h** |
+
+## 7. Outcome
+
+Five commits, no feature. The one that mattered was the first.
+
+### A. The correctness sweep found four
+
+All four were rules written when a pane could hold only one filesystem, and
+none of them could be seen by any existing test — because with one backend
+every wrong answer is also the right one.
+
+- **A job's two backends were the active pane's and the other pane's,
+  always.** `F7` builds its path from the active pane, so inside an archive it
+  would have created a directory *on the disk*, at the path the archive calls
+  it. Not a failure; a real directory in the wrong place. Each job now says
+  which pane it writes into.
+- **`Ctrl+U` swapped the listings and left the backends behind**, so each pane
+  showed the other's entries through its own filesystem.
+- **`Ctrl+←`/`Ctrl+→` copied only the path**, sending the other pane's backend
+  somewhere that belongs to this one.
+- **A drive button navigated the *archive* to `/mnt/whatever`**, leaving the
+  pane inside it with an error and Backspace the only way out.
+
+Plus `F4`, which handed an editor a path inside an archive — a path that also
+exists on the disk, where the editor would have created it on save.
+
+Two improvements came out of the fixing rather than the finding: a backend
+that cannot be written to now refuses a job once instead of failing per file,
+and four transition variants collapsed into one, because entering an archive,
+leaving one, following the other pane and leaving for a drive all say "the
+stack becomes this".
+
+### B and C. Two files whose names had stopped describing them
+
+`main.rs` became `main.rs` + `shell.rs` + `actions.rs`; `dialogs.rs` became a
+module with a file for each window that has a lifetime of its own. Nothing
+else moved, and not one test was touched — which is the only proof a
+refactoring of this kind can offer.
+
+### D. The documentation pass
+
+The trait listing in `vfs.md` was four methods out of date, the dialog table
+in `ui-shell.md` listed four windows of eleven, and every claim written as a
+promise about a later phase is now a statement about what happened. One
+doc-and-code pair has no test between them — the binding table in
+`keymap.md` — and it is named in
+[future-improvements.md](../../future-improvements.md) rather than left as an
+assumption.
+
+### The pattern worth keeping
+
+**A rule written when there was one of something is wrong when there are
+two**, and the suite cannot see it. Asking that question of every such rule
+found four defects in an afternoon that six phases of green tests had not.

@@ -67,5 +67,5 @@ logic broke after a refactor.
 
 Provenance note: the earlier local memory `feedback_no_redundancy` was
 migrated into the repo on 2026-08-07 (plan
-[2026-08-07-agent-wissen-ins-repository.md](../plans/archive/2026-08-07-agent-wissen-ins-repository.md))
+`2026-08-07-agent-wissen-ins-repository.md`, in the Chimera project)
 — this skill is the canonical place.

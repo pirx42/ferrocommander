@@ -1,7 +1,7 @@
 # Phase 6 — archives as directories
 
 **Status:** Implemented
-**Design:** [2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md) § 6, phase 6.
+**Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) § 6, phase 6.
 
 ## 1. Why
 

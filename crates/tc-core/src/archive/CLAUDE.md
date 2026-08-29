@@ -1,6 +1,6 @@
 # archive/
 
-← Parent: [../../CLAUDE.md](../../CLAUDE.md) ·
+← Parent: [../CLAUDE.md](../CLAUDE.md) ·
 Topic doc: [docs/archives.md](../../../../docs/archives.md)
 
 Reading archives as filesystems, and writing new ones. The module the

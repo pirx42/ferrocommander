@@ -1,6 +1,6 @@
 # ops/
 
-← Parent: [../../CLAUDE.md](../../CLAUDE.md) ·
+← Parent: [../CLAUDE.md](../CLAUDE.md) ·
 Topic doc: [docs/ops.md](../../../../docs/ops.md)
 
 The file-operation engine: what F5, F6, F7, F8 and Alt+F5 actually do.

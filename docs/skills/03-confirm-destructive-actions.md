@@ -35,7 +35,8 @@ If unsure, better to wait briefly.
 ("you may perform this action without asking back"):
 - Local git ops + commits under /home/pirx/projects without asking back
   (grant `feedback_git_autonomy`, today in
-  [../workspace/agent-arbeitsregeln.md](../workspace/agent-arbeitsregeln.md)).
+  `workspace/agent-arbeitsregeln.md` in the Chimera project, where this skill
+  came from — not a file in this repository).
 - **Topic-branch pushes are free** (they trigger neither CI nor deploy) —
   see `64-branch-workflow-dev-topic-main.md` (Chimera only).
 

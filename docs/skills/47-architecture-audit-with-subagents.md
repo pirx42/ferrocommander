@@ -144,10 +144,10 @@ plan doc afterwards.
 **Example run (2026-06-03).** Request: "create an architecture analysis
 at high + mid level with a principles check". 75k LOC, 5271 tests. 6
 subagents in ~25 minutes of wall time, ~710k subagent tokens, result:
-[`docs/plans/archive/2026-06-03-architecture-review.md`](../plans/archive/2026-06-03-architecture-review.md)
+`docs/plans/archive/2026-06-03-architecture-review.md`
 (481 LOC). Findings: 63 cycles, App.tsx 5 forward-ref bridges, 3
 determinism leaks, 0 UI tests, plus a concrete Quick-Wins/Mid/Big roadmap.
 Follow-up plan
-[`2026-06-03-arch-review-qw1-qw2-qw4.md`](../plans/archive/2026-06-03-arch-review-qw1-qw2-qw4.md)
+`2026-06-03-arch-review-qw1-qw2-qw4.md`
 implemented the first three quick wins (commits `4ce131d4`, `23e162fa`,
 `285b1959`).

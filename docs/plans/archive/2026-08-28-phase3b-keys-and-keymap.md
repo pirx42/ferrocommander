@@ -53,7 +53,7 @@ is a hole rather than a decision, and `Ctrl+Num −` closes it.
 ## 4. Consequence the ruling on `config.toml` forces
 
 `config.toml` is now written **whenever something changes**, not on exit
-([config.md](../config.md)). A serde round-trip through `Settings` reproduces
+([config.md](../../config.md)). A serde round-trip through `Settings` reproduces
 the *data* and nothing else — so a user who hand-writes a `[keys]` table with
 comments would lose them the first time they moved the cursor, about half a
 second after opening the app. That is unacceptable for a file the user is now
@@ -111,7 +111,7 @@ records `selected_names()` when a job is submitted, because
 anything could ask for them.
 
 `Shift+PgUp/PgDn` are the awkward pair: paging is deliberately the widget's
-job ([keymap.md](../keymap.md)) because the model does not know how tall the
+job ([keymap.md](../../keymap.md)) because the model does not know how tall the
 viewport is. The pane measures a page from the column view's allocated height
 and its row height and hands the model a row count. **If that measurement
 proves unreliable under the UI harness, this is the item that gets reported
@@ -146,7 +146,7 @@ makes the marks and the cursor come along for free.
 
 - **`tc-core`** gains `Settings::keys: BTreeMap<String, String>` — plain
   strings on both sides. It parses no key names and knows no actions, because
-  a key name is a `gdk::Key` and `tc-core` stays GTK-free ([crates/CLAUDE.md](../../crates/CLAUDE.md)).
+  a key name is a `gdk::Key` and `tc-core` stays GTK-free ([crates/CLAUDE.md](../../../crates/CLAUDE.md)).
 - **`tc-app`** owns both halves of the translation:
   - a key spec `"ctrl+shift+kp_add"` → `(Key, ModifierType)`, case-insensitive,
     modifiers in any order;
@@ -157,7 +157,7 @@ makes the marks and the cursor come along for free.
   the binding for that key, and an empty value unbinds it. A key nobody
   mentions keeps its default, so a binding added in a later version reaches
   people who already have a config file.
-- **Bad entries do not stop the program** ([config.md](../config.md)): an
+- **Bad entries do not stop the program** ([config.md](../../config.md)): an
   unknown key name or action is reported once and skipped, and the rest of the
   table still applies.
 - The format-preserving save from §4.
@@ -174,7 +174,7 @@ makes the marks and the cursor come along for free.
   write and nothing else observable (after that write the two agree again), so
   it carries no test of its own: pinning it would take a contortion that tests
   the contortion.
-- **The `Testing` section of [keymap.md](../keymap.md) had gone stale** —
+- **The `Testing` section of [keymap.md](../../keymap.md) had gone stale** —
   it claimed every binding but two was pressed for real, which stopped being
   true three sub-phases ago. It now names what is left out and why, and two
   keys that had no reason to be missing (`Shift+PgUp`, `Alt+Num −`) were
@@ -186,9 +186,9 @@ makes the marks and the cursor come along for free.
   call on all six or take a flag to say which, and both are worse than the
   three lines they would save.
 
-[keymap.md](../keymap.md) gets the full table and the TC-faithfulness notes;
-[config.md](../config.md) gets `[keys]` and the format-preserving save;
-[listing.md](../listing.md) gets the selection primitives. Then the audit per
+[keymap.md](../../keymap.md) gets the full table and the TC-faithfulness notes;
+[config.md](../../config.md) gets `[keys]` and the format-preserving save;
+[listing.md](../../listing.md) gets the selection primitives. Then the audit per
 skill 49: the selection commands will have grown to a dozen actions that all
 do "something to the marks", and that is exactly where redundancy hides.
 
@@ -201,7 +201,7 @@ do "something to the marks", and that is exactly where redundancy hides.
   behaviour was never the considered choice, just the easy one.
 - **`toml_edit` as a second TOML crate** — `toml` stays for reading into
   `Settings`, `toml_edit` does the writing. Two crates for one format is worth
-  one line of justification in [config.md](../config.md), and the alternative
+  one line of justification in [config.md](../../config.md), and the alternative
   is destroying the user's own file.
 
 ## 7. Effort

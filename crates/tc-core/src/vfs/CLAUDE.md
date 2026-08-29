@@ -1,6 +1,6 @@
 # vfs/
 
-← Parent: [../../CLAUDE.md](../../CLAUDE.md) ·
+← Parent: [../CLAUDE.md](../CLAUDE.md) ·
 Topic doc: [docs/vfs.md](../../../../docs/vfs.md)
 
 The one interface everything that touches a filesystem goes through.

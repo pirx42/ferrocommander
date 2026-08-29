@@ -79,6 +79,12 @@ const APP_LOG: &str = "app.log";
 /// Where the private X server's own output goes, for the same reason.
 const XVFB_LOG: &str = "xvfb.log";
 
+/// How long one resize request is given to take effect before it is re-sent.
+///
+/// Short, because a resize that arrived is applied in a frame; the point of
+/// the wait is to notice one that did not.
+const RESIZE_SETTLE: Duration = Duration::from_millis(500);
+
 /// How many times a launch is retried when it could not reach the display.
 ///
 /// See the retry in [`App::start`] for what it is for. Three rather than one,
@@ -482,9 +488,47 @@ impl App {
     }
 
     /// Resizes the main window, the way dragging its corner would.
+    /// Resizes the main window, and waits until X agrees that it happened.
+    ///
+    /// Re-sent until it takes. Under a bare Xvfb there is no window manager to
+    /// hold the request, and one launch in five swallowed it outright — the
+    /// app then never saw a size change and the test spent both its timeouts
+    /// waiting for one. Confirming the effect is the same rule the rest of
+    /// this harness follows for focus and for a dialog closing: wait for what
+    /// happened, never for how long it usually takes.
     pub fn resize(&self, width: u32, height: u32) {
-        let (width, height) = (width.to_string(), height.to_string());
-        self.xdotool(&["windowsize", &self.window, &width, &height]);
+        let deadline = Instant::now() + EFFECT_TIMEOUT;
+        loop {
+            let (w, h) = (width.to_string(), height.to_string());
+            self.xdotool(&["windowsize", &self.window, &w, &h]);
+            if await_until(RESIZE_SETTLE, || self.geometry() == Some((width, height))).is_some() {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the window never became {width}x{height}; it is {:?}",
+                self.geometry()
+            );
+        }
+    }
+
+    /// The main window's size, as X has it.
+    fn geometry(&self) -> Option<(u32, u32)> {
+        let output = Command::new("xdotool")
+            .env("DISPLAY", &self.display)
+            .args(["getwindowgeometry", "--shell", &self.window])
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        let reported = String::from_utf8_lossy(&output.stdout);
+        let read = |key: &str| {
+            reported
+                .lines()
+                .find_map(|line| line.strip_prefix(key))?
+                .parse()
+                .ok()
+        };
+        Some((read("WIDTH=")?, read("HEIGHT=")?))
     }
 
     /// Runs xdotool and insists it worked. For key presses, which have no

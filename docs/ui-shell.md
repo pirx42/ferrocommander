@@ -354,7 +354,7 @@ apps dying at startup on a display that had just answered. A suite that fails
 randomly teaches people to ignore red, so a mutex makes them queue. The cost
 is about half a minute.
 
-Three things the harness learned the hard way, each now a check rather than a
+Four things the harness learned the hard way, each now a check rather than a
 sleep:
 
 - **Wait for the display to be *usable*, not just present.** Xvfb accepts a
@@ -372,6 +372,11 @@ sleep:
   landed, a key press reaches the window that *used* to have it — which is how
   a directory name typed into a dialog ended up in the main window, where
   every letter is unbound and silently does nothing.
+- **A resize request can be swallowed.** Under a bare Xvfb there is no window
+  manager to hold one, and about one launch in five lost it outright — the app
+  then never saw a size change, and the test spent both its timeouts waiting
+  for one. `resize` re-sends until X agrees the window is the size that was
+  asked for.
 - **A window closes on GTK's schedule, not on the keystroke's.** Checking that
   a dialog is gone the instant after dismissing it is a race the test loses
   about a third of the time; `await_dialog_closed` polls instead.

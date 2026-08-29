@@ -25,6 +25,23 @@ is what the date column shows.
 the Windows equivalent, weighed against how much a directory's mtime is worth.
 *From:* [vfs.md](vfs.md), phase 2 sub-phase A.
 
+**`.tar.zst` is not read or written.**
+The v1 scope named it beside `.tar.gz`, and nothing in building the archive
+layer turned up a reason for it: zstd is another compressor and another
+dependency, and `.tar.gz` is what the world actually ships. The format table
+is one match arm and the wrapper is one enum variant, so adding it is small —
+it just has not earned itself.
+*Home:* whenever somebody has a `.tar.zst` they want to open.
+*From:* the phase 7 audit, against the v1 scope list.
+
+**A job can be cancelled but not paused.**
+"pause/cancel" was one phrase in the scope list. What a pause *means* for a
+job holding an open file across a conflict prompt is not one phrase, and
+nothing since has asked for it. Cancel is implemented, tested, and rolls back
+the file it was in the middle of.
+*Home:* if a long copy over a slow mount ever makes somebody want it.
+*From:* the phase 7 audit, against the v1 scope list.
+
 **`.7z` and `.rar` are not read, and probably never will be here.**
 `.rar` has no freely licensed extractor — unrar's licence forbids using it to
 build a competing archiver — and a 7z decoder is a large dependency with no

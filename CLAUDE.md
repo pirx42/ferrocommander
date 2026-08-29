@@ -2,7 +2,7 @@
 
 A keyboard-centric dual-pane file manager for Linux in the style of
 Total Commander (ghisler.com), built from scratch in Rust + GTK4.
-Design and v1 scope: [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md).
+Design and v1 scope: [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md).
 
 **Stack:** Rust + GTK4 (gtk4-rs) · Cargo workspace: `tc-core` (UI-free
 engine: VFS, listing, file ops, archives, search, multi-rename) + `tc-app`
@@ -59,6 +59,11 @@ minute; it runs one app at a time on purpose. See
 The full sequence must be green before every commit — see
 [docs/skills/25-green-suite-before-commit.md](docs/skills/25-green-suite-before-commit.md).
 
+**Documentation links** are checked by `python3 scripts/check-links.py`, which
+reports every relative Markdown link in the repository that goes nowhere. Not
+part of the green gate — it needs no toolchain and takes a second — but run it
+whenever a doc moves. Documentation rots by moving, not by being wrong.
+
 ## Search Defaults (Grep/Glob/Find)
 
 Searches that sweep the whole tree should exclude by default:
@@ -86,8 +91,8 @@ The project is in its build-up phase; this table grows with the code.
 | Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
 | Noticing external changes: the watcher, `Ctrl+R` | [docs/watching.md](docs/watching.md) |
-| Look up v1 scope / architecture | [docs/plans/2026-08-28-tc-clone-design.md](docs/plans/2026-08-28-tc-clone-design.md) |
-| What is being built right now | [docs/plans/2026-08-29-phase7-refactoring-audit.md](docs/plans/2026-08-29-phase7-refactoring-audit.md) — the closing audit; phases 1–6 done |
+| Look up v1 scope / architecture | [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md) |
+| What was built, and what it cost | [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md) § 8 — v1 is implemented, all seven phases |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
 | How fast things are, and what is still slow | [docs/performance.md](docs/performance.md) |
 | What "reliable" means, and where the tests live | [docs/reliability.md](docs/reliability.md) |

@@ -36,7 +36,7 @@ rather than spawned, `Esc` clears it, and the history opens on `Ctrl+↓` **and*
 Decided here: **nothing blocks**. The command runs off the UI thread and the
 window stays live; a second command may start while the first runs. A file
 manager whose prime directive is speed does not get to freeze while
-`find /` finishes ([performance.md](../performance.md)).
+`find /` finishes ([performance.md](../../performance.md)).
 
 ## 3. Phase 0 — coverage pre-check (skill 43)
 
@@ -128,8 +128,8 @@ that makes a command line in a file manager worth having.
 - **`choose_place` became `choose_one`** when the history needed the same
   chooser. It was never about places.
 
-[keymap.md](../keymap.md), [config.md](../config.md), a new
-[command-line.md](../command-line.md), and the audit per skill 49.
+[keymap.md](../../keymap.md), [config.md](../../config.md), a new
+[command-line.md](../../command-line.md), and the audit per skill 49.
 
 ## 5. Risks
 

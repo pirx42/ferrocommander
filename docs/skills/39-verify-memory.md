@@ -59,7 +59,7 @@ Memory: "Function X takes argument Y with default Z"
 - [09-scope-before-implementation.md](09-scope-before-implementation.md) (verification as part
   of scope clarification).
 - Since 2026-08-07, project knowledge lives directly in the repo (skills / GDP /
-  [docs/backlog.md](../backlog.md); plan
-  [2026-08-07-agent-wissen-ins-repository.md](../plans/archive/2026-08-07-agent-wissen-ins-repository.md)).
+  `docs/backlog.md`; plan `2026-08-07-agent-wissen-ins-repository.md` — both
+  in the Chimera project, where this skill came from).
   The local agent memory only holds machine-local facts — this verification
   rule applies unchanged to those entries as well.

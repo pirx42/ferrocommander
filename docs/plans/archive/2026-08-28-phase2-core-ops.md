@@ -8,7 +8,7 @@ Commits 2ac3018 (0) / cf93979 (A) / a271527 (B) / 70bdc9d (C) / 967d2f5 (D) /
 5148fb9 (E) / 6d37cd2 (F).
 
 *2026-08-28 — implements phase 2 of
-[2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md).*
+[2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md).*
 
 > Process: [good-development-practices.md](../../good-development-practices.md),
 > skill triggers in the root [CLAUDE.md](../../CLAUDE.md). Every sub-phase

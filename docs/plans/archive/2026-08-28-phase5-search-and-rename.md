@@ -1,7 +1,7 @@
 # Phase 5 — search (Alt+F7) and the multi-rename tool (Ctrl+M)
 
 **Status:** Implemented
-**Design:** [2026-08-28-tc-clone-design.md](../2026-08-28-tc-clone-design.md) § 6, phase 5.
+**Design:** [2026-08-28-tc-clone-design.md](2026-08-28-tc-clone-design.md) § 6, phase 5.
 
 ## 1. Why
 

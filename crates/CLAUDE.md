@@ -17,7 +17,7 @@ three things at once: archives become browsable folders for free (a pane just
 holds a different `VirtualFs`), copying between local and archive falls out of
 a single code path, and the entire engine is testable without a display
 server. Details:
-[docs/plans/2026-08-28-tc-clone-design.md](../docs/plans/2026-08-28-tc-clone-design.md).
+[docs/plans/2026-08-28-tc-clone-design.md](../docs/plans/archive/2026-08-28-tc-clone-design.md).
 
 **The first claim has now been collected and counted.** Browsing a zip cost
 sixteen lines outside `tc-core::archive`; the two formats after it cost none;

@@ -19,7 +19,8 @@ merging an existing file.
 
 **Linking convention (binding since 2026-05-05).**
 - Internal refs to markdown files: relative `.md` paths with anchor:
-  `[runs.md → Loot-Pools](../runs.md#loot-pools-boss-runjson)`.
+  `[runs.md → Loot-Pools](../runs.md#loot-pools-boss-runjson)` — an example
+  from the Chimera project, where this skill came from.
 - Plan refs as markdown links, not as code spans:
   `[plan-name.md](plans/...)` instead of `` `plans/...` ``.
 - Active plans: `docs/plans/...md`. Archived:
