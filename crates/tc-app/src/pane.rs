@@ -207,7 +207,9 @@ pub struct PaneView {
     store: gio::ListStore,
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
-    listing: Listing,
+    /// Everything that belongs to *what this pane is showing* rather than to
+    /// the pane itself — and therefore everything `Ctrl+U` carries across.
+    shown: Contents,
     /// Watches the directory this pane is showing, so a change made by
     /// anything else reaches it without being asked.
     ///
@@ -238,33 +240,6 @@ pub struct PaneView {
     /// Kept so the two page keys that mark can measure a page; the model has
     /// no idea how tall the viewport is.
     scroller: gtk::ScrolledWindow,
-    /// What was marked when the last job was submitted, for `Num /`.
-    ///
-    /// Names rather than rows, and held by the pane rather than the listing,
-    /// because the listing this refers to no longer exists: every finished job
-    /// builds a new one.
-    remembered_marks: Vec<String>,
-    /// How this pane orders and filters, which belongs to the *pane* and not
-    /// to the directory it happens to be showing.
-    ///
-    /// Every navigation and every finished job builds a fresh `Listing`, so
-    /// without keeping these here they would reset to the defaults each time
-    /// — sorting by size and then copying a file put the order back to name.
-    sort: Sort,
-    show_hidden: bool,
-    /// Shared rather than owned: a running job holds the same backend on its
-    /// worker thread while the pane goes on using it.
-    fs: Arc<dyn VirtualFs>,
-    /// The archives this pane has walked into, outermost first.
-    ///
-    /// The one piece of state entering an archive adds to the shell, and the
-    /// phase 6 plan said so out loud so the audit could check that nothing
-    /// else crept in; it had not. It is what `..` at an archive's root needs: which backend to
-    /// go back to, and which file to put the cursor on.
-    ///
-    /// A stack rather than one slot, because an archive inside an archive is
-    /// then not a case anybody has to think about.
-    entered: Vec<Entered>,
     /// What the read in flight will do to that stack when it lands.
     ///
     /// Applied on arrival rather than when the key was pressed: opening an
@@ -334,8 +309,14 @@ impl PaneView {
         root.append(&status);
 
         let mut pane = PaneView {
-            sort: listing.sort(),
-            show_hidden: listing.show_hidden(),
+            shown: Contents {
+                sort: listing.sort(),
+                show_hidden: listing.show_hidden(),
+                listing,
+                entered: Vec::new(),
+                remembered_marks: Vec::new(),
+                fs,
+            },
             root,
             path_bar,
             filter_bar,
@@ -343,18 +324,14 @@ impl PaneView {
             store,
             selection,
             column_view,
-            listing,
             scroller,
             wanted: None,
             focus_on_arrival: None,
-            entered: Vec::new(),
             transition: Transition::Stay,
             watch: None,
             watched: None,
             renaming: None,
             rename_hook,
-            remembered_marks: Vec::new(),
-            fs,
             error,
         };
         pane.update_headers();
@@ -370,12 +347,12 @@ impl PaneView {
     /// The model behind the pane, for the pure functions that decide what a
     /// keystroke acts on.
     pub fn listing(&self) -> &Listing {
-        &self.listing
+        &self.shown.listing
     }
 
     /// A handle on this pane's backend, for a job that reads or writes here.
     pub fn fs(&self) -> Arc<dyn VirtualFs> {
-        Arc::clone(&self.fs)
+        Arc::clone(&self.shown.fs)
     }
 
     /// Re-reads the directory after a job may have changed it.
@@ -386,13 +363,14 @@ impl PaneView {
     /// somewhere they cannot navigate out of; landing on the nearest
     /// surviving ancestor keeps the pane usable.
     pub fn reload_after_job(&mut self) {
-        let focused = self.listing.current().map(|entry| entry.name.clone());
-        let mut listing = Listing::load_nearest(self.fs.as_ref(), self.listing.dir().clone());
+        let focused = self.shown.listing.current().map(|entry| entry.name.clone());
+        let mut listing =
+            Listing::load_nearest(self.shown.fs.as_ref(), self.shown.listing.dir().clone());
         self.adopt(&mut listing);
         if let Some(name) = focused {
             listing.focus_entry(&name);
         }
-        self.listing = listing;
+        self.shown.listing = listing;
         self.error = None;
         self.refresh();
     }
@@ -405,7 +383,7 @@ impl PaneView {
     pub fn rewatch(&mut self) -> Option<tc_core::watch::Changes> {
         // Set even when the watch could not be started, so a directory that
         // cannot be watched is not retried on every keystroke.
-        self.watched = Some(self.listing.dir().clone());
+        self.watched = Some(self.shown.listing.dir().clone());
         // Inside an archive there is nothing to watch: the path is one this
         // backend understands and the operating system does not, and starting
         // an inotify watch on it would either fail or, worse, register a real
@@ -423,19 +401,19 @@ impl PaneView {
         if let Some(previous) = self.watch.take() {
             std::thread::spawn(move || drop(previous));
         }
-        self.watch = tc_core::watch::Watch::start(self.listing.dir());
+        self.watch = tc_core::watch::Watch::start(self.shown.listing.dir());
         self.watch.as_ref().map(|watch| watch.changes())
     }
 
     /// Whether the watch is about somewhere this pane has since left.
     pub fn watch_is_stale(&self) -> bool {
-        self.watched.as_ref() != Some(self.listing.dir())
+        self.watched.as_ref() != Some(self.shown.listing.dir())
     }
 
     /// The directory this pane is showing, for a watcher to check it is still
     /// the one it was started for.
     pub fn directory(&self) -> VfsPath {
-        self.listing.dir().clone()
+        self.shown.listing.dir().clone()
     }
 
     /// Re-reads the directory, keeping everything the user put there.
@@ -455,7 +433,7 @@ impl PaneView {
         // must not move what is being looked at, and rows above the viewport
         // coming and going is the rarer case.
         let scroll = self.scroller.vadjustment().value();
-        if self.listing.reload(self.fs.as_ref()).is_err() {
+        if self.shown.listing.reload(self.shown.fs.as_ref()).is_err() {
             self.reload_after_job();
             return;
         }
@@ -486,14 +464,14 @@ impl PaneView {
     fn refresh_marks(&mut self) {
         // Which rows actually say something different now. Everything else is
         // left exactly as it is, object identity included.
-        let changed: Vec<usize> = (0..self.listing.len())
+        let changed: Vec<usize> = (0..self.shown.listing.len())
             .filter(|&index| {
                 self.store
                     .item(index as u32)
                     .and_downcast::<PaneEntry>()
                     .is_some_and(|entry| {
                         let renaming = self.renaming.as_deref() == Some(entry.full_name().as_str());
-                        entry.differs(self.listing.is_selected(index), renaming)
+                        entry.differs(self.shown.listing.is_selected(index), renaming)
                     })
             })
             .collect();
@@ -515,20 +493,21 @@ impl PaneView {
         }
 
         self.status
-            .set_text(&crate::jobs::selection_status(&self.listing));
+            .set_text(&crate::jobs::selection_status(&self.shown.listing));
         self.sync_cursor();
     }
 
     /// One row of the store, built from the listing.
     fn entry_at(&self, index: usize) -> PaneEntry {
         let entry = self
+            .shown
             .listing
             .get(index)
             .expect("indices below len() always resolve");
         let mut row = Row::from_entry(
             entry,
-            self.listing.is_parent(index),
-            self.listing.is_selected(index),
+            self.shown.listing.is_parent(index),
+            self.shown.listing.is_selected(index),
         );
         row.renaming = self.renaming.as_deref() == Some(row.full_name.as_str());
         PaneEntry::new(row)
@@ -551,15 +530,15 @@ impl PaneView {
         // Emptying and refilling the store makes the widget move its own
         // selection, which `adopt_selection` would then read back as the
         // user's intent. The model's cursor is restored afterwards.
-        let cursor = self.listing.cursor();
+        let cursor = self.shown.listing.cursor();
         self.store.remove_all();
-        for index in 0..self.listing.len() {
+        for index in 0..self.shown.listing.len() {
             self.store.append(&self.entry_at(index));
         }
 
-        self.listing.set_cursor(cursor);
+        self.shown.listing.set_cursor(cursor);
         self.status
-            .set_text(&crate::jobs::selection_status(&self.listing));
+            .set_text(&crate::jobs::selection_status(&self.shown.listing));
         self.sync_cursor();
     }
 
@@ -578,7 +557,7 @@ impl PaneView {
     /// Applies whatever is in the field.
     pub fn apply_filter(&mut self) {
         let text = self.filter_bar.text().to_string();
-        self.listing.set_filter(&text);
+        self.shown.listing.set_filter(&text);
         self.refresh();
     }
 
@@ -587,7 +566,7 @@ impl PaneView {
     pub fn reset_filter(&mut self) {
         self.filter_bar.set_text("");
         self.filter_bar.set_visible(false);
-        self.listing.set_filter("");
+        self.shown.listing.set_filter("");
         self.refresh();
         self.grab_focus();
     }
@@ -601,27 +580,29 @@ impl PaneView {
     /// Sorts by `key`, flipping the direction when it is already the one in
     /// force.
     pub fn sort_by(&mut self, key: SortKey) {
-        self.sort = self.sort.cycled(key);
-        self.listing.set_sort(self.sort);
+        self.shown.sort = self.shown.sort.cycled(key);
+        self.shown.listing.set_sort(self.shown.sort);
         self.update_headers();
         self.refresh();
     }
 
     /// Shows or hides the dot-files.
     pub fn toggle_hidden(&mut self) {
-        self.show_hidden = !self.show_hidden;
-        self.listing.toggle_hidden();
+        self.shown.show_hidden = !self.shown.show_hidden;
+        self.shown.listing.toggle_hidden();
         self.refresh();
     }
 
     /// Opens the pane with a remembered ordering and hidden-file flag.
     pub fn restore(&mut self, sort: Sort, show_hidden: bool) {
-        self.sort = sort;
-        self.show_hidden = show_hidden;
-        let mut listing =
-            std::mem::replace(&mut self.listing, Listing::new(VfsPath::root(), Vec::new()));
+        self.shown.sort = sort;
+        self.shown.show_hidden = show_hidden;
+        let mut listing = std::mem::replace(
+            &mut self.shown.listing,
+            Listing::new(VfsPath::root(), Vec::new()),
+        );
         self.adopt(&mut listing);
-        self.listing = listing;
+        self.shown.listing = listing;
         self.update_headers();
         self.refresh();
     }
@@ -636,7 +617,7 @@ impl PaneView {
     /// restart lands beside the archive rather than inside it, without a
     /// special case for saying so (`docs/archives.md`).
     pub fn state(&self) -> (VfsPath, Sort, bool) {
-        (self.shown_dir(), self.sort, self.show_hidden)
+        (self.shown_dir(), self.shown.sort, self.shown.show_hidden)
     }
 
     /// Where this pane is, spelled so a person can read it.
@@ -655,11 +636,12 @@ impl PaneView {
     /// Everything a *person* reads uses this: the path bar, the command
     /// line's prompt, and the settings file.
     pub fn shown_dir(&self) -> VfsPath {
-        if self.entered.is_empty() {
+        if self.shown.entered.is_empty() {
             return self.target_dir();
         }
         let mut path = VfsPath::root();
         for step in self
+            .shown
             .entered
             .iter()
             .map(|entered| &entered.archive)
@@ -675,8 +657,8 @@ impl PaneView {
     /// Puts this pane's ordering, hidden-file flag and filter onto a listing
     /// that has just been read.
     fn adopt(&self, listing: &mut Listing) {
-        listing.set_sort(self.sort);
-        if listing.show_hidden() != self.show_hidden {
+        listing.set_sort(self.shown.sort);
+        if listing.show_hidden() != self.shown.show_hidden {
             listing.toggle_hidden();
         }
         listing.set_filter(&self.filter_bar.text());
@@ -687,7 +669,7 @@ impl PaneView {
     /// The header text is the marker: this shell sorts in the model, so there
     /// is no GTK sorter whose arrow GTK would draw for us.
     fn update_headers(&self) {
-        let sort = self.listing.sort();
+        let sort = self.shown.listing.sort();
         for (position, column) in Column::ALL.iter().enumerate() {
             let Some(view_column) = self
                 .column_view
@@ -718,8 +700,10 @@ impl PaneView {
     /// its mark off again.
     pub fn toggle_mark(&mut self, step: isize) {
         self.adopt_selection();
-        self.listing.toggle_selected(self.listing.cursor());
-        self.listing.move_cursor_by(step);
+        self.shown
+            .listing
+            .toggle_selected(self.shown.listing.cursor());
+        self.shown.listing.move_cursor_by(step);
         self.refresh_marks();
     }
 
@@ -730,9 +714,10 @@ impl PaneView {
     /// is not what a person asking for "to the end" means.
     pub fn extend_mark_to(&mut self, target: usize) {
         self.adopt_selection();
-        self.listing
-            .select_range(self.listing.cursor(), target, true);
-        self.listing.set_cursor(target);
+        self.shown
+            .listing
+            .select_range(self.shown.listing.cursor(), target, true);
+        self.shown.listing.set_cursor(target);
         self.refresh_marks();
     }
 
@@ -746,16 +731,12 @@ impl PaneView {
     pub fn exchange_with(&mut self, other: &mut PaneView) {
         self.adopt_selection();
         other.adopt_selection();
-        // The backend and the archive stack travel with the listing. Swapping
-        // only the listing would leave each pane showing the other's entries
-        // through its own backend — which, once one of them can be an archive,
-        // is two panes both looking at the wrong filesystem.
-        std::mem::swap(&mut self.fs, &mut other.fs);
-        std::mem::swap(&mut self.entered, &mut other.entered);
-        std::mem::swap(&mut self.listing, &mut other.listing);
-        std::mem::swap(&mut self.sort, &mut other.sort);
-        std::mem::swap(&mut self.show_hidden, &mut other.show_hidden);
-        std::mem::swap(&mut self.remembered_marks, &mut other.remembered_marks);
+        // One swap, not six. Naming the fields one at a time is what let the
+        // backend and the archive stack be forgotten when archives arrived,
+        // and every field that joins `Contents` from now on travels by
+        // construction — `Contents` itself says what is deliberately not in
+        // it, and why.
+        std::mem::swap(&mut self.shown, &mut other.shown);
         let filter = self.filter_bar.text();
         self.set_filter_text(&other.filter_bar.text());
         other.set_filter_text(&filter);
@@ -786,7 +767,7 @@ impl PaneView {
     /// that is a trade worth making even when the case is unreachable.
     pub fn begin_rename(&mut self) {
         self.adopt_selection();
-        if self.listing.is_parent(self.listing.cursor()) {
+        if self.shown.listing.is_parent(self.shown.listing.cursor()) {
             return;
         }
         self.renaming = self.current_name();
@@ -813,7 +794,7 @@ impl PaneView {
 
     /// The name of the row under the cursor.
     pub fn current_name(&self) -> Option<String> {
-        self.listing.current().map(|entry| entry.name.clone())
+        self.shown.listing.current().map(|entry| entry.name.clone())
     }
 
     /// The path of the row under the cursor, when it is a **file**.
@@ -821,11 +802,11 @@ impl PaneView {
     /// `None` on `..` and on a directory: what F3 and F4 do with one is
     /// nothing, which is what Total Commander does too.
     pub fn current_file(&self) -> Option<VfsPath> {
-        let entry = self.listing.current()?;
-        if entry.is_dir() || self.listing.is_parent(self.listing.cursor()) {
+        let entry = self.shown.listing.current()?;
+        if entry.is_dir() || self.shown.listing.is_parent(self.shown.listing.cursor()) {
             return None;
         }
-        self.listing.current_path()
+        self.shown.listing.current_path()
     }
 
     /// Whether the last navigation failed and left the pane where it was.
@@ -835,11 +816,11 @@ impl PaneView {
 
     /// Where the cursor is, and the last row it could be on.
     pub fn cursor(&self) -> usize {
-        self.listing.cursor()
+        self.shown.listing.cursor()
     }
 
     pub fn last_row(&self) -> usize {
-        self.listing.len().saturating_sub(1)
+        self.shown.listing.len().saturating_sub(1)
     }
 
     /// How many rows fit on screen, for the two page keys that mark.
@@ -853,7 +834,7 @@ impl PaneView {
     pub fn page_rows(&self) -> usize {
         let adjustment = self.scroller.vadjustment();
         let (content, viewport) = (adjustment.upper(), adjustment.page_size());
-        let rows = self.listing.len() as f64;
+        let rows = self.shown.listing.len() as f64;
         if content <= 0.0 || viewport <= 0.0 || rows <= 0.0 {
             return PAGE_ROWS_FALLBACK;
         }
@@ -862,7 +843,7 @@ impl PaneView {
     }
 
     pub fn mark_matching(&mut self, pattern: &str, selected: bool) {
-        self.listing.select_matching(pattern, selected);
+        self.shown.listing.select_matching(pattern, selected);
         self.refresh_marks();
     }
 
@@ -870,27 +851,27 @@ impl PaneView {
     /// `Num *`. `including_folders` is its `Shift+Num *`.
     pub fn invert_marks(&mut self, including_folders: bool) {
         if including_folders {
-            self.listing.invert_selection();
+            self.shown.listing.invert_selection();
         } else {
-            self.listing.invert_selection_files();
+            self.shown.listing.invert_selection_files();
         }
         self.refresh_marks();
     }
 
     pub fn mark_all(&mut self) {
-        self.listing.select_all();
+        self.shown.listing.select_all();
         self.refresh_marks();
     }
 
     pub fn unmark_all(&mut self) {
-        self.listing.clear_selection();
+        self.shown.listing.clear_selection();
         self.refresh_marks();
     }
 
     /// `Alt+Num ±`: every visible file sharing the cursor row's extension.
     pub fn mark_same_extension(&mut self, selected: bool) {
         self.adopt_selection();
-        self.listing.select_same_extension(selected);
+        self.shown.listing.select_same_extension(selected);
         self.refresh_marks();
     }
 
@@ -899,14 +880,14 @@ impl PaneView {
     /// Called when a job is submitted rather than when it finishes: the job
     /// ends with a fresh listing, and by then the marks it consumed are gone.
     pub fn remember_marks(&mut self) {
-        self.remembered_marks = self.listing.selected_names();
+        self.shown.remembered_marks = self.shown.listing.selected_names();
     }
 
     /// `Num /`: the selection from before the last operation.
     pub fn restore_marks(&mut self) {
-        let remembered = std::mem::take(&mut self.remembered_marks);
-        self.listing.set_selected_names(&remembered);
-        self.remembered_marks = remembered;
+        let remembered = std::mem::take(&mut self.shown.remembered_marks);
+        self.shown.listing.set_selected_names(&remembered);
+        self.shown.remembered_marks = remembered;
         self.refresh_marks();
     }
 
@@ -921,7 +902,7 @@ impl PaneView {
     /// *its* focus, so the focus has to follow our cursor or paging resumes
     /// from wherever it last was.
     fn sync_cursor(&self) {
-        if self.listing.is_empty() {
+        if self.shown.listing.is_empty() {
             return;
         }
         // While a row is being renamed the focus belongs to its editor, and
@@ -934,7 +915,7 @@ impl PaneView {
             Some(_) => gtk::ListScrollFlags::empty(),
             None => gtk::ListScrollFlags::FOCUS,
         };
-        let row = self.listing.cursor() as u32;
+        let row = self.shown.listing.cursor() as u32;
         self.column_view
             .scroll_to(row, None, focus | gtk::ListScrollFlags::SELECT, None);
     }
@@ -951,23 +932,23 @@ impl PaneView {
     /// viewport, and the model has no idea how many rows are on screen.
     pub fn adopt_selection(&mut self) {
         if let Some(cursor) = adopted_cursor(self.selection.selected()) {
-            self.listing.set_cursor(cursor);
+            self.shown.listing.set_cursor(cursor);
         }
     }
 
     /// Moves the cursor by `delta` rows.
     pub fn move_cursor_by(&mut self, delta: isize) {
-        self.listing.move_cursor_by(delta);
+        self.shown.listing.move_cursor_by(delta);
         self.sync_cursor();
     }
 
     pub fn move_cursor_to_first(&mut self) {
-        self.listing.move_cursor_to_first();
+        self.shown.listing.move_cursor_to_first();
         self.sync_cursor();
     }
 
     pub fn move_cursor_to_last(&mut self) {
-        self.listing.move_cursor_to_last();
+        self.shown.listing.move_cursor_to_last();
         self.sync_cursor();
     }
 
@@ -986,10 +967,10 @@ impl PaneView {
     /// no way out but Backspace.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     pub fn leave_for(&mut self, dir: VfsPath) -> Loading {
-        let outermost = self
-            .entered
-            .first()
-            .map_or_else(|| Arc::clone(&self.fs), |entered| Arc::clone(&entered.fs));
+        let outermost = self.shown.entered.first().map_or_else(
+            || Arc::clone(&self.shown.fs),
+            |entered| Arc::clone(&entered.fs),
+        );
         self.start(dir.clone(), None);
         self.transition = Transition::Adopt(Vec::new());
         Listing::spawn_load(outermost, dir)
@@ -1002,9 +983,9 @@ impl PaneView {
     /// inside an archive is a path on the disk that has nothing to do with it.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     pub fn follow(&mut self, other: &PaneView) -> Loading {
-        let (fs, dir) = (Arc::clone(&other.fs), other.target_dir());
+        let (fs, dir) = (Arc::clone(&other.shown.fs), other.target_dir());
         self.start(dir.clone(), None);
-        self.transition = Transition::Adopt(other.entered.clone());
+        self.transition = Transition::Adopt(other.shown.entered.clone());
         Listing::spawn_load(fs, dir)
     }
 
@@ -1013,7 +994,7 @@ impl PaneView {
     /// for.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     pub fn activate(&mut self) -> Option<Loading> {
-        match activation_step(&self.listing)? {
+        match activation_step(&self.shown.listing)? {
             Step::Into(target) => Some(self.navigate_to(target)),
             Step::Enter(archive) => Some(self.enter_archive(archive)),
             Step::Out => self.go_parent(),
@@ -1023,8 +1004,8 @@ impl PaneView {
     /// Opens the archive at `archive` and shows its root.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     fn enter_archive(&mut self, archive: VfsPath) -> Loading {
-        let outer = Arc::clone(&self.fs);
-        let mut stack = self.entered.clone();
+        let outer = Arc::clone(&self.shown.fs);
+        let mut stack = self.shown.entered.clone();
         stack.push(Entered {
             fs: Arc::clone(&outer),
             archive: archive.clone(),
@@ -1044,13 +1025,13 @@ impl PaneView {
     /// remembers what it entered.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     pub fn go_parent(&mut self) -> Option<Loading> {
-        if let Some(target) = parent_target(&self.listing) {
+        if let Some(target) = parent_target(&self.shown.listing) {
             return Some(self.navigate_to(target));
         }
-        let entered = self.entered.last()?;
+        let entered = self.shown.entered.last()?;
         let (outer, archive) = (Arc::clone(&entered.fs), entered.archive.clone());
         let containing = archive.parent()?;
-        let mut stack = self.entered.clone();
+        let mut stack = self.shown.entered.clone();
         stack.pop();
         self.start(containing.clone(), archive.file_name().map(str::to_string));
         self.transition = Transition::Adopt(stack);
@@ -1063,7 +1044,7 @@ impl PaneView {
     /// directory watcher and the command line — because an archive has no path
     /// the operating system knows (`docs/archives.md`).
     pub fn in_archive(&self) -> bool {
-        !self.entered.is_empty()
+        !self.shown.entered.is_empty()
     }
 
     /// Shows `dir`, or stays put and reports why it could not.
@@ -1078,10 +1059,10 @@ impl PaneView {
     /// nothing to put there that is more true than what is already on screen.
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     fn navigate_to(&mut self, dir: VfsPath) -> Loading {
-        let focus = focus_after_move(self.listing.dir(), &dir);
+        let focus = focus_after_move(self.shown.listing.dir(), &dir);
         self.start(dir.clone(), focus);
         self.transition = Transition::Stay;
-        Listing::spawn_load(Arc::clone(&self.fs), dir)
+        Listing::spawn_load(Arc::clone(&self.shown.fs), dir)
     }
 
     /// Records that a move to `dir` is in flight, whatever backend answers it.
@@ -1125,7 +1106,7 @@ impl PaneView {
     pub fn target_dir(&self) -> VfsPath {
         self.wanted
             .clone()
-            .unwrap_or_else(|| self.listing.dir().clone())
+            .unwrap_or_else(|| self.shown.listing.dir().clone())
     }
 
     /// Takes a listing that was read on a worker thread.
@@ -1146,9 +1127,9 @@ impl PaneView {
                 // it — into an archive, or back out of one — takes effect at
                 // the moment there is something to show, and a step that
                 // failed leaves the pane exactly where it was.
-                self.fs = fs;
+                self.shown.fs = fs;
                 if let Transition::Adopt(entered) = transition {
-                    self.entered = entered;
+                    self.shown.entered = entered;
                 }
                 // At the root of an archive there is no parent inside it, and
                 // still somewhere to go: back out. The row is offered here
@@ -1161,7 +1142,7 @@ impl PaneView {
                 if let Some(name) = self.focus_on_arrival.take() {
                     listing.focus_entry(&name);
                 }
-                self.listing = listing;
+                self.shown.listing = listing;
                 self.error = None;
             }
             Err(reason) => {
@@ -1317,6 +1298,47 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
 fn list_item(item: &glib::Object) -> &gtk::ListItem {
     item.downcast_ref::<gtk::ListItem>()
         .expect("a column view factory always yields ListItems")
+}
+
+/// What a pane is showing, as opposed to the pane itself.
+///
+/// The grouping exists because `Ctrl+U` swaps exactly this and nothing else.
+/// It used to name six fields one at a time, and that shape has already cost
+/// a real bug: when archives arrived, `fs` and `entered` were added to the
+/// pane and forgotten in the swap, so each pane went on reading the other's
+/// entries through its own backend. Every field added here now travels by
+/// construction, and a field added to `PaneView` deliberately does not.
+///
+/// **What is not here, and why.** The directory watch is rebuilt by the shell
+/// after any move, so swapping it would be work undone a moment later. A read
+/// in flight (`wanted`, `focus_on_arrival`, `transition`) is addressed to the
+/// pane that asked for it, not to the contents. An open inline rename belongs
+/// to the widget the user is typing into. And the quick filter's text lives in
+/// a `gtk::Entry`, which stays with the pane — so `exchange_with` moves that
+/// one by hand, and it is the only exception.
+struct Contents {
+    listing: Listing,
+    /// How this pane orders and filters, which belongs to what is shown and
+    /// not to the directory: every navigation and every finished job builds a
+    /// fresh `Listing`, so without keeping these the order would reset each
+    /// time — sorting by size and then copying a file put it back to name.
+    sort: Sort,
+    show_hidden: bool,
+    /// Shared rather than owned: a running job holds the same backend on its
+    /// worker thread while the pane goes on using it.
+    fs: Arc<dyn VirtualFs>,
+    /// The archives this pane has walked into, outermost first.
+    ///
+    /// What `..` at an archive's root needs: which backend to go back to, and
+    /// which file to put the cursor on. A stack rather than one slot, because
+    /// an archive inside an archive is then not a case anybody has to think
+    /// about.
+    entered: Vec<Entered>,
+    /// What was marked when the last job was submitted, for `Num /`.
+    ///
+    /// Names rather than rows, because the listing this refers to no longer
+    /// exists: every finished job builds a new one.
+    remembered_marks: Vec<String>,
 }
 
 /// An archive this pane walked into, and where it came from.

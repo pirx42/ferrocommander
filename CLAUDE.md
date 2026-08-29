@@ -58,6 +58,10 @@ minute; it runs one app at a time on purpose. See
 
 The full sequence must be green before every commit — see
 [docs/skills/25-green-suite-before-commit.md](docs/skills/25-green-suite-before-commit.md).
+**Run it as `scripts/green-gate.sh`**, which runs every step, reports each one,
+and fails loudly if any failed. Typing the chain by hand is how a red clippy
+gets hidden behind a green test run — that has happened, which is why the
+script exists.
 
 **Documentation links** are checked by `python3 scripts/check-links.py`, which
 reports every relative Markdown link in the repository that goes nowhere. Not
