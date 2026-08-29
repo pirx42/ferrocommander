@@ -1,11 +1,12 @@
 # Architecture and redundancy review
 
-**Status:** Implemented — all nine items, plus the audit phase
-(commits `5c601ef`…`3ad55f8` on `claude/architecture-and-redundancy-fixes`;
-`git log --grep "architecture-and-redundancy-review"`)
+**Status:** Implemented and archived — all nine items, plus the audit phase.
+Built on `claude/architecture-and-redundancy-fixes` from `5c601ef` and
+fast-forwarded onto `main` on 2026-08-29; the per-item commits are in § 7,
+and `git log --grep "architecture-and-redundancy-review"` finds the rest.
 **Scope:** the whole of `crates/`, 14 139 lines of code and 9 730 of tests
 **Follows:** the phase 7 audit
-([archive/2026-08-29-phase7-refactoring-audit.md](2026-08-29-phase7-refactoring-audit.md)),
+([2026-08-29-phase7-refactoring-audit.md](2026-08-29-phase7-refactoring-audit.md)),
 and looks for what it did not catch.
 
 > Skill [47](../../skills/47-architecture-audit-with-subagents.md) asks for
