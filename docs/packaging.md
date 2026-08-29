@@ -75,6 +75,34 @@ have been wrong in somebody's package before:
   An invalid one does not stop the installation; it stops the launcher entry
   appearing, silently.
 
+## The workflow, and what could be checked about it before it ran
+
+`.github/workflows/main.yml`: on a push to `main` (or by hand), Ubuntu 24.04,
+install the dependencies, run the gate, run the packaging script, replace the
+release. `contents: write` and nothing else; `concurrency` cancels an
+in-flight run when a second commit arrives, because the release only ever
+holds the newest build.
+
+The file cannot be run before it is pushed. Three things about it *could* be
+checked here, and were:
+
+- **It parses**, and every `run:` block is valid shell (`bash -n`).
+- **The release step does what it reads like.** Run with `gh` stubbed out,
+  the SHA reaches `--target`, the notes stay one argument, and the glob finds
+  the built `.deb`.
+- **The scripts it calls are executable in the index**, `100755`, which a
+  workflow discovers by failing.
+
+One line was removed by reading rather than by running: the gate was wrapped
+in `xvfb-run`, and the end-to-end harness starts an `Xvfb` of its own per test
+on its own display numbers — so the outer server would have been one nothing
+connects to.
+
+**What is left unchecked** is everything that needs GitHub: whether the runner
+image has what the `apt-get` line assumes, whether `gh release delete` and
+`create` in sequence are reliable, and whether `fetch-depth: 0` really gives
+`build.rs` the commit count. Those are watched on the first real run.
+
 ## What was checked by hand, once
 
 Built here, installed with `dpkg -i`, started under Xvfb — the window came up

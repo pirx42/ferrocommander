@@ -1,0 +1,84 @@
+# Verifies every commit to `main` and publishes an Ubuntu package.
+#
+# **Deliberately almost empty.** A workflow can only be tested by pushing it —
+# no local run, no probe, no green gate — so the logic lives in two scripts
+# that run on a laptop, and this file installs what they need and calls them.
+# Every line here that is not such a call is a line nobody can check before it
+# runs for real (`docs/packaging.md`).
+name: main
+
+on:
+  push:
+    branches: [main]
+  # So the packaging can be exercised without waiting for a commit.
+  workflow_dispatch:
+
+# Read-only except for the one thing this has to do: replace a release. A
+# workflow that runs on every commit to the default branch is the most
+# attractive thing in the repository to whoever compromises a dependency.
+permissions:
+  contents: write
+
+concurrency:
+  # A second commit while the first is still building makes the first
+  # pointless: the release only ever holds the newest build.
+  group: main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Pinned, not `ubuntu-latest`. 24.04 is the oldest Ubuntu with GTK 4.14,
+    # and this needs 4.12; `latest` moves, and the day it does, the package
+    # quietly stops installing on the oldest release it supports.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `build.rs` and the package version both count commits, so a
+          # shallow clone would report a build number of one.
+          fetch-depth: 0
+
+      - name: Install what the gate and the package need
+        # xvfb and xdotool are not optional garnish: without them the
+        # end-to-end suite fails by design, because a UI test that quietly
+        # skips is worse than no UI test.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libgtk-4-dev xvfb xdotool desktop-file-utils
+          rustup target add x86_64-pc-windows-gnu
+          cargo install cargo-deb --locked
+
+      - name: Green gate
+        # fmt, clippy, the Windows clippy branch, every test including the
+        # end-to-end suite, the release build, the documentation links. A
+        # package built from an unverified commit is a package of unknown
+        # quality.
+        # No `xvfb-run` around it: the end-to-end harness starts an `Xvfb` of
+        # its own per test, on its own display numbers, so an outer server
+        # would be one nothing connects to.
+        run: ./scripts/green-gate.sh
+
+      - name: Package
+        run: ./scripts/package-deb.sh
+
+      - name: Publish the rolling build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # One release, replaced every time, so the download URL is stable and
+        # yesterday's builds do not accumulate. Deleted and recreated rather
+        # than edited: `gh release upload --clobber` leaves the old notes and
+        # the old tag target behind, pointing at a commit that is no longer
+        # what the asset was built from.
+        run: |
+          gh release delete main --yes --cleanup-tag || true
+          gh release create main \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Latest build from main" \
+            --notes "Built from ${GITHUB_SHA}. Ubuntu 24.04 or later.
+
+          Install with \`sudo apt install ./ferrocommander_*.deb\`, which pulls
+          in the GTK 4 runtime; \`dpkg -i\` will not." \
+            target/debian/*.deb
