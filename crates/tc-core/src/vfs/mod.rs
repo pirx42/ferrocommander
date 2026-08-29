@@ -52,6 +52,16 @@ pub fn mount_for(path: &VfsPath, mounts: &[Mount]) -> Option<VfsPath> {
         .map(|mount| mount.path.clone())
 }
 
+/// The attributes an archive's recorded Unix mode amounts to on this platform.
+///
+/// Unix keeps the bits; Windows has nowhere to put them and reports none. Here
+/// rather than in the archive layer because what an `Attributes` *means* is
+/// this module's business, and an archive that reached into the raw value
+/// would be the second place that decides — which is how the two drift apart.
+pub fn attributes_from_unix_mode(mode: u32) -> Attributes {
+    platform::attributes_from_unix_mode(mode)
+}
+
 /// The attributes of an entry, written the way the platform writes them:
 /// `rwxr-xr-x` on Unix, `RHSA` on Windows.
 pub fn render_attributes(attributes: Attributes) -> String {

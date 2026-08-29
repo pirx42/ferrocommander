@@ -46,6 +46,22 @@ toml_edit = "0.23"
 # never does; the Windows COM apartment feature is kept, because dropping it
 # would silently change how the crate initializes COM there.
 trash = { version = "5", default-features = false, features = ["coinit_apartmentthreaded"] }
+# Reading archives as directories (docs/archives.md). `zip` is used as a
+# *parser*: default features off, so bzip2, zstd and lzma — three compressors
+# with no evidence anybody needs them here, two of which want a C toolchain
+# the Windows target does not have — stay out. `deflate` is on because the
+# method has to be nameable to be recognised at all, and it costs nothing:
+# flate2 is a dependency either way.
+#
+# The entry bytes are decoded here rather than by the crate, through flate2
+# over the raw range the central directory points at. That is what lets
+# `open_read` return an owned, streaming decoder instead of something
+# borrowing an archive handle behind a mutex — which a VirtualFs handed to a
+# worker thread cannot be.
+zip = { version = "8", default-features = false, features = ["deflate"] }
+# The deflate decoder those readers are built on, and the CRC that checks
+# them. Also what a `.tar.gz` is unwrapped with.
+flate2 = "1"
 # The GTK4 bindings, pinned to the GTK 4.12 API.
 #
 # The floor was 4.0 on the assumption that the shell needed nothing newer.

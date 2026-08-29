@@ -76,6 +76,7 @@ The project is in its build-up phase; this table grows with the code.
 | Read/list files, path handling, platform differences | [docs/vfs.md](docs/vfs.md) |
 | Sorting, hidden files, cursor, the `..` row | [docs/listing.md](docs/listing.md) |
 | Copy/move/delete/mkdir, progress, conflicts, cancel | [docs/ops.md](docs/ops.md) |
+| Browsing, unpacking and packing archives | [docs/archives.md](docs/archives.md) |
 | Search by name or content (Alt+F7) | [docs/search.md](docs/search.md) |
 | Renaming many files by a rule (Ctrl+M), undo | [docs/multi-rename.md](docs/multi-rename.md) |
 | Looking inside a file: F3, paging, encodings, the F4 editor hook | [docs/viewer.md](docs/viewer.md) |

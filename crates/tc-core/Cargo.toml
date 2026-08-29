@@ -9,12 +9,19 @@ repository.workspace = true
 
 [dependencies]
 async-channel.workspace = true
+flate2.workspace = true
 notify.workspace = true
 serde.workspace = true
 toml.workspace = true
 toml_edit.workspace = true
 trash.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 async-channel.workspace = true
 tempfile.workspace = true
+# The archive tests build their own zips. Reading back what this same crate
+# wrote proves the index and the decoders, not that anybody else's zip parses
+# — `tests/fixtures/interop.zip`, written by Info-ZIP's `zip(1)`, is what
+# proves that.
+zip.workspace = true

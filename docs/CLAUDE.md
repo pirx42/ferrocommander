@@ -24,6 +24,9 @@ cross-references instead of duplication.
   the directory watcher, `Ctrl+R`, and what survives a re-read.
 - [search.md](search.md) — Alt+F7: why the walk streams and stops, and what
   choosing a result does.
+- [archives.md](archives.md) — archives as directories: why the backend is
+  read-only, what holds an archive open, and why an entry cannot name a path
+  outside it.
 - [multi-rename.md](multi-rename.md) — Ctrl+M: why the preview is the
   rename, what the rules are, and how one batch of undo works.
 - [viewer.md](viewer.md) — the F3 viewer: why it never reads the file, how

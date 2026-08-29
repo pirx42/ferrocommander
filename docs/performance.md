@@ -75,6 +75,40 @@ filesystem. Marks cost nothing to carry because they are a `Vec<bool>` beside
 the entries, and the filter is folded into the pass that was already
 happening.
 
+## Archives
+
+Release build, a 10 000-entry zip with an 8 MB member, best of five.
+
+| | Stored | Deflated |
+|---|---|---|
+| Open the archive (10 000 entries) | **49 ms** | 50 ms |
+| List one directory inside it | **24 µs** | 26 µs |
+| A 64 KB window at offset 0 | **5.7 µs** | 22 µs |
+| A 64 KB window at offset 8 MB | **5.4 µs** | 1.4 ms |
+| Stream the whole 8 MB member | 1.6 ms | 1.5 ms |
+
+**Opening is buffered, and at 8 KiB rather than 64.** The parse seeks
+constantly — the end-of-directory record, then every entry's local header —
+and each seek throws a buffer away. Unbuffered, 10 000 entries take **63 ms**;
+buffered at the default 8 KiB, **49 ms**; buffered at the 64 KiB the rest of
+the layer reads in, **152 ms**, because each seek then discards eight times as
+much. Pinned by a read *count* rather than a time: opening 200 entries is
+allowed five container reads per two entries, which sits between the 403 it
+takes buffered and the 603 it takes without.
+
+**Browsing an open archive reads nothing at all.** The index is complete when
+the archive opens, so a listing inside it is a map lookup — which is what makes
+walking around in one instant. Pinned by a test asserting the container is not
+touched.
+
+**A window of a stored entry is a window of the file.** Reading near the end of
+an 8 MB stored member costs one read; the same window of a compressed member
+costs 1.4 ms, because a deflate stream has no seek and has to be decoded from
+the start. That is the honest cost of the format — a cache would move it, not
+remove it — and it is why the fast path exists for the common case of an
+already-compressed payload sitting in a zip. Pinned by a test asserting the
+stored window takes exactly one container read.
+
 ## What is deliberately still slow
 
 **The listing loads whole directories.** No pagination, no incremental

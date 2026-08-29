@@ -25,6 +25,15 @@ is what the date column shows.
 the Windows equivalent, weighed against how much a directory's mtime is worth.
 *From:* [vfs.md](vfs.md), phase 2 sub-phase A.
 
+**Only zip is readable, and `.7z` and `.rar` never will be here.**
+`.rar` has no freely licensed extractor — unrar's licence forbids using it to
+build a competing archiver — and a 7z decoder is a large dependency with no
+evidence anybody here wants it. `.tar` and `.tar.gz` are wanted and are
+phase 6 sub-phase B. An archive in an unsupported format stays an ordinary
+file: it is listed, viewed and copied, it simply does not open as a directory.
+*Home:* `.tar` next; the other two only if somebody asks with a use for them.
+*From:* [archives.md](archives.md), phase 6 sub-phase A.
+
 **Undo is one multi-rename deep.**
 `Ctrl+Z` puts the last batch back and forgets it. Nothing else in the program
 is undoable, and a rename stack would be the visible half of a general

@@ -18,7 +18,8 @@
 //!   place per-user settings belong.
 //! - [`attributes`] and [`render_attributes`] read and show the permission
 //!   or attribute bits, which are entirely different things on the two
-//!   platforms.
+//!   platforms; [`attributes_from_unix_mode`] takes the mode an archive
+//!   recorded and says what it amounts to here.
 //! - [`set_attributes`] puts them back onto a copy.
 //! - [`mount_points`] lists the places the drive bar offers.
 //! - [`trash_error`] maps a `trash` failure onto [`VfsError`]. It lives here
@@ -43,6 +44,12 @@ mod imp {
     pub fn attributes(metadata: &std::fs::Metadata) -> Attributes {
         use std::os::unix::fs::PermissionsExt;
         Attributes::from_raw(metadata.permissions().mode())
+    }
+
+    /// A mode an archive recorded is already what this platform means by
+    /// attributes, so it is kept as it is.
+    pub fn attributes_from_unix_mode(mode: u32) -> Attributes {
+        Attributes::from_raw(mode)
     }
 
     /// `rwxr-xr-x`, the form every Unix tool prints.
@@ -241,6 +248,13 @@ mod imp {
         Attributes::from_raw(metadata.file_attributes())
     }
 
+    /// Windows has nowhere to put a Unix mode, and the raw value it does keep
+    /// means something else entirely — so a zip made on Linux shows no
+    /// attributes here rather than a row of nonsense flags.
+    pub fn attributes_from_unix_mode(_mode: u32) -> Attributes {
+        Attributes::default()
+    }
+
     /// `RHSA`, the letters Total Commander shows, with a dash where a flag is
     /// absent.
     pub fn render_attributes(attributes: Attributes) -> String {
@@ -342,8 +356,8 @@ mod imp {
 }
 
 pub use imp::{
-    attributes, config_dir, from_std_path, home_dir, is_hidden, mount_points, render_attributes,
-    root_entries, set_attributes, to_std_path, trash_error,
+    attributes, attributes_from_unix_mode, config_dir, from_std_path, home_dir, is_hidden,
+    mount_points, render_attributes, root_entries, set_attributes, to_std_path, trash_error,
 };
 
 #[cfg(test)]

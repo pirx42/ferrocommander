@@ -113,6 +113,13 @@ pub enum VfsError {
     /// A rename would have crossed filesystems, which no filesystem can do
     /// atomically. The engine answers with copy + delete.
     CrossDevice,
+    /// The backend cannot be written to at all. An archive says this to every
+    /// mutating call rather than to some of them: it is a property of the
+    /// backend, not of the path, and the engine reports it once instead of
+    /// discovering it per file.
+    ReadOnly,
+    /// A file was opened as an archive and is not one this build can read.
+    NotAnArchive,
     /// Anything the layer does not model explicitly, with the original message
     /// preserved for the job log.
     Io(String),
@@ -143,6 +150,8 @@ impl fmt::Display for VfsError {
             VfsError::NotEmpty => write!(f, "directory is not empty"),
             VfsError::IsADirectory => write!(f, "is a directory"),
             VfsError::CrossDevice => write!(f, "on a different filesystem"),
+            VfsError::ReadOnly => write!(f, "this filesystem cannot be written to"),
+            VfsError::NotAnArchive => write!(f, "not an archive this program can read"),
             VfsError::Io(message) => write!(f, "{message}"),
         }
     }

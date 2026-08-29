@@ -129,6 +129,8 @@ render. The original message survives in `Io` for the job log.
 | `NotEmpty` | `remove_dir` on a directory with contents |
 | `IsADirectory` | `remove_file` aimed at a directory |
 | `CrossDevice` | `rename` across filesystems; the engine answers with copy + delete |
+| `ReadOnly` | any mutating call on a backend that has no write side at all, such as an [archive](archives.md) |
+| `NotAnArchive` | opening a file as an archive when it is not one this build reads |
 | `Io(String)` | anything unmodelled, description preserved |
 
 ## Platform differences
