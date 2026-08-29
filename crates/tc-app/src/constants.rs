@@ -131,6 +131,13 @@ pub const DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
 /// is showing and what somebody would have typed to mean it.
 pub const BRANCH_MARKER: &str = "/**";
 
+/// Marks a counted folder size as a lower bound.
+///
+/// A subdirectory that refused to be read, or a scan that was stopped: the
+/// number is the best answer there is, and a size nobody can trust looking
+/// exactly like one they can is the failure worth one character to avoid.
+pub const SIZE_PARTIAL_MARKER: &str = "+";
+
 /// Separates the directory path from an error notice in the path bar.
 pub const PATH_BAR_ERROR_SEPARATOR: &str = "   ⚠ ";
 

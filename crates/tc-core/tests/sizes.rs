@@ -109,7 +109,7 @@ fn a_measured_size_lands_on_the_row_of_that_name() {
     let (_dir, root) = tree();
     let mut listing = Listing::load(&LocalFs, root).unwrap();
 
-    let row = listing.set_measured("sub", 4096).expect("the row");
+    let row = listing.set_measured("sub", 4096, true).expect("the row");
 
     assert!(listing.is_measured(row));
     assert_eq!(listing.get(row).expect("an entry").size, 4096);
@@ -121,11 +121,24 @@ fn a_measured_folder_counts_towards_the_marked_total() {
     // total the request asked for is the status line's, already rendered.
     let (_dir, root) = tree();
     let mut listing = Listing::load(&LocalFs, root).unwrap();
-    let row = listing.set_measured("sub", 4096).expect("the row");
+    let row = listing.set_measured("sub", 4096, true).expect("the row");
     listing.set_selected(row, true);
 
     assert_eq!(listing.selection_summary().bytes, 4096);
     assert_eq!(listing.selection_summary().count, 1);
+}
+
+#[test]
+fn a_partial_count_says_so_on_its_row() {
+    // A lower bound has to look like one. The row keeps the number — it is
+    // the best answer there is — and carries that it is not the whole story.
+    let (_dir, root) = tree();
+    let mut listing = Listing::load(&LocalFs, root).unwrap();
+
+    let row = listing.set_measured("sub", 4096, false).expect("the row");
+
+    assert!(listing.is_measured(row));
+    assert_eq!(listing.measured_at(row), Some(false));
 }
 
 #[test]
@@ -143,7 +156,7 @@ fn a_re_read_forgets_the_sizes_but_keeps_the_marks() {
     // user's own and survives; a count is the filesystem's and does not.
     let (_dir, root) = tree();
     let mut listing = Listing::load(&LocalFs, root.clone()).unwrap();
-    let row = listing.set_measured("sub", 4096).expect("the row");
+    let row = listing.set_measured("sub", 4096, true).expect("the row");
     listing.set_selected(row, true);
 
     listing.reload(&LocalFs).unwrap();

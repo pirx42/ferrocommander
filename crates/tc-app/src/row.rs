@@ -10,7 +10,7 @@ use gtk::glib;
 use tc_core::listing::split_name;
 use tc_core::vfs::Entry;
 
-use crate::constants::{DATE_FORMAT, DIR_SIZE_LABEL};
+use crate::constants::{DATE_FORMAT, DIR_SIZE_LABEL, SIZE_PARTIAL_MARKER};
 use crate::format::group_digits;
 
 /// One rendered row: four column strings plus what the UI needs to style it.
@@ -37,7 +37,15 @@ pub struct Row {
 
 impl Row {
     /// Renders an entry. `is_parent` marks the synthetic `..` row.
-    pub fn from_entry(entry: &Entry, is_parent: bool, selected: bool) -> Self {
+    /// `measured` is `None` when nobody has counted this directory, and
+    /// `Some(complete)` when somebody has — `false` meaning the count is a
+    /// lower bound. Files ignore it: they have always known their size.
+    pub fn from_entry(
+        entry: &Entry,
+        is_parent: bool,
+        selected: bool,
+        measured: Option<bool>,
+    ) -> Self {
         // A directory called `archive.tar.gz` is not a `.gz` file, so only
         // files get their name split across the name and ext columns.
         let (name, ext) = if entry.is_dir() {
@@ -50,10 +58,15 @@ impl Row {
             name: name.to_string(),
             ext: ext.to_string(),
             full_name: entry.name.clone(),
-            size: if entry.is_dir() {
-                DIR_SIZE_LABEL.to_string()
-            } else {
-                group_digits(entry.size)
+            size: match (entry.is_dir(), measured) {
+                // Counted. The `+` says the number is a lower bound — a
+                // subdirectory refused to be read, or the scan was stopped —
+                // because a size nobody can trust is worse than none.
+                (true, Some(true)) => group_digits(entry.size),
+                (true, Some(false)) => format!("{}{SIZE_PARTIAL_MARKER}", group_digits(entry.size)),
+                // Nobody has counted it, which is what `<DIR>` means.
+                (true, None) => DIR_SIZE_LABEL.to_string(),
+                (false, _) => group_digits(entry.size),
             },
             // `..` is a navigation control, not a file: it carries no real
             // timestamp, and printing the epoch would be a lie.
@@ -128,14 +141,14 @@ mod tests {
 
     #[test]
     fn a_file_name_is_split_across_the_name_and_ext_columns() {
-        let row = Row::from_entry(&file("report.txt", 0), false, false);
+        let row = Row::from_entry(&file("report.txt", 0), false, false, None);
         assert_eq!(row.name, "report");
         assert_eq!(row.ext, "txt");
     }
 
     #[test]
     fn a_directory_keeps_its_whole_name_even_when_it_looks_like_a_file() {
-        let row = Row::from_entry(&directory("archive.tar.gz"), false, false);
+        let row = Row::from_entry(&directory("archive.tar.gz"), false, false, None);
         assert_eq!(row.name, "archive.tar.gz");
         assert_eq!(row.ext, "");
     }
@@ -143,7 +156,7 @@ mod tests {
     #[test]
     fn directories_show_a_dir_marker_instead_of_a_byte_count() {
         assert_eq!(
-            Row::from_entry(&directory("sub"), false, false).size,
+            Row::from_entry(&directory("sub"), false, false, None).size,
             "<DIR>"
         );
     }
@@ -152,9 +165,40 @@ mod tests {
     fn a_symlink_to_a_directory_is_rendered_as_a_directory() {
         let mut entry = file("link", 4096);
         entry.kind = EntryKind::Symlink(SymlinkTarget::Dir);
-        let row = Row::from_entry(&entry, false, false);
+        let row = Row::from_entry(&entry, false, false, None);
         assert_eq!(row.size, "<DIR>");
         assert!(row.is_dir);
+    }
+
+    #[test]
+    fn a_counted_directory_shows_its_size_instead_of_the_marker() {
+        // The whole feature, at the one place it is visible.
+        let mut entry = directory("build");
+        entry.size = 1234567;
+
+        let row = Row::from_entry(&entry, false, false, Some(true));
+
+        assert_eq!(row.size, "1 234 567");
+        assert!(row.is_dir, "it is still a directory");
+    }
+
+    #[test]
+    fn a_counted_directory_of_nothing_shows_zero_not_the_marker() {
+        // Zero is a real answer for an empty folder, and the case that makes
+        // "counted" a flag rather than a non-zero size.
+        let row = Row::from_entry(&directory("empty"), false, false, Some(true));
+
+        assert_eq!(row.size, "0");
+    }
+
+    #[test]
+    fn a_partial_count_is_marked_as_a_lower_bound() {
+        let mut entry = directory("half-read");
+        entry.size = 4096;
+
+        let row = Row::from_entry(&entry, false, false, Some(false));
+
+        assert_eq!(row.size, "4 096+");
     }
 
     #[test]
@@ -170,7 +214,7 @@ mod tests {
         ];
         for (size, expected) in cases {
             assert_eq!(
-                Row::from_entry(&file("f", size), false, false).size,
+                Row::from_entry(&file("f", size), false, false, None).size,
                 expected
             );
         }
@@ -178,7 +222,7 @@ mod tests {
 
     #[test]
     fn the_parent_row_shows_no_timestamp() {
-        let row = Row::from_entry(&directory(".."), true, false);
+        let row = Row::from_entry(&directory(".."), true, false, None);
         assert_eq!(row.name, "..");
         assert_eq!(row.modified, "");
         assert_eq!(row.size, "<DIR>");
@@ -197,7 +241,9 @@ mod tests {
     fn an_ordinary_file_gets_a_timestamp() {
         let mut entry = file("f", 1);
         entry.modified = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
-        assert!(!Row::from_entry(&entry, false, false).modified.is_empty());
+        assert!(!Row::from_entry(&entry, false, false, None)
+            .modified
+            .is_empty());
     }
 
     #[test]
@@ -205,15 +251,15 @@ mod tests {
         // Rendered here, decided in the listing: the cell factory reads this
         // to colour the row, and nothing else in the shell knows the rule.
         let entry = file("report.txt", 10);
-        assert!(!Row::from_entry(&entry, false, false).selected);
-        assert!(Row::from_entry(&entry, false, true).selected);
+        assert!(!Row::from_entry(&entry, false, false, None).selected);
+        assert!(Row::from_entry(&entry, false, true, None).selected);
     }
 
     #[test]
     fn marking_changes_nothing_a_column_shows() {
         let entry = file("report.txt", 1234);
-        let plain = Row::from_entry(&entry, false, false);
-        let marked = Row::from_entry(&entry, false, true);
+        let plain = Row::from_entry(&entry, false, false, None);
+        let marked = Row::from_entry(&entry, false, true, None);
 
         assert_eq!(marked.name, plain.name);
         assert_eq!(marked.ext, plain.ext);

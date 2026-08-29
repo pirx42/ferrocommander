@@ -39,6 +39,7 @@
 | `Alt+F5` | Pack what is marked into a new archive, beside the other pane — see [archives.md](archives.md) |
 | `Ctrl+M` | Rename what is marked by a rule — see [multi-rename.md](multi-rename.md) |
 | `Ctrl+Z` | Put the last multi-rename back |
+| `Alt+Shift+Enter` | Count what the marked folders hold, recursively |
 | `Ctrl+B` | Every file below this pane, as one flat list |
 | `Ctrl+D` | The favourite directories, to pick one and go there |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
@@ -127,6 +128,34 @@ entry, and copying or deleting "the parent directory" from inside it is never
 what the user means. It cannot be marked, and with nothing else marked, F5–F8
 on it do nothing. A mark elsewhere in the pane still counts — the `..` rule is
 about the fallback, not about the marks.
+
+## Counting what a folder holds
+
+A directory row says `<DIR>` because nobody has counted it.
+`Alt+Shift+Enter` counts it — the marked folders, or the one under the cursor
+when nothing is marked, the rule every operation here follows. Marked **files**
+need no counting: they already know their size, and they still count towards
+the total.
+
+**The answer goes in the size column**, which is Total Commander's behaviour
+and is worth more than it looks. The number is the entry's own size from then
+on, so the status line's marked-bytes total includes it — that total *is* the
+accumulated answer — and sorting by size orders the folders properly, which
+is the question that always follows.
+
+**One folder at a time**, each appearing as its scan finishes rather than all
+at the pace of the slowest, and `Escape` stops the rest. The sizes already
+found stay: unlike a half-finished branch walk, each folder's number is its
+own and complete.
+
+**A partial count says so**, with a `+` after the number. A subdirectory that
+refused to be read, or a scan that was stopped, leaves a lower bound — and a
+size nobody can trust looking exactly like one they can is the failure worth
+one character to avoid.
+
+**Nothing is re-sorted while the answers arrive**, and **a re-read forgets
+them** ([listing.md](listing.md)). Pressing the key again counts afresh, which
+is how a stale number is refreshed.
 
 ## The branch view
 

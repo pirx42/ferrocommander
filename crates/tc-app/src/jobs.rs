@@ -103,6 +103,29 @@ pub fn delete_prompt(subject: &str, mode: DeleteMode) -> String {
     template.replace("{subject}", subject)
 }
 
+/// Which folders `Alt+Shift+Enter` counts.
+///
+/// The marks, or the row under the cursor when nothing is marked — the rule
+/// [`sources`] uses, and the reason marking is optional rather than a mode.
+///
+/// **Directories only.** A file already knows its size, so scanning one is
+/// work for an answer in hand; the marked files still count towards the
+/// total, they simply need no counting. Empty when neither applies, which is
+/// a file under the cursor with nothing marked: there is nothing to do, and
+/// nothing is what the key does.
+pub fn folders_to_measure(listing: &Listing) -> Vec<String> {
+    let marked = listing.directory_names(true);
+    if !marked.is_empty() {
+        return marked;
+    }
+    listing
+        .current()
+        .filter(|entry| entry.is_dir())
+        .filter(|_| !listing.is_parent(listing.cursor()))
+        .map(|entry| vec![entry.name.clone()])
+        .unwrap_or_default()
+}
+
 /// What a pane's status line says about the marks.
 pub fn selection_status(listing: &Listing) -> String {
     let marked = listing.selection_summary();
@@ -464,6 +487,44 @@ mod tests {
             matches!(packed_at(&offered, &into), Packing::Into(..)),
             "the prefilled name {offered} would be refused"
         );
+    }
+
+    #[test]
+    fn the_folders_to_count_are_the_marked_ones() {
+        let mut listing = listing_with_cursor_on("notes.txt");
+        listing.focus_entry("photos");
+        listing.toggle_selected(listing.cursor());
+
+        assert_eq!(folders_to_measure(&listing), ["photos"]);
+    }
+
+    #[test]
+    fn with_nothing_marked_it_is_the_folder_under_the_cursor() {
+        let listing = listing_with_cursor_on("photos");
+
+        assert_eq!(folders_to_measure(&listing), ["photos"]);
+    }
+
+    #[test]
+    fn a_file_under_the_cursor_gives_the_key_nothing_to_do() {
+        // Files already know their size. Nothing to count is not an error,
+        // it is a keystroke that does nothing.
+        let listing = listing_with_cursor_on("notes.txt");
+
+        assert!(folders_to_measure(&listing).is_empty());
+    }
+
+    #[test]
+    fn a_marked_file_is_counted_but_never_scanned() {
+        // The status total is over everything marked; only the folders need
+        // counting. Marking the file as well must not put it in the scan.
+        let mut listing = listing_with_cursor_on("notes.txt");
+        listing.toggle_selected(listing.cursor());
+        listing.focus_entry("photos");
+        listing.toggle_selected(listing.cursor());
+
+        assert_eq!(folders_to_measure(&listing), ["photos"]);
+        assert_eq!(listing.selection_summary().count, 2);
     }
 
     #[test]

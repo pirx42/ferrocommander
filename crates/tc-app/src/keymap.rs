@@ -109,6 +109,8 @@ pub enum Action {
     Favourites,
     /// `Ctrl+B`: every file below this pane, as one flat list.
     BranchView,
+    /// `Alt+Shift+Enter`: count what the marked folders hold.
+    FolderSizes,
     SelectDriveLeft,
     /// Alt+F2 — the same for the right pane.
     SelectDriveRight,
@@ -139,7 +141,7 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 54] = [
+    const ALL: [Action; 55] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
@@ -187,6 +189,7 @@ impl Action {
         Action::InsertName,
         Action::Favourites,
         Action::BranchView,
+        Action::FolderSizes,
         Action::SelectDriveLeft,
         Action::SelectDriveRight,
         Action::CloneToRight,
@@ -453,6 +456,16 @@ static BINDINGS: &[Binding] = &[
         action: Action::BranchView,
     },
     Binding {
+        key: Key::Return,
+        modifiers: ModifierType::ALT_MASK.union(ModifierType::SHIFT_MASK),
+        action: Action::FolderSizes,
+    },
+    Binding {
+        key: Key::KP_Enter,
+        modifiers: ModifierType::ALT_MASK.union(ModifierType::SHIFT_MASK),
+        action: Action::FolderSizes,
+    },
+    Binding {
         key: Key::s,
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::QuickFilter,
@@ -626,6 +639,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("insert_name", Action::InsertName),
     ("favourites", Action::Favourites),
     ("branch_view", Action::BranchView),
+    ("folder_sizes", Action::FolderSizes),
     ("select_drive_left", Action::SelectDriveLeft),
     ("select_drive_right", Action::SelectDriveRight),
     ("clone_to_right", Action::CloneToRight),
@@ -903,6 +917,11 @@ mod tests {
             (Key::a, ModifierType::CONTROL_MASK, Action::MarkAll),
             (Key::d, ModifierType::CONTROL_MASK, Action::Favourites),
             (Key::b, ModifierType::CONTROL_MASK, Action::BranchView),
+            (
+                Key::Return,
+                ModifierType::ALT_MASK.union(ModifierType::SHIFT_MASK),
+                Action::FolderSizes,
+            ),
             (Key::s, ModifierType::CONTROL_MASK, Action::QuickFilter),
             (Key::Escape, PLAIN, Action::ClearFilter),
             (

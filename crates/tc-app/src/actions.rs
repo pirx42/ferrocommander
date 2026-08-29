@@ -100,7 +100,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
             // and a walk of somebody's home directory is the case the whole
             // cancel exists for — clearing a filter can wait a keystroke.
             let mut state = shell.borrow_mut();
-            if !state.active_pane().abandon_walk() {
+            if !state.active_pane().abandon_background() {
                 state.active_pane().reset_filter();
             }
         }
@@ -116,6 +116,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         }
         Action::Favourites => start_favourites(shell),
         Action::BranchView => start_branch_view(shell),
+        Action::FolderSizes => start_folder_sizes(shell),
         Action::SelectDriveLeft => start_drive_selection(shell, LEFT_PANE),
         Action::SelectDriveRight => start_drive_selection(shell, RIGHT_PANE),
         Action::CloneToRight => clone_pane(shell, RIGHT_PANE),
@@ -319,6 +320,26 @@ pub(crate) fn start_branch_view(shell: &Rc<RefCell<Shell>>) {
     let index = shell.borrow().active;
     let loading = shell.borrow_mut().panes[index].branch();
     await_listing(shell, index, Some(loading));
+}
+
+/// Alt+Shift+Enter: count what the marked folders hold.
+///
+/// Total Commander's own key. The answers arrive one folder at a time and
+/// each is spliced into its row as it lands, so ten marked folders fill in as
+/// they finish rather than all at the pace of the slowest
+/// (`docs/listing.md`).
+pub(crate) fn start_folder_sizes(shell: &Rc<RefCell<Shell>>) {
+    let index = shell.borrow().active;
+    let Some(answers) = shell.borrow_mut().panes[index].measure_folders() else {
+        return;
+    };
+
+    let counting = shell.clone();
+    glib::spawn_future_local(async move {
+        while let Ok((name, measured)) = answers.recv().await {
+            counting.borrow_mut().panes[index].measured(&name, measured.bytes, measured.complete);
+        }
+    });
 }
 
 /// Ctrl+D: offer the favourite directories, and go to the chosen one.

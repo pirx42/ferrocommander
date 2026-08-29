@@ -64,13 +64,14 @@ pub struct Listing {
     /// is readable but does nothing here: `reload` re-reads one directory,
     /// and a caller holding a branch listing has to walk instead.
     branch: bool,
-    /// Which entries carry a size somebody counted, parallel to `entries`.
+    /// Which entries carry a size somebody counted, and whether that count
+    /// was the whole story — parallel to `entries`.
     ///
     /// Beside `selected` and for the same reason: it is a fact about *this
     /// listing*, not about the file, and a `read_dir` that replaces the
     /// entries forgets it by construction — which is exactly what a re-read
     /// should do with a number that may since have gone stale.
-    measured: Vec<bool>,
+    measured: Vec<Option<bool>>,
     /// Indices into `entries`, sorted and filtered — the visible rows after
     /// `parent`.
     view: Vec<usize>,
@@ -158,7 +159,7 @@ impl Listing {
         let parent = dir.parent().map(|_| parent_row());
         let mut listing = Listing {
             selected: vec![false; entries.len()],
-            measured: vec![false; entries.len()],
+            measured: vec![None; entries.len()],
             dir,
             entries,
             parent,
@@ -197,11 +198,14 @@ impl Listing {
     /// of what somebody pressing the key wants to watch. The order catches up
     /// on the next sort keystroke or re-read, and until then the number is
     /// right even where its position is stale.
-    pub fn set_measured(&mut self, name: &str, bytes: u64) -> Option<usize> {
+    pub fn set_measured(&mut self, name: &str, bytes: u64, complete: bool) -> Option<usize> {
         let index = self.index_of(name)?;
         let position = self.entry_index(index)?;
+        // The bytes live on the entry and nowhere else, which is what lets
+        // the status line's total and the size sort pick them up without
+        // knowing this happened. Only the *fact* of the count is kept here.
         self.entries[position].size = bytes;
-        self.measured[position] = true;
+        self.measured[position] = Some(complete);
         Some(index)
     }
 
@@ -211,8 +215,18 @@ impl Listing {
     /// answer**: an empty folder holds no bytes, and a row that fell back to
     /// `<DIR>` for it would be the one case this feature exists to get right.
     pub fn is_measured(&self, index: usize) -> bool {
+        self.measured_at(index).is_some()
+    }
+
+    /// Whether the row at `index` was counted, and whether that count reached
+    /// everything under it.
+    ///
+    /// `Some(false)` is a lower bound — a subdirectory refused to be read, or
+    /// the scan was stopped. The row says so rather than showing a number
+    /// that looks whole, because a size nobody can trust is worse than none.
+    pub fn measured_at(&self, index: usize) -> Option<bool> {
         self.entry_index(index)
-            .is_some_and(|position| self.measured[position])
+            .and_then(|position| self.measured[position])
     }
 
     /// The visible directory rows, by name, in the order they are shown.
@@ -282,7 +296,7 @@ impl Listing {
         // before it could be stale in a way nothing on screen admits. It is
         // also what keeps this vector the same length as the entries, which a
         // parallel vector has to be.
-        self.measured = vec![false; self.entries.len()];
+        self.measured = vec![None; self.entries.len()];
         self.rebuild(focused);
         Ok(())
     }

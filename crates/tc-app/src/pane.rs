@@ -12,6 +12,7 @@ use gtk::subclass::prelude::*;
 use tc_core::branch;
 use tc_core::listing::{split_name, Arrival, Listing, Loading, Sort, SortKey, SortOrder};
 use tc_core::ops::CancelToken;
+use tc_core::sizes::{self, Sizes};
 use tc_core::vfs::constants::SEPARATOR;
 use tc_core::vfs::{VfsPath, VirtualFs};
 
@@ -248,6 +249,8 @@ pub struct PaneView {
     /// Held here rather than passed around because Escape has to reach it
     /// from the keymap, which knows only the pane.
     walking: Option<CancelToken>,
+    /// Stops the folder-size scan in flight, when there is one.
+    measuring: Option<CancelToken>,
     /// What the read in flight will do to that stack when it lands.
     ///
     /// Applied on arrival rather than when the key was pressed: opening an
@@ -336,6 +339,7 @@ impl PaneView {
             wanted: None,
             focus_on_arrival: None,
             walking: None,
+            measuring: None,
             transition: Transition::Stay,
             watch: None,
             watched: None,
@@ -546,6 +550,7 @@ impl PaneView {
             entry,
             self.shown.listing.is_parent(index),
             self.shown.listing.is_selected(index),
+            self.shown.listing.measured_at(index),
         );
         row.renaming = self.renaming.as_deref() == Some(row.full_name.as_str());
         PaneEntry::new(row)
@@ -1136,6 +1141,61 @@ impl PaneView {
         self.start(root.clone(), focus);
         self.transition = Transition::Stay;
         branch::spawn(Arc::clone(&self.shown.fs), root, cancel)
+    }
+
+    /// Counts what the marked folders hold, or the one under the cursor.
+    ///
+    /// Hands back where the answers will arrive; the pane stays usable while
+    /// they do, unlike a directory read, because nothing about the rows is in
+    /// doubt — each folder simply gains a number it did not have.
+    #[must_use = "the caller has to await the answers, or no size ever appears"]
+    pub fn measure_folders(&mut self) -> Option<Sizes> {
+        let folders = crate::jobs::folders_to_measure(&self.shown.listing);
+        if folders.is_empty() {
+            return None;
+        }
+        // A second press re-counts, so the one already running is stopped
+        // first rather than left racing the new one for the same rows.
+        self.abandon_background();
+        let cancel = CancelToken::new();
+        self.measuring = Some(cancel.clone());
+        Some(sizes::spawn(
+            Arc::clone(&self.shown.fs),
+            self.shown.listing.dir().clone(),
+            folders,
+            cancel,
+        ))
+    }
+
+    /// Records one folder's answer and repaints just that row.
+    ///
+    /// One row, not the span the marking commands repaint: the answer names
+    /// exactly one folder, and re-deriving which rows differ would be work
+    /// proportional to the listing for a change proportional to nothing.
+    pub fn measured(&mut self, name: &str, bytes: u64, complete: bool) {
+        let Some(index) = self.shown.listing.set_measured(name, bytes, complete) else {
+            return;
+        };
+        let replacement = self.entry_at(index);
+        self.store.splice(index as u32, 1, &[replacement]);
+        // The total the accumulation was for, which the status line renders
+        // from the marks and now includes this folder in.
+        self.status
+            .set_text(&crate::jobs::selection_status(&self.shown.listing));
+    }
+
+    /// Stops whatever this pane has running in the background.
+    ///
+    /// One method rather than one per kind, because the caller — `Escape` —
+    /// means "stop what you are doing", not "stop the walk specifically".
+    /// Returns whether there was anything to stop, which is what lets Escape
+    /// fall through to clearing a filter when there was not.
+    pub fn abandon_background(&mut self) -> bool {
+        let scanning = self.measuring.take().inspect(|cancel| cancel.cancel());
+        // The sizes already on screen stay. Unlike a half-finished walk, each
+        // folder's number is its own and complete — there is nothing
+        // misleading about having counted three of five.
+        self.abandon_walk() || scanning.is_some()
     }
 
     /// Stops a branch walk and leaves the pane exactly where it was.

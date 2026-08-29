@@ -1856,6 +1856,46 @@ fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
 }
 
 #[test]
+fn alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it() {
+    // The size column is not something this suite can read, so the counted
+    // number is observed through the one thing that reacts to it: sorting by
+    // size. Uncounted, both folders are zero and tie, so the name breaks it
+    // and `big` comes first. Counted, `small` is genuinely smaller and leads.
+    // Copying whichever the cursor lands on says which happened.
+    let app = App::launch(|home| {
+        std::fs::create_dir_all(home.join("src/big")).unwrap();
+        std::fs::create_dir_all(home.join("src/small")).unwrap();
+        std::fs::create_dir(home.join("dst")).unwrap();
+        std::fs::write(home.join("src/big/data.bin"), vec![9u8; 4096]).unwrap();
+        std::fs::write(home.join("src/small/tiny.txt"), "x").unwrap();
+    });
+    app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
+    await_panes_at(&app, "/src", "/dst");
+
+    // src is `..`, big, small. Mark both folders.
+    app.keys(&["Home", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+
+    app.key("alt+shift+Return");
+    app.settle();
+
+    // Unmark, or F5 would act on the marks rather than on the cursor row.
+    app.key("ctrl+KP_Subtract");
+    app.key("ctrl+F6");
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.settle();
+    let landed: Vec<String> = std::fs::read_dir(app.path("dst"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(landed, ["small"], "the sort could not tell them apart");
+}
+
+#[test]
 fn ctrl_b_lists_the_whole_tree_and_f5_copies_from_two_levels_down() {
     // The whole feature in one sequence: flatten, then act on a file the pane
     // could not otherwise reach without navigating to it. F5 with nothing
