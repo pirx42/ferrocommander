@@ -28,12 +28,12 @@ use tc_core::vfs::{LocalFs, VfsPath};
 
 use constants::{
     APP_ID, APP_TITLE, CLASS_DRIVE_BAR, COMMAND_IN_ARCHIVE, CONFLICT_PROMPT, DRIVE_BAR_SPACING,
-    LEFT_PANE, NEW_FILE_DEFAULT, PANE_COUNT, PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT,
-    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK,
-    PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE,
-    STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE,
-    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK,
-    TITLE_UNMARK_PATTERN,
+    EDIT_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT, PANE_COUNT, PANE_SPACING, PANE_SPLIT_RATIO,
+    PATTERN_DEFAULT, PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE,
+    PROMPT_MOVE, PROMPT_PACK, PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE,
+    SETTINGS_UNWRITABLE, STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR,
+    TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE,
+    TITLE_OUTPUT, TITLE_PACK, TITLE_UNMARK_PATTERN,
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
@@ -469,7 +469,7 @@ fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &VfsPath) {
         .get(mount.as_str())
         .map(|dir| VfsPath::new(dir));
     let arriving = remembered.unwrap_or_else(|| mount.clone());
-    let loading = state.panes[target].go_to(arriving);
+    let loading = state.panes[target].leave_for(arriving);
     drop(state);
     await_listing_or(shell, target, Some(loading), Some(mount.clone()));
 }
@@ -509,8 +509,16 @@ fn clone_pane(shell: &Rc<RefCell<Shell>>, target: usize) {
     if state.active == target {
         return;
     }
-    let dir = state.active_pane().target_dir();
-    let loading = state.panes[target].go_to(dir);
+    let active = state.active;
+    let loading = {
+        let (left, right) = state.panes.split_at_mut(RIGHT_PANE);
+        let (source, destination) = if active == LEFT_PANE {
+            (&left[LEFT_PANE], &mut right[0])
+        } else {
+            (&right[0], &mut left[LEFT_PANE])
+        };
+        destination.follow(source)
+    };
     drop(state);
     await_listing(shell, target, Some(loading));
 }
@@ -569,7 +577,7 @@ fn start_transfer(shell: &Rc<RefCell<Shell>>, copying: bool) {
                 destination,
             }
         };
-        submit(&shell, job);
+        submit(&shell, job, Writes::IntoOtherPane);
     });
 }
 
@@ -628,6 +636,7 @@ fn start_create_dir(shell: &Rc<RefCell<Shell>>) {
                 Job::CreateDir {
                     path: dir.child(&name),
                 },
+                Writes::InThisPane,
             );
         },
     );
@@ -664,29 +673,51 @@ fn start_delete(shell: &Rc<RefCell<Shell>>, mode: DeleteMode) {
                     paths: paths.clone(),
                     mode,
                 },
+                Writes::InThisPane,
             );
         },
     );
 }
 
 /// Hands a job to the queue and starts watching it.
-fn submit(shell: &Rc<RefCell<Shell>>, job: Job) {
-    submit_then(shell, job, || {});
+/// Which pane a job writes into.
+///
+/// It has to be said rather than assumed. A job's two backends used to be the
+/// active pane's and the other pane's, always — which was invisibly right
+/// while there was one backend and both were the same object, and wrong the
+/// moment a pane could hold an archive. `F7` in a pane inside an archive would
+/// then have created a directory *on the disk*, at the path the archive calls
+/// it: not a failure, a real directory in the wrong place
+/// (`docs/archives.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Writes {
+    /// F5, F6, Alt+F5 — across the panes, which is what two panes are for.
+    IntoOtherPane,
+    /// F7, F8, Shift+F4, a rename — inside the pane the user is looking at.
+    InThisPane,
 }
 
-/// Submits a job and runs `done` if it finished without a single failure.
-///
-/// What `Shift+F4` needs: an editor opened on a file that was never created
-/// shows an empty buffer that silently recreates it on save, which is a worse
-/// answer than nothing at all.
-fn submit_then(shell: &Rc<RefCell<Shell>>, job: Job, done: impl FnOnce() + 'static) {
+fn submit(shell: &Rc<RefCell<Shell>>, job: Job, writes: Writes) {
+    submit_then(shell, job, writes, || {});
+}
+
+/// Hands a job to the queue and follows it, then runs `done`.
+fn submit_then(
+    shell: &Rc<RefCell<Shell>>,
+    job: Job,
+    writes: Writes,
+    done: impl FnOnce() + 'static,
+) {
     let handle = {
         let mut state = shell.borrow_mut();
         // Put the marks away before the job spends them: it ends with a fresh
         // listing, and by then there is nothing left for `Num /` to restore.
         state.active_pane().remember_marks();
         let source_fs = state.panes[state.active].fs();
-        let target_fs = state.panes[state.other()].fs();
+        let target_fs = match writes {
+            Writes::IntoOtherPane => state.panes[state.other()].fs(),
+            Writes::InThisPane => source_fs.clone(),
+        };
         state.queue.submit(job, source_fs, target_fs)
     };
     watch(shell, handle, done);
@@ -1040,6 +1071,7 @@ fn start_multi_rename(shell: &Rc<RefCell<Shell>>) {
                     sources: vec![directory.child(&row.from)],
                     destination: Destination::Exact(directory.child(&row.to)),
                 },
+                Writes::InThisPane,
             );
         }
     });
@@ -1064,6 +1096,7 @@ fn undo_rename(shell: &Rc<RefCell<Shell>>) {
                 sources: vec![from],
                 destination: Destination::Exact(to),
             },
+            Writes::InThisPane,
         );
     }
 }
@@ -1077,7 +1110,7 @@ fn undo_rename(shell: &Rc<RefCell<Shell>>) {
 /// archive and what packs into one, so a name this writes is a name that opens
 /// again (`docs/archives.md`).
 fn start_pack(shell: &Rc<RefCell<Shell>>) {
-    let (window, sources, source_dir, prefill) = {
+    let (window, sources, into, prefill) = {
         let state = shell.borrow();
         let pane = &state.panes[state.active];
         let sources = jobs::sources(pane.listing());
@@ -1087,17 +1120,18 @@ fn start_pack(shell: &Rc<RefCell<Shell>>) {
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        let prefill = jobs::prefilled_archive(
-            &state.panes[state.other()].target_dir(),
-            pane.listing(),
-            sources.len(),
-        );
-        (window, sources, pane.listing().dir().clone(), prefill)
+        // Beside the *other* pane, which is where the archive is written and
+        // what a bare name resolves against. The two have to be the same
+        // directory or a name typed over the prefill lands somewhere the
+        // prefill never mentioned.
+        let into = state.panes[state.other()].target_dir();
+        let prefill = jobs::prefilled_archive(&into, pane.listing(), sources.len());
+        (window, sources, into, prefill)
     };
 
     let shell = shell.clone();
     dialogs::ask_text(&window, TITLE_PACK, PROMPT_PACK, &prefill, move |text| {
-        let Some(archive) = jobs::packed_at(&text, &source_dir) else {
+        let Some(archive) = jobs::packed_at(&text, &into) else {
             return;
         };
         submit(
@@ -1106,6 +1140,7 @@ fn start_pack(shell: &Rc<RefCell<Shell>>) {
                 sources: sources.clone(),
                 archive,
             },
+            Writes::IntoOtherPane,
         );
     });
 }
@@ -1179,6 +1214,19 @@ fn start_editing(shell: &Rc<RefCell<Shell>>) {
     let Some(path) = state.active_pane().current_file() else {
         return;
     };
+    // An editor is given an operating-system path, and a file inside an
+    // archive has none: handing over what the archive calls it would open the
+    // editor on a path of the same name **on the disk**, and create it there
+    // when saved. F3 reads through the backend and works; F4 hands the file
+    // over and cannot (`docs/archives.md`).
+    if state.active_pane().in_archive() {
+        let window = state.window.upgrade();
+        drop(state);
+        if let Some(window) = window {
+            dialogs::show_output(&window, TITLE_OUTPUT, EDIT_IN_ARCHIVE);
+        }
+        return;
+    }
     let editor = state.saved.editor().to_string();
     tc_core::command::open_in_editor(&editor, &path);
 }
@@ -1216,10 +1264,15 @@ fn start_create_file(shell: &Rc<RefCell<Shell>>) {
             let path = directory.child(name);
             let opening = shell.clone();
             let target = path.clone();
-            submit_then(&shell, Job::CreateFile { path }, move || {
-                let editor = opening.borrow().saved.editor().to_string();
-                tc_core::command::open_in_editor(&editor, &target);
-            });
+            submit_then(
+                &shell,
+                Job::CreateFile { path },
+                Writes::InThisPane,
+                move || {
+                    let editor = opening.borrow().saved.editor().to_string();
+                    tc_core::command::open_in_editor(&editor, &target);
+                },
+            );
         },
     );
 }
@@ -1371,6 +1424,7 @@ fn wire_inline_rename(shell: &Rc<RefCell<Shell>>, index: usize) {
                 sources: vec![source],
                 destination: Destination::Exact(target),
             },
+            Writes::InThisPane,
         );
     };
     shell.borrow().panes[index].on_rename(accept);

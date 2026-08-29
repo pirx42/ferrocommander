@@ -96,6 +96,19 @@ pub trait VirtualFs: Send + Sync {
     /// decides whether the two are talking about the same files at all.
     fn store(&self) -> Store;
 
+    /// Whether nothing here can be written to at all.
+    ///
+    /// A property of the backend rather than of a path, which is why it can be
+    /// answered once instead of discovered per file. The operation engine asks
+    /// before it scans, so a copy into an archive is one refusal with a reason
+    /// rather than a list of a thousand identical ones.
+    ///
+    /// A default, because a backend that *can* be written to has nothing to
+    /// say here and the one that cannot is the exception.
+    fn read_only(&self) -> bool {
+        false
+    }
+
     /// Lists a directory. The order is unspecified — sorting belongs to the
     /// listing layer.
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError>;

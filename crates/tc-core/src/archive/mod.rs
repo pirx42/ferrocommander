@@ -117,6 +117,10 @@ impl VirtualFs for ArchiveFs {
         self.store
     }
 
+    fn read_only(&self) -> bool {
+        true
+    }
+
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         // Missing and not-a-directory are told apart, because the listing
         // layer shows them differently and "not found" for a file that is

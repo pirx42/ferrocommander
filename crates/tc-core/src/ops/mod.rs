@@ -97,6 +97,32 @@ pub enum Job {
     },
 }
 
+impl Job {
+    /// What this job would create or replace, for a refusal that has to name
+    /// something.
+    ///
+    /// The destination rather than the sources: a job refused because it
+    /// cannot write is refused about where it was writing.
+    fn writes_to(&self) -> Vec<VfsPath> {
+        match self {
+            Job::Copy {
+                sources,
+                destination,
+            }
+            | Job::Move {
+                sources,
+                destination,
+            } => sources
+                .iter()
+                .map(|source| destination.of(source))
+                .collect(),
+            Job::Delete { paths, .. } => paths.clone(),
+            Job::CreateDir { path } | Job::CreateFile { path } => vec![path.clone()],
+            Job::Pack { archive, .. } => vec![archive.clone()],
+        }
+    }
+}
+
 /// Runs a job to completion and reports what happened.
 ///
 /// `source_fs` is read from, `target_fs` is written to; for a job that stays
@@ -176,6 +202,25 @@ struct Run<'a> {
 
 impl Run<'_> {
     fn job(&mut self, job: &Job) {
+        // A backend that cannot be written to says so once rather than a
+        // thousand times: a copy of a large tree into an archive would
+        // otherwise be a failure list nobody can read, with the same reason on
+        // every line.
+        //
+        // A **delete** asks the source, because that is the backend it removes
+        // from. A move asks the target, and only the target: moving *out of*
+        // an archive is a copy that works followed by a delete that cannot,
+        // which is worth doing and worth reporting per entry.
+        let writing_to = match job {
+            Job::Delete { .. } => self.source_fs,
+            _ => self.target_fs,
+        };
+        if writing_to.read_only() {
+            for path in job.writes_to() {
+                self.fail(&path, VfsError::ReadOnly);
+            }
+            return;
+        }
         match job {
             Job::CreateDir { path } => self.create_dir(path),
             Job::CreateFile { path } => self.create_file(path),

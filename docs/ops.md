@@ -146,6 +146,13 @@ reason the original is expendable, and a skip is not an arrival.
 
 ## Refusals
 
+**A backend that cannot be written to is refused first**, before the scan,
+with one `ReadOnly` per destination the job named rather than one per file
+inside it. A delete asks the source backend; everything else asks the target.
+A move *out of* a read-only backend is the exception that proves the rule: its
+copy half is worth doing, so it runs and the delete half is reported per entry.
+
+
 Two destinations are refused before anything touches the disk, because both
 destroy data rather than merely failing:
 

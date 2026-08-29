@@ -84,6 +84,17 @@ it across two stores hands the source's path to the target backend — where
 `/packed.txt` from inside an archive names a file at the root of the disk. See
 [archives.md](archives.md) and [ops.md](ops.md).
 
+## `read_only` — a backend that cannot be written to at all
+
+A property of the backend, not of a path, so it is answered once instead of
+discovered per file. The operation engine asks before it scans: a copy of a
+large tree into an archive is one refusal with a reason rather than a thousand
+identical ones. A **delete** asks the source backend, because that is the one
+it removes from.
+
+Defaulted to `false`, because a backend that can be written to has nothing to
+say here and the one that cannot is the exception.
+
 ## `Entry`
 
 `name`, `kind`, `size`, `modified`, `attributes`, `hidden`.

@@ -744,6 +744,12 @@ impl PaneView {
     pub fn exchange_with(&mut self, other: &mut PaneView) {
         self.adopt_selection();
         other.adopt_selection();
+        // The backend and the archive stack travel with the listing. Swapping
+        // only the listing would leave each pane showing the other's entries
+        // through its own backend — which, once one of them can be an archive,
+        // is two panes both looking at the wrong filesystem.
+        std::mem::swap(&mut self.fs, &mut other.fs);
+        std::mem::swap(&mut self.entered, &mut other.entered);
         std::mem::swap(&mut self.listing, &mut other.listing);
         std::mem::swap(&mut self.sort, &mut other.sort);
         std::mem::swap(&mut self.show_hidden, &mut other.show_hidden);
@@ -969,6 +975,37 @@ impl PaneView {
         self.navigate_to(dir)
     }
 
+    /// Sends this pane to `dir` on the **outermost** backend, leaving behind
+    /// any archive it had walked into.
+    ///
+    /// What the drive bar needs. Navigating on the current backend would send
+    /// the *archive* to `/mnt/backup`, which is a path it has never heard of —
+    /// so the pane would show an error and still be inside the archive, with
+    /// no way out but Backspace.
+    #[must_use = "the caller has to await the listing, or the pane never moves"]
+    pub fn leave_for(&mut self, dir: VfsPath) -> Loading {
+        let outermost = self
+            .entered
+            .first()
+            .map_or_else(|| Arc::clone(&self.fs), |entered| Arc::clone(&entered.fs));
+        self.start(dir.clone(), None);
+        self.transition = Transition::Adopt(Vec::new());
+        Listing::spawn_load(outermost, dir)
+    }
+
+    /// Sends this pane to wherever `other` is — same backend, same archives.
+    ///
+    /// What `Ctrl+←` and `Ctrl+→` mean. Copying only the *path* would send
+    /// this pane's own backend to a path that belongs to the other's, which
+    /// inside an archive is a path on the disk that has nothing to do with it.
+    #[must_use = "the caller has to await the listing, or the pane never moves"]
+    pub fn follow(&mut self, other: &PaneView) -> Loading {
+        let (fs, dir) = (Arc::clone(&other.fs), other.target_dir());
+        self.start(dir.clone(), None);
+        self.transition = Transition::Adopt(other.entered.clone());
+        Listing::spawn_load(fs, dir)
+    }
+
     /// Enters what is under the cursor: a directory, or an archive as if it
     /// were one. Does nothing on any other file, which is what F3 and F4 are
     /// for.
@@ -985,12 +1022,14 @@ impl PaneView {
     #[must_use = "the caller has to await the listing, or the pane never moves"]
     fn enter_archive(&mut self, archive: VfsPath) -> Loading {
         let outer = Arc::clone(&self.fs);
-        self.start(VfsPath::root(), None);
-        self.transition = Transition::Enter(Entered {
-            fs: outer,
+        let mut stack = self.entered.clone();
+        stack.push(Entered {
+            fs: Arc::clone(&outer),
             archive: archive.clone(),
         });
-        Listing::spawn_enter(Arc::clone(&self.fs), archive)
+        self.start(VfsPath::root(), None);
+        self.transition = Transition::Adopt(stack);
+        Listing::spawn_enter(outer, archive)
     }
 
     /// Leaves the current directory. Does nothing at the root of the outermost
@@ -1009,8 +1048,10 @@ impl PaneView {
         let entered = self.entered.last()?;
         let (outer, archive) = (Arc::clone(&entered.fs), entered.archive.clone());
         let containing = archive.parent()?;
+        let mut stack = self.entered.clone();
+        stack.pop();
         self.start(containing.clone(), archive.file_name().map(str::to_string));
-        self.transition = Transition::Leave;
+        self.transition = Transition::Adopt(stack);
         Some(Listing::spawn_load(outer, containing))
     }
 
@@ -1104,12 +1145,8 @@ impl PaneView {
                 // the moment there is something to show, and a step that
                 // failed leaves the pane exactly where it was.
                 self.fs = fs;
-                match transition {
-                    Transition::Stay => {}
-                    Transition::Enter(entered) => self.entered.push(entered),
-                    Transition::Leave => {
-                        self.entered.pop();
-                    }
+                if let Transition::Adopt(entered) = transition {
+                    self.entered = entered;
                 }
                 // At the root of an archive there is no parent inside it, and
                 // still somewhere to go: back out. The row is offered here
@@ -1281,6 +1318,7 @@ fn list_item(item: &glib::Object) -> &gtk::ListItem {
 }
 
 /// An archive this pane walked into, and where it came from.
+#[derive(Clone)]
 struct Entered {
     /// The backend the archive file itself lives on.
     fs: Arc<dyn VirtualFs>,
@@ -1292,8 +1330,10 @@ struct Entered {
 enum Transition {
     /// An ordinary move: the backend does not change.
     Stay,
-    Enter(Entered),
-    Leave,
+    /// Every other case is "the stack becomes this" — walking into an archive,
+    /// back out of one, following the other pane, or leaving for a drive. One
+    /// variant rather than four, because they differ only in the list.
+    Adopt(Vec<Entered>),
 }
 
 #[cfg(test)]

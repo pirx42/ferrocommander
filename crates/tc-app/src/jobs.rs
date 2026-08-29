@@ -115,21 +115,21 @@ pub fn selection_status(listing: &Listing) -> String {
 
 /// Where the name typed into Alt+F5's field puts the archive.
 ///
-/// A bare name lands beside the sources, exactly as it does for F5 and F6:
-/// the field arrives prefilled with a path beside the *other* pane and
-/// selected, so somebody who types over it with one word means "here", and a
-/// program that read that as the root of the disk would be answering a
-/// question nobody asked.
+/// A bare name lands in `into` — the directory the field was prefilled with,
+/// which is also the pane the archive is written on. The two have to agree or
+/// a name typed over the prefill goes somewhere the prefill never mentioned,
+/// and a program that read a bare name as the root of the disk would be
+/// answering a question nobody asked.
 ///
 /// `None` for nothing at all.
-pub fn packed_at(input: &str, source_dir: &VfsPath) -> Option<VfsPath> {
+pub fn packed_at(input: &str, into: &VfsPath) -> Option<VfsPath> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return None;
     }
     Some(match trimmed.contains(SEPARATOR) {
         true => VfsPath::new(trimmed),
-        false => source_dir.child(trimmed),
+        false => into.child(trimmed),
     })
 }
 

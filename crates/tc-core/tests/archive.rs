@@ -17,8 +17,8 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use tc_core::archive::{format_for, ArchiveFs, Format};
 use tc_core::ops::{
-    self, Answer, CancelToken, Conflict, ConflictResolver, Destination, Job, Report, Resolution,
-    Silent,
+    self, Answer, CancelToken, Conflict, ConflictResolver, DeleteMode, Destination, Job, Report,
+    Resolution, Silent,
 };
 use tc_core::vfs::{Attributes, Entry, EntryKind, LocalFs, Store, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
@@ -1018,6 +1018,74 @@ impl ConflictResolver for Asked {
         self.questions += 1;
         self.answer
     }
+}
+
+#[test]
+fn a_job_that_would_write_into_an_archive_is_refused_once() {
+    // Once, not once per file. A copy of a large tree into an archive would
+    // otherwise be a failure list with a thousand identical lines, which is
+    // the same as no failure list at all.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    std::fs::write(dir.path().join("t.zip"), zip_of_tree(&tree)).unwrap();
+    let archive = open_container(dir.path(), "t.zip");
+
+    let report = ops::run(
+        &Job::Copy {
+            sources: vec![LocalFs::vfs_path(&tree)],
+            destination: Destination::Into(VfsPath::root()),
+        },
+        &LocalFs,
+        &archive,
+        &mut Refuse,
+        &mut Silent,
+        &CancelToken::new(),
+    );
+
+    assert_eq!(report.failures.len(), 1, "not one refusal: {report:?}");
+    assert_eq!(report.failures[0].1, VfsError::ReadOnly);
+}
+
+#[test]
+fn creating_and_deleting_inside_an_archive_are_refused_too() {
+    // Every job that writes, not only the transfers. A delete asks the
+    // *source* backend, because that is the one it removes from.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    std::fs::write(dir.path().join("t.zip"), zip_of_tree(&tree)).unwrap();
+    let archive = open_container(dir.path(), "t.zip");
+
+    let jobs = [
+        Job::CreateDir {
+            path: VfsPath::new("/made"),
+        },
+        Job::CreateFile {
+            path: VfsPath::new("/made.txt"),
+        },
+        Job::Delete {
+            paths: vec![VfsPath::new("/a.txt")],
+            mode: DeleteMode::Permanent,
+        },
+    ];
+    for job in jobs {
+        let report = ops::run(
+            &job,
+            &archive,
+            &archive,
+            &mut Refuse,
+            &mut Silent,
+            &CancelToken::new(),
+        );
+        assert_eq!(
+            report.failures.iter().map(|(_, e)| e).collect::<Vec<_>>(),
+            [&VfsError::ReadOnly],
+            "{job:?} was not refused"
+        );
+    }
+    // And the archive still says what it always said.
+    assert!(archive.stat(&VfsPath::new("/a.txt")).is_ok());
 }
 
 /// The top-level entries of an archive, as the paths a job takes.

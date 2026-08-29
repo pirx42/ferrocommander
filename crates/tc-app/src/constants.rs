@@ -378,6 +378,13 @@ pub const PACK_FALLBACK_NAME: &str = "archive";
 /// A path inside an archive is not somewhere a process can run, and running
 /// the command against whatever that path means on the real filesystem is how
 /// something meant for an archive acts on a home directory instead.
+/// What `F4` says when the file is inside an archive.
+///
+/// An editor takes an operating-system path, and a file in an archive has
+/// none. `F3` reads through the backend and works.
+pub const EDIT_IN_ARCHIVE: &str =
+    "This file is inside an archive. F3 shows it; editing it needs it unpacked first.";
+
 pub const COMMAND_IN_ARCHIVE: &str =
     "This pane is inside an archive, which is not a directory a command can run in.";
 

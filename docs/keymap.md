@@ -36,7 +36,7 @@
 | `Ctrl+↓`, `Alt+F8` | The command history — see [command-line.md](command-line.md) |
 | `Ctrl+Enter` | Put the name under the cursor into the command line |
 | `Alt+F7` | Find files below the active pane — see [search.md](search.md) |
-| `Alt+F5` | Pack what is marked into a new archive — see [archives.md](archives.md) |
+| `Alt+F5` | Pack what is marked into a new archive, beside the other pane — see [archives.md](archives.md) |
 | `Ctrl+M` | Rename what is marked by a rule — see [multi-rename.md](multi-rename.md) |
 | `Ctrl+Z` | Put the last multi-rename back |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
@@ -53,7 +53,8 @@
 Activating a *file* does nothing: `F3` views it and `F4` edits it
 ([viewer.md](viewer.md)) — **except an archive**, which Enter walks into as if
 it were a directory, and which `..` or Backspace comes back out of
-([archives.md](archives.md)).
+([archives.md](archives.md)). Inside an archive `F3` still works and `F4` says
+why it cannot.
 
 **Two keys for each delete**, because Total Commander has both and muscle
 memory splits evenly between them. Shift is the only place in the keymap where

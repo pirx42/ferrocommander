@@ -62,6 +62,17 @@ The window is titled `<name> — <percent>%`, which is both how a person tells t
 open viewers apart and the only thing about the viewer the end-to-end suite can
 see — so it is what the paging test asserts on.
 
+## F3 works inside an archive; F4 does not
+
+The viewer is handed the pane's own backend, so `F3` on a file inside an
+[archive](archives.md) reads it through the archive and shows it — never
+unpacking it, because it never reads more than a window at a time.
+
+`F4` hands the file to an editor, and an editor takes an operating-system
+path, which a file inside an archive has none of. It says so rather than
+handing over what the archive calls the file: that path also exists on the
+disk, and the editor would create it there when saved.
+
 ## What is where
 
 The arithmetic — where the offset goes, what the bytes say, how a hex dump is

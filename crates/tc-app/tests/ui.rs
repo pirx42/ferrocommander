@@ -639,15 +639,23 @@ fn alt_f5_packs_what_is_marked_and_the_result_opens_again() {
 
     app.key("alt+F5");
     app.focus_dialog(DIALOG_PACK);
+    // A bare name lands beside the *other* pane, which is where the prefilled
+    // path points and where the archive is written.
     app.type_text("packed.zip");
     app.key("Return");
-    app.await_exists("src/packed.zip");
+    app.await_exists("dst/packed.zip");
 
-    // `..`, nested, data.bin, notes.txt, packed.zip — walk into it.
+    // Send the left pane somewhere the unpacked file will not collide.
     app.focus_main();
-    app.keys(&["Home", "Down", "Down", "Down", "Down"]);
+    app.keys(&["Home", "Down"]);
     app.key("Return");
-    await_panes_at(&app, "/src/packed.zip", "/dst");
+    await_panes_at(&app, "/src/nested", "/dst");
+
+    // The right pane walks into the archive: `..`, packed.zip.
+    app.key("Tab");
+    app.keys(&["Home", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/nested", "/dst/packed.zip");
 
     // Inside: `..`, data.bin, notes.txt. Copy the text file back out.
     app.keys(&["Home", "Down", "Down"]);
@@ -655,7 +663,7 @@ fn alt_f5_packs_what_is_marked_and_the_result_opens_again() {
     app.focus_dialog(DIALOG_COPY);
     app.key("Return");
 
-    app.await_contents("dst/notes.txt", SOURCE_TEXT);
+    app.await_contents("src/nested/notes.txt", SOURCE_TEXT);
 }
 
 #[test]
@@ -674,7 +682,7 @@ fn packing_into_a_name_that_names_no_format_makes_nothing() {
     app.focus_dialog(DIALOG_FAILURES);
     app.key("Return");
     app.settle();
-    assert!(!app.path("src/nope.rar").exists(), "a .rar was written");
+    assert!(!app.path("dst/nope.rar").exists(), "a .rar was written");
 }
 
 #[test]
@@ -760,6 +768,147 @@ fn enter_on_the_parent_row_at_an_archive_root_leaves_the_archive() {
     app.keys(&["Home", "Return"]);
 
     await_panes_at(&app, "/src", "/dst");
+}
+
+#[test]
+fn f7_inside_an_archive_makes_no_directory_anywhere() {
+    // The bug this exists for: a job's two backends used to be the active
+    // pane's and the *other* pane's, always. F7 builds its path from the
+    // active pane, so inside an archive it would have been created on the
+    // disk, at the path the archive calls it — `/made-in-here` at the root of
+    // the filesystem. Not a failure: a real directory in the wrong place.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("made-in-here");
+    app.key("Return");
+
+    // One refusal, and nothing created — not in the archive, not beside it,
+    // and not in the other pane either.
+    app.focus_dialog(DIALOG_FAILURES);
+    app.key("Return");
+    app.settle();
+    for nowhere in ["src/made-in-here", "dst/made-in-here", "made-in-here"] {
+        assert!(!app.path(nowhere).exists(), "it was created at {nowhere}");
+    }
+}
+
+#[test]
+fn ctrl_u_carries_the_archive_across_with_the_listing() {
+    // Exchanging the panes swapped the listings and left the backends where
+    // they were, so each pane showed the other's entries through its own
+    // filesystem. Invisible with one backend; with two it is both panes
+    // reading the wrong one.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.key("ctrl+u");
+    await_panes_at(&app, "/dst", "/src/bundle.zip");
+
+    // The archive is on the right now, and still readable: Tab into it and
+    // copy a file out to the left, which is `dst`.
+    app.key("Tab");
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/packed.txt", ARCHIVED_TEXT);
+}
+
+#[test]
+fn ctrl_right_carries_the_archive_across_too() {
+    // The same failure as Ctrl+U, from the other direction: copying only the
+    // *path* would send the right pane's own backend to a path that belongs
+    // to the left's — inside an archive, a path on the disk that has nothing
+    // to do with it.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.key("ctrl+Right");
+    await_panes_at(&app, "/src/bundle.zip", "/src/bundle.zip");
+
+    // Both panes are in the archive; the right one can still be read out of.
+    app.key("Tab");
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.settle();
+
+    // Copying between two panes in the same archive is a write into one:
+    // refused, and nothing left behind on the disk.
+    assert!(!app.path("src/packed.txt").exists());
+    assert!(!app.path("packed.txt").exists());
+}
+
+#[test]
+fn a_drive_button_takes_a_pane_out_of_an_archive() {
+    // Navigating on the current backend would send the *archive* to
+    // `/mnt/whatever`, which it has never heard of — so the pane would show an
+    // error and still be inside, with Backspace the only way out.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.key("alt+F1");
+    app.focus_dialog(DIALOG_DRIVES);
+    app.key("Return");
+
+    // Wherever the first drive is, the pane is no longer inside the archive.
+    await_left_pane_leaves(&app, "bundle.zip");
+}
+
+/// Waits until the left pane's recorded directory no longer mentions `name`.
+///
+/// The settings file is the only place a pane's directory is observable from
+/// outside, and it is rewritten whenever one changes.
+fn await_left_pane_leaves(app: &App, name: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let recorded = recorded_directories(app.home());
+        if !recorded[0].contains(name) {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the left pane never left {name}: {recorded:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+}
+
+#[test]
+fn f4_inside_an_archive_does_not_open_an_editor_on_the_disk() {
+    // An editor takes an operating-system path and a file inside an archive
+    // has none. Handing over what the archive calls it would open the editor
+    // on a path of the same name on the disk — and create it there when
+    // saved.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    // `..`, deeper, packed.txt.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F4");
+
+    app.focus_dialog(DIALOG_OUTPUT);
+    app.key("Return");
+    app.settle();
+    assert!(
+        !app.path("packed.txt").exists(),
+        "a file was made on the disk"
+    );
 }
 
 #[test]

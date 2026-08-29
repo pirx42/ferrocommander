@@ -97,6 +97,34 @@ because they are the whole cost of this phase outside `tc-core::archive`:
   no parent *inside* the archive, and still has somewhere to go. Where the row
   leads is the pane's business; that it is there is the listing's.
 
+## A job says which pane it writes into
+
+A job's two backends used to be the active pane's and the other pane's,
+always. That was invisibly right while there was one backend and both were the
+same object, and wrong the moment a pane could hold an archive: `F7` builds its
+path from the active pane, so inside an archive it would have created a
+directory **on the disk**, at the path the archive calls it — `/made/` at the
+root of the filesystem. Not a failure; a real directory in the wrong place.
+
+So each job now says it. `F5`, `F6` and `Alt+F5` write into the other pane,
+which is what two panes are for; `F7`, `F8`, `Shift+F6` and a rename write in
+the pane the user is looking at. The end-to-end test presses `F7` inside an
+archive and asserts that nothing was created anywhere — in it, beside it, or in
+the other pane.
+
+**Everything that moves a pane moves its backend with it.** The drive bar
+leaves the archive rather than sending it to `/mnt/backup`, a path it has never
+heard of; `Ctrl+←`/`Ctrl+→` carries the backend and the archive stack across,
+not just the path; and `Ctrl+U` swaps them along with the listings, because
+swapping only the listings leaves both panes reading the wrong filesystem. Each
+of the three is a rule written when there was one backend, and each has a test
+that fails without the fix.
+
+`Alt+F5` writes the archive on the other pane's backend, so a bare name typed
+into its field resolves against the other pane's directory: the prefill and the
+destination have to be the same place, or a name typed over the prefill lands
+somewhere the prefill never mentioned.
+
 ## Where an archive is, as far as everything else is concerned
 
 Two different paths mean two different things, and keeping them apart is what
@@ -189,12 +217,19 @@ as no date rather than as a wrong one.
   and registering an inotify watch on one that happens to look like a real path
   would be worse than not watching. `Ctrl+R` still re-reads — from the index,
   so it will not notice the archive being replaced underneath.
-- **The command line refuses.** A path inside an archive is not somewhere a
-  process can run, and running the command against whatever that path means on
-  the real filesystem is how something meant for an archive acts on a home
-  directory instead.
-- **Everything that writes fails with `ReadOnly`**: `F7`, `F8`, `Shift+F6`,
-  and the target side of `F5` or `F6`.
+- **The command line refuses**, and so does `F4`. A path inside an archive is
+  not somewhere a process can run, and it is not a path an editor can be handed
+  either: running either against whatever that path means on the real
+  filesystem is how something meant for an archive acts on a home directory
+  instead — or creates a file on the disk when the editor saves. `F3` reads
+  through the backend and works.
+- **Everything that writes is refused with `ReadOnly`**: `F7`, `F8`,
+  `Shift+F6`, and the target side of `F5`, `F6` or `Alt+F5`. Refused **once**,
+  before the scan, rather than once per file — a copy of a large tree into an
+  archive would otherwise be a failure list with a thousand identical lines,
+  which is the same as no failure list at all. The exception is a move *out
+  of* an archive, whose copy half works and whose delete half is reported per
+  entry.
 
 ## An archive cannot express a path outside itself
 
