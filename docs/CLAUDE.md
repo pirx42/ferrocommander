@@ -37,6 +37,9 @@ cross-references instead of duplication.
 - [config.md](config.md) — the settings file: where it lives, why it is
   written as it changes rather than on exit, why the write is atomic, and why
   nothing about it may stop the program starting.
+- [packaging.md](packaging.md) — the Ubuntu `.deb`: what it holds, how its
+  version ties to the title bar, and why the logic is in a script rather than
+  in the workflow.
 - [reliability.md](reliability.md) — the standing reliability requirement for
   file operations, and where the tests live.
 - [performance.md](performance.md) — the standing speed requirement, the

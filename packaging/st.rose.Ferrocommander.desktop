@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Ferrocommander
+GenericName=File Manager
+Comment=Keyboard-centric dual-pane file manager
+Exec=ferrocommander
+Icon=st.rose.Ferrocommander
+Terminal=false
+Categories=System;FileTools;FileManager;Utility;
+Keywords=file;manager;commander;dual;pane;
+StartupNotify=true
+StartupWMClass=ferrocommander

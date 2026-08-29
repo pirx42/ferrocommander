@@ -96,6 +96,7 @@ The project is in its build-up phase; this table grows with the code.
 | Counting what a folder holds (Alt+Shift+Enter) | [docs/keymap.md](docs/keymap.md) + [docs/listing.md](docs/listing.md) |
 | Favourite directories (Ctrl+D): the list, and where it lives | [docs/keymap.md](docs/keymap.md) + [docs/config.md](docs/config.md) |
 | Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
+| Building the Ubuntu package, and what is in it | [docs/packaging.md](docs/packaging.md) |
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
 | Noticing external changes: the watcher, `Ctrl+R` | [docs/watching.md](docs/watching.md) |
 | Look up v1 scope / architecture | [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md) |
