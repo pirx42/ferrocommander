@@ -652,7 +652,9 @@ impl PaneView {
     ///
     /// **Not** what an operation uses. A job addresses its backend, and this
     /// path means nothing to one — [`target_dir`](Self::target_dir) is that.
-    fn shown_dir(&self) -> VfsPath {
+    /// Everything a *person* reads uses this: the path bar, the command
+    /// line's prompt, and the settings file.
+    pub fn shown_dir(&self) -> VfsPath {
         if self.entered.is_empty() {
             return self.target_dir();
         }

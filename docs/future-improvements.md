@@ -104,6 +104,16 @@ directory taller than the viewport and an assertion about which row the cursor
 is on — neither of which the filesystem can answer. That one wants a way to
 read the pane's state from outside.
 
+**Text on screen is not covered either.** The path bar and the command-line
+prompt are GTK labels, and the suite can see window titles and the filesystem
+and nothing else — so "the prompt inside an archive reads `…/bundle.zip`
+rather than `/`" was verified by screenshot and is not pinned by a test. A
+test written for it would have asserted on the command it *ran*, which is
+already covered, while looking like it checked the label.
+*Home:* wants the pane's state readable from outside, the same thing the Page
+Up/Down gap wants.
+*From:* the phase 7 audit's smoke run.
+
 The gap this replaces was total until phase 2, and it was not theoretical:
 phase 1's manual pass found three bugs that 74 green tests missed, all in the
 composition between GTK and the model, and the phase-2 suite found two more.

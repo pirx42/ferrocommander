@@ -133,8 +133,12 @@ impl Shell {
     /// would run in changes under the user with every Tab, and a command line
     /// that did not say so is one you check by running something.
     pub(crate) fn follow_active(&self) {
+        // The path a person reads, not the one a job addresses: inside an
+        // archive the backend calls the directory `/`, and a prompt reading
+        // `/ $` beside a path bar reading `…/bundle.zip` is two answers to
+        // one question.
         self.command_line
-            .follow(&self.panes[self.active].target_dir());
+            .follow(&self.panes[self.active].shown_dir());
     }
 
     /// What the settings file would say if it were written right now.
