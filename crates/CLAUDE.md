@@ -8,7 +8,7 @@ central boundary: **the UI never touches the filesystem directly.**
 | Crate | Kind | Contents |
 |---|---|---|
 | [tc-core](tc-core/src/CLAUDE.md) | lib | VFS, listing model, file operations, archives, search, multi-rename. **No GTK dependency** — headless-testable with `cargo test`. |
-| [tc-app](tc-app/) | bin | GTK4 shell: main window with two panes, dialogs, viewer, keymap, config. |
+| [tc-app](tc-app/src/CLAUDE.md) | bin | GTK4 shell: main window with two panes, dialogs, viewer, keymap, config. |
 
 ## Why the split
 

@@ -112,6 +112,24 @@ move changed both, and a delete may have removed the directory a pane was
 standing in — which is why the reload goes through `Listing::load_nearest`
 rather than a plain reload. See [listing.md](listing.md).
 
+## Where the code lives
+
+Four phases each added a `start_*` function to one file and a window to
+another, which is how `main.rs` came to hold the shell's state, every action
+and the window at once. It is three things now, and each file's name says
+which:
+
+| | |
+|---|---|
+| `main.rs` | the window: what is built at startup, and how a keystroke reaches an action |
+| `shell.rs` | what the program knows while it runs — the settings, the queue, the listings in flight, the watches — and the machinery every action shares |
+| `actions.rs` | what each key *does*, and the one table mapping an `Action` onto it |
+| `dialogs/` | the shell every window is built from, plus a file each for the four with state of their own: the progress bar, the viewer, the search, the multi-rename |
+
+`Shell`'s fields are `pub(crate)` rather than private, which is the honest
+shape: two panes, a queue, a keymap and the settings are one object the crate
+cooperates on, not four pretending not to know about each other.
+
 ## Where the logic lives
 
 Only one thing in this crate is real logic — turning an `Entry` into the four

@@ -94,7 +94,8 @@ Code directories carry their own `CLAUDE.md` beside the code:
 [vfs/](../crates/tc-core/src/vfs/CLAUDE.md),
 [listing/](../crates/tc-core/src/listing/CLAUDE.md),
 [ops/](../crates/tc-core/src/ops/CLAUDE.md),
-[archive/](../crates/tc-core/src/archive/CLAUDE.md).
+[archive/](../crates/tc-core/src/archive/CLAUDE.md); and
+[tc-app/src/](../crates/tc-app/src/CLAUDE.md).
 
 ## Conventions
 
