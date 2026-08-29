@@ -163,6 +163,13 @@ The fix is streaming the model into the view, which needs the pane to render
 rows it does not yet have.
 *From:* [listing.md](listing.md).
 
+**A branch view is re-walked on the main thread after a job**, and on
+`Ctrl+R`. The walk that `Ctrl+B` itself starts is on a worker with a cancel;
+the re-walk that replaces `Listing::load_nearest` is not, because the re-read
+it replaces is not either — same exposure, on a list of the same size
+(31 ms for 20 000 files). Both move to a worker together, or neither does.
+*From:* [listing.md](listing.md).
+
 **One `stat` per entry is unavoidable** as long as the pane shows size and
 date, which is the whole point of the columns. The 12 ms floor in the table
 is names only.

@@ -1856,6 +1856,155 @@ fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
 }
 
 #[test]
+fn ctrl_b_lists_the_whole_tree_and_f5_copies_from_two_levels_down() {
+    // The whole feature in one sequence: flatten, then act on a file the pane
+    // could not otherwise reach without navigating to it. F5 with nothing
+    // marked copies the cursor row, so what lands in dst says which row that
+    // was — and `nested/inner.txt` is a row that exists only because the tree
+    // was flattened.
+    //
+    // The assertion distinguishes the two outcomes rather than merely
+    // checking that something arrived: had the walk not landed, row two would
+    // still be `nested`, and copying *that* would put the file at
+    // `dst/nested/inner.txt` instead.
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+b");
+    // The walk is on a worker, and there is nothing outside the window that
+    // changes when it lands — the pane's recorded directory is the same root
+    // it was walked from. So this is one of the few places the suite waits by
+    // the clock rather than for an effect.
+    app.settle();
+    // src flattened is `..`, data.bin, nested/inner.txt, notes.txt — sorted
+    // by name, which for a branch row is its path.
+    app.keys(&["Home", "Down", "Down"]);
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/inner.txt", "deep");
+    assert!(
+        !app.path("dst/nested").exists(),
+        "the copy came from the plain listing, not the branch view"
+    );
+}
+
+#[test]
+fn a_job_from_a_branch_view_leaves_a_branch_view() {
+    // The pane reloads after a job, and the reload must not quietly turn the
+    // flattened tree back into one directory. Copying and then copying again
+    // from a row that only a branch view has is what says it did not.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+b");
+    app.settle();
+
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_contents("dst/inner.txt", "deep");
+
+    // Still flat: the same row is still two down, and copying it again is
+    // still a copy of the deep file rather than of the `nested` directory.
+    std::fs::remove_file(app.path("dst/inner.txt")).unwrap();
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_contents("dst/inner.txt", "deep");
+    assert!(
+        !app.path("dst/nested").exists(),
+        "the pane fell back to one directory"
+    );
+}
+
+#[test]
+fn escape_in_a_settled_branch_view_still_clears_the_filter() {
+    // Escape gained a first job — stopping a walk — and must not keep eating
+    // the keystroke once there is no walk to stop. A landed arrival clears
+    // the token, and this is what says so: without that, the filter would
+    // survive the Escape and row two would still be `notes.txt`.
+    //
+    // The mid-walk cancel itself is *not* tested here. On a fixture small
+    // enough for this suite the walk lands before the second keystroke
+    // arrives, so a test that pressed Escape into it would be a race dressed
+    // as an assertion. The walk's half of the cancel is pinned headlessly in
+    // `tc-core/tests/branch.rs`.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+b");
+    app.settle();
+
+    // Return first, which hands the keyboard back to the rows while the
+    // filter stays applied — the field's own handler takes Escape, so this is
+    // the only way the keymap's ClearFilter is reached at all.
+    app.key("ctrl+s");
+    app.type_text("notes");
+    app.key("Return");
+    app.key("Escape");
+    app.settle();
+
+    // The filter is gone, so the flattened rows are all back: `..`,
+    // data.bin, nested/inner.txt, notes.txt.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/inner.txt", "deep");
+}
+
+#[test]
+fn escape_still_clears_a_filter_when_no_walk_is_running() {
+    // Escape gained a first job and must not have lost its old one. The
+    // filter narrows src to `notes.txt` alone; clearing it puts the other
+    // rows back, which the copy of row two then proves.
+    let app = in_src_and_dst(arrange);
+
+    // Return hands the keyboard back to the rows with the filter still on;
+    // the field's own handler takes Escape, so this is the only way the
+    // keymap's ClearFilter is reached.
+    app.key("ctrl+s");
+    app.type_text("notes");
+    app.key("Return");
+    app.key("Escape");
+    app.settle();
+
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+}
+
+#[test]
+fn navigating_out_of_a_branch_view_leaves_it() {
+    // Leaving is not a key of its own: any step lands an ordinary listing of
+    // somewhere, and the flat rows go with it. Backspace to the parent, then
+    // F7 — which creates in the pane's directory — proves the pane is a plain
+    // listing of home.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+b");
+    app.settle();
+
+    // Up to the home directory, whose path is the tempdir's and so has no
+    // suffix `await_panes_at` could match on.
+    app.key("BackSpace");
+    app.settle();
+
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("made-at-home");
+    app.key("Return");
+    app.await_exists("made-at-home");
+    assert!(
+        !app.path("src/made-at-home").exists(),
+        "the pane was still showing the branch view of src"
+    );
+}
+
+#[test]
 fn ctrl_d_sends_the_pane_that_has_the_keyboard() {
     // A key with no direction and no number in it acts on the active pane —
     // the ordinary rule, and the opposite of Alt+F1/Alt+F2 where the F-key

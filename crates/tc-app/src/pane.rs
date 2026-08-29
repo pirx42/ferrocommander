@@ -9,11 +9,13 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use tc_core::branch;
 use tc_core::listing::{split_name, Arrival, Listing, Loading, Sort, SortKey, SortOrder};
+use tc_core::ops::CancelToken;
 use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
-    CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
+    BRANCH_MARKER, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
     CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME,
     COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
     COLUMN_WIDTH_SIZE, FILTER_PLACEHOLDER, PAGE_ROWS_FALLBACK, PANE_SPACING,
@@ -240,6 +242,11 @@ pub struct PaneView {
     /// Kept so the two page keys that mark can measure a page; the model has
     /// no idea how tall the viewport is.
     scroller: gtk::ScrolledWindow,
+    /// Stops the branch walk in flight, when there is one.
+    ///
+    /// Held here rather than passed around because Escape has to reach it
+    /// from the keymap, which knows only the pane.
+    walking: Option<CancelToken>,
     /// What the read in flight will do to that stack when it lands.
     ///
     /// Applied on arrival rather than when the key was pressed: opening an
@@ -327,6 +334,7 @@ impl PaneView {
             scroller,
             wanted: None,
             focus_on_arrival: None,
+            walking: None,
             transition: Transition::Stay,
             watch: None,
             watched: None,
@@ -364,8 +372,12 @@ impl PaneView {
     /// surviving ancestor keeps the pane usable.
     pub fn reload_after_job(&mut self) {
         let focused = self.shown.listing.current().map(|entry| entry.name.clone());
-        let mut listing =
-            Listing::load_nearest(self.shown.fs.as_ref(), self.shown.listing.dir().clone());
+        let mut listing = match self.is_branch() {
+            true => self.walk_again(),
+            false => {
+                Listing::load_nearest(self.shown.fs.as_ref(), self.shown.listing.dir().clone())
+            }
+        };
         self.adopt(&mut listing);
         if let Some(name) = focused {
             listing.focus_entry(&name);
@@ -373,6 +385,25 @@ impl PaneView {
         self.shown.listing = listing;
         self.error = None;
         self.refresh();
+    }
+
+    /// Walks the tree again, keeping this pane a branch view.
+    ///
+    /// **On this thread**, unlike the walk `Ctrl+B` starts. That is not an
+    /// oversight: the re-read it replaces — `Listing::load_nearest` — is
+    /// synchronous too, and a branch view of a tree costs about what a plain
+    /// listing of the same number of files costs
+    /// (`docs/performance.md`). So this is the same exposure the plain path
+    /// already has, on a list of the same size, and moving it to a worker
+    /// means giving `reload_all` somewhere to await — worth doing when the
+    /// synchronous re-read moves, not before.
+    ///
+    /// Uncancellable for the same reason: there is no keystroke in flight to
+    /// cancel it with.
+    fn walk_again(&mut self) -> Listing {
+        let root = self.shown.listing.dir().clone();
+        let found = branch::walk(self.shown.fs.as_ref(), &root, &CancelToken::new());
+        Listing::branch(root, found)
     }
 
     /// Starts watching whatever directory this pane is now showing.
@@ -433,6 +464,13 @@ impl PaneView {
         // must not move what is being looked at, and rows above the viewport
         // coming and going is the rarer case.
         let scroll = self.scroller.vadjustment().value();
+        // `Listing::reload` re-reads one directory, which for a branch view
+        // would quietly replace the whole tree with the root's own files.
+        if self.is_branch() {
+            self.reload_after_job();
+            self.scroller.vadjustment().set_value(scroll);
+            return;
+        }
         if self.shown.listing.reload(self.shown.fs.as_ref()).is_err() {
             self.reload_after_job();
             return;
@@ -521,10 +559,16 @@ impl PaneView {
     /// [`refresh_marks`](Self::refresh_marks) instead.
     pub fn refresh(&mut self) {
         let shown = self.shown_dir();
-        let path = shown.as_str();
+        // A branch view is not the directory it was walked from, and a path
+        // bar that said only the root would be the pane lying about what is
+        // in it.
+        let path = match self.is_branch() {
+            true => format!("{}{BRANCH_MARKER}", shown.as_str()),
+            false => shown.as_str().to_string(),
+        };
         self.path_bar.set_text(&match &self.error {
             Some(reason) => format!("{path}{PATH_BAR_ERROR_SEPARATOR}{reason}"),
-            None => path.to_string(),
+            None => path,
         });
 
         // Emptying and refilling the store makes the widget move its own
@@ -1061,6 +1105,45 @@ impl PaneView {
         !self.shown.entered.is_empty()
     }
 
+    /// Fills this pane with every file below where it is — `Ctrl+B`.
+    ///
+    /// The pane keeps showing what it has until the walk lands, exactly as it
+    /// does for a slow directory read, and [`abandon_walk`](Self::abandon_walk)
+    /// is why the key is not a trap on a huge tree.
+    #[must_use = "the caller has to await the listing, or the pane never changes"]
+    pub fn branch(&mut self) -> Loading {
+        let root = self.target_dir();
+        let cancel = CancelToken::new();
+        self.walking = Some(cancel.clone());
+        // The cursor row is worth keeping: a branch view of where you are
+        // should start on the file you were looking at, which is now spelled
+        // as a relative path of one component.
+        let focus = self.current_name();
+        self.start(root.clone(), focus);
+        self.transition = Transition::Stay;
+        branch::spawn(Arc::clone(&self.shown.fs), root, cancel)
+    }
+
+    /// Stops a branch walk and leaves the pane exactly where it was.
+    ///
+    /// Both halves matter. Cancelling alone would still land a partial
+    /// listing, which is worse than none — a tree half shown looks like a
+    /// tree. Forgetting `wanted` is what makes [`arrived`](Self::arrived)
+    /// drop the answer when it comes.
+    pub fn abandon_walk(&mut self) -> bool {
+        let Some(cancel) = self.walking.take() else {
+            return false;
+        };
+        cancel.cancel();
+        self.wanted = None;
+        true
+    }
+
+    /// Whether this pane is showing a walk rather than one directory.
+    pub fn is_branch(&self) -> bool {
+        self.shown.listing.is_branch()
+    }
+
     /// Shows `dir`, or stays put and reports why it could not.
     ///
     /// A pane that cannot read a directory must not end up displaying it as
@@ -1134,6 +1217,7 @@ impl PaneView {
             return;
         }
         self.wanted = None;
+        self.walking = None;
         let transition = std::mem::replace(&mut self.transition, Transition::Stay);
         match arrival {
             Ok((fs, mut listing)) => {

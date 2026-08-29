@@ -124,6 +124,13 @@ pub const THOUSANDS_GROUP: usize = 3;
 /// free of locale surprises in a column of fixed width.
 pub const DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
 
+/// What the path bar adds when a pane is showing a branch view rather than
+/// one directory.
+///
+/// The shell glob for "everything below here", because that is what the pane
+/// is showing and what somebody would have typed to mean it.
+pub const BRANCH_MARKER: &str = "/**";
+
 /// Separates the directory path from an error notice in the path bar.
 pub const PATH_BAR_ERROR_SEPARATOR: &str = "   ⚠ ";
 

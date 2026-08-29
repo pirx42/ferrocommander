@@ -95,7 +95,15 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
             let state = shell.borrow();
             state.panes[state.active].begin_filter();
         }
-        Action::ClearFilter => shell.borrow_mut().active_pane().reset_filter(),
+        Action::ClearFilter => {
+            // Escape stops a branch walk first. It is the only key that can,
+            // and a walk of somebody's home directory is the case the whole
+            // cancel exists for — clearing a filter can wait a keystroke.
+            let mut state = shell.borrow_mut();
+            if !state.active_pane().abandon_walk() {
+                state.active_pane().reset_filter();
+            }
+        }
         Action::SortBy(key) => shell.borrow_mut().active_pane().sort_by(key),
         Action::CommandHistory => show_command_history(shell),
         Action::InsertName => {
@@ -107,6 +115,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
             }
         }
         Action::Favourites => start_favourites(shell),
+        Action::BranchView => start_branch_view(shell),
         Action::SelectDriveLeft => start_drive_selection(shell, LEFT_PANE),
         Action::SelectDriveRight => start_drive_selection(shell, RIGHT_PANE),
         Action::CloneToRight => clone_pane(shell, RIGHT_PANE),
@@ -295,6 +304,21 @@ pub(crate) fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &Vfs
     let loading = state.panes[target].leave_for(arriving);
     drop(state);
     await_listing_or(shell, target, Some(loading), Some(mount.clone()));
+}
+
+/// Ctrl+B: every file below this pane, as one flat list.
+///
+/// Total Commander's branch view. What comes back is an ordinary listing, so
+/// the sort, the filter, the marks and every file operation go on meaning
+/// what they meant (`docs/listing.md`).
+///
+/// Pressing it while already in one walks again, which is the re-read a
+/// branch view has instead of `Ctrl+R`. Leaving is a navigation: any step
+/// lands an ordinary listing of somewhere.
+pub(crate) fn start_branch_view(shell: &Rc<RefCell<Shell>>) {
+    let index = shell.borrow().active;
+    let loading = shell.borrow_mut().panes[index].branch();
+    await_listing(shell, index, Some(loading));
 }
 
 /// Ctrl+D: offer the favourite directories, and go to the chosen one.

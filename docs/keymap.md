@@ -39,6 +39,7 @@
 | `Alt+F5` | Pack what is marked into a new archive, beside the other pane — see [archives.md](archives.md) |
 | `Ctrl+M` | Rename what is marked by a rule — see [multi-rename.md](multi-rename.md) |
 | `Ctrl+Z` | Put the last multi-rename back |
+| `Ctrl+B` | Every file below this pane, as one flat list |
 | `Ctrl+D` | The favourite directories, to pick one and go there |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
 | `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
@@ -126,6 +127,34 @@ entry, and copying or deleting "the parent directory" from inside it is never
 what the user means. It cannot be marked, and with nothing else marked, F5–F8
 on it do nothing. A mark elsewhere in the pane still counts — the `..` rule is
 about the fallback, not about the marks.
+
+## The branch view
+
+`Ctrl+B` fills the pane with every file below where it is — Total Commander's
+branch view. What comes back is an **ordinary listing**, so the sort, the
+quick filter, the marks and every file operation go on meaning what they
+meant; the rows are files from several directories, each named by its path
+relative to the root ([listing.md](listing.md)).
+
+**The walk runs on a worker** and the pane keeps showing what it has until it
+lands, exactly as it does for a slow directory read. **`Escape` stops it**,
+and drops the partial answer with it — a tree half shown looks like a tree,
+which is worse than not flattening at all. That is Escape's first job now; it
+goes on clearing a filter when there is no walk to stop.
+
+**Pressing `Ctrl+B` again walks again**, which is the re-read a branch view
+has instead of `Ctrl+R`. **Leaving is a navigation**: any step — Enter,
+Backspace, a favourite, a drive — lands an ordinary listing of somewhere, and
+the flat rows go with it.
+
+**The path bar says so**, with `/**` after the root. A pane showing a whole
+tree while its path bar reads like one directory is a pane lying about what is
+in it.
+
+**A job done from a branch view leaves a branch view.** The panes re-read
+after every job, and for this one that means walking again rather than
+re-reading the root — otherwise a copy would silently flatten the view back
+into one directory.
 
 ## The favourite directories
 

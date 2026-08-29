@@ -107,6 +107,8 @@ pub enum Action {
     /// Alt+F1 — offer the left pane a list of places to go.
     /// `Ctrl+D`: the favourite directories, to pick one and go there.
     Favourites,
+    /// `Ctrl+B`: every file below this pane, as one flat list.
+    BranchView,
     SelectDriveLeft,
     /// Alt+F2 — the same for the right pane.
     SelectDriveRight,
@@ -137,7 +139,7 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 53] = [
+    const ALL: [Action; 54] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
@@ -184,6 +186,7 @@ impl Action {
         Action::CommandHistory,
         Action::InsertName,
         Action::Favourites,
+        Action::BranchView,
         Action::SelectDriveLeft,
         Action::SelectDriveRight,
         Action::CloneToRight,
@@ -445,6 +448,11 @@ static BINDINGS: &[Binding] = &[
         action: Action::Favourites,
     },
     Binding {
+        key: Key::b,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::BranchView,
+    },
+    Binding {
         key: Key::s,
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::QuickFilter,
@@ -617,6 +625,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("command_history", Action::CommandHistory),
     ("insert_name", Action::InsertName),
     ("favourites", Action::Favourites),
+    ("branch_view", Action::BranchView),
     ("select_drive_left", Action::SelectDriveLeft),
     ("select_drive_right", Action::SelectDriveRight),
     ("clone_to_right", Action::CloneToRight),
@@ -893,6 +902,7 @@ mod tests {
             ),
             (Key::a, ModifierType::CONTROL_MASK, Action::MarkAll),
             (Key::d, ModifierType::CONTROL_MASK, Action::Favourites),
+            (Key::b, ModifierType::CONTROL_MASK, Action::BranchView),
             (Key::s, ModifierType::CONTROL_MASK, Action::QuickFilter),
             (Key::Escape, PLAIN, Action::ClearFilter),
             (
