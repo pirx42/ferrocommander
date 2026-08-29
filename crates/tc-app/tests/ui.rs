@@ -120,6 +120,47 @@ fn in_src_and_dst(arrange: impl FnOnce(&Path)) -> App {
     app
 }
 
+/// The favourite paths the settings file holds, in order.
+///
+/// The `[[favourites]]` blocks, extracted — not a search for a substring.
+/// Every one of these paths is also somewhere a *pane* has been, so "the file
+/// mentions src/nested" says nothing at all about whether it is a favourite.
+fn recorded_favourites(app: &App) -> Vec<String> {
+    let written = std::fs::read_to_string(app.path(SETTINGS_FILE)).unwrap_or_default();
+    let mut found = Vec::new();
+    let mut inside = false;
+    for line in written.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            inside = line == "[[favourites]]";
+        } else if inside {
+            if let Some(path) = line.strip_prefix("path = ") {
+                found.push(path.trim_matches('"').to_string());
+            }
+        }
+    }
+    found
+}
+
+/// Waits until the settings file holds exactly `count` favourites.
+///
+/// The write is debounced, so reading straight after the keystroke is a test
+/// of the delay rather than of the change.
+fn await_favourites(app: &App, count: usize) -> Vec<String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let found = recorded_favourites(app);
+        if found.len() == count {
+            return found;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the file never held {count} favourites: {found:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+}
+
 /// Waits until the app has recorded both panes at those directories.
 ///
 /// The settings file is the only place a pane's directory is observable from
@@ -1890,6 +1931,118 @@ fn a_favourite_whose_directory_is_gone_leaves_the_pane_where_it_was() {
     app.type_text("still-here");
     app.key("Return");
     app.await_exists("src/still-here");
+}
+
+#[test]
+fn the_list_keeps_the_directory_the_pane_is_in_and_still_has_it_next_time() {
+    // The whole of Total Commander's rule that the hotlist is maintained from
+    // inside itself: no second key, and the moment you notice a directory is
+    // missing is the moment you are looking at the list.
+    //
+    // The relaunch is the half that matters. A list that is added to and
+    // never written looks exactly like one that works, until the next start.
+    let first = in_src_and_dst(with_favourites);
+    // Somewhere that is not already a favourite, or adding it is correctly a
+    // no-op and the test would be measuring the de-duplication instead.
+    first.key("F7");
+    first.focus_dialog(DIALOG_NEW_DIR);
+    first.type_text("kept-place");
+    first.key("Return");
+    first.await_exists("src/kept-place");
+    // src lists `..`, kept-place, nested, then the files.
+    first.keys(&["Home", "Down"]);
+    first.key("Return");
+    await_panes_at(&first, "/src/kept-place", "/dst");
+
+    first.key("ctrl+d");
+    first.focus_dialog(DIALOG_FAVOURITES);
+    // Past the two favourites, onto the row that adds.
+    first.keys(&["Down", "Down"]);
+    first.key("Return");
+    let kept = await_favourites(&first, 3);
+    assert!(
+        kept[2].ends_with("src/kept-place"),
+        "the added favourite is not the directory the pane was in: {kept:?}"
+    );
+    // Escape rather than closing on the add: the window stays open, which is
+    // what makes adding and then going somewhere one visit to the list.
+    assert!(
+        first.has_dialog(DIALOG_FAVOURITES),
+        "adding closed the window"
+    );
+    first.key("Escape");
+    first.await_dialog_closed(DIALOG_FAVOURITES);
+    let home = first.kill();
+
+    // It is there on the next run, and going to it works. The pane starts
+    // where it was left, so it has to leave first or arriving there again
+    // would be indistinguishable from never moving.
+    let app = App::relaunch(home);
+    app.key("BackSpace");
+    await_panes_at(&app, "/src", "/dst");
+
+    app.key("ctrl+d");
+    app.focus_dialog(DIALOG_FAVOURITES);
+    app.keys(&["Down", "Down"]);
+    app.key("Return");
+    app.await_dialog_closed(DIALOG_FAVOURITES);
+
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("added-then-used");
+    app.key("Return");
+    app.await_exists("src/kept-place/added-then-used");
+}
+
+#[test]
+fn delete_takes_a_favourite_off_the_list() {
+    // The other half of maintaining it from inside: a list that can only grow
+    // is one nobody keeps tidy.
+    let app = in_src_and_dst(with_favourites);
+
+    app.key("ctrl+d");
+    app.focus_dialog(DIALOG_FAVOURITES);
+    app.key("Delete");
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_FAVOURITES);
+
+    // One of the two is gone, and it is the one the cursor was on.
+    let left = await_favourites(&app, 1);
+    assert!(
+        left[0].ends_with("dst"),
+        "Delete took the wrong row: {left:?}"
+    );
+}
+
+#[test]
+fn a_directory_inside_an_archive_is_refused_rather_than_kept() {
+    // A path in there belongs to the archive's own store, where the same
+    // spelling means a completely different file. The probe that removed the
+    // refusal is what says why this matters: what got kept was `/`, the
+    // archive's own root — a favourite that on the next run would quietly
+    // send the pane to the root of the disk.
+    let app = in_src_and_dst(with_favourites);
+    // `..`, nested, bundle.zip, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.key("ctrl+d");
+    app.focus_dialog(DIALOG_FAVOURITES);
+    app.keys(&["Down", "Down"]);
+    app.key("Return");
+    // The window stays open with the reason in it, so Escape is what closes
+    // it — a dialog that vanished would look like the add had worked.
+    assert!(
+        app.has_dialog(DIALOG_FAVOURITES),
+        "the refusal closed the window"
+    );
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_FAVOURITES);
+    app.settle();
+
+    let kept = recorded_favourites(&app);
+    assert_eq!(kept.len(), 2, "a path inside an archive was kept: {kept:?}");
 }
 
 #[test]

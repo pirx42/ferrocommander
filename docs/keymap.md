@@ -146,6 +146,20 @@ inside an archive comes *out* of it — the archive backend has never heard of
 `/home/…`, and navigating on it would leave the pane inside showing an error.
 That is `leave_for`, the same route `Alt+F1` takes out of an archive.
 
+**The list is maintained from inside itself**, which is why `Ctrl+D` is the
+only key this feature has. The last row keeps where the active pane is,
+`Delete` removes the row under the cursor, and the window stays open through
+both — so adding a directory and then going somewhere is one visit to the
+list. Adding a directory that is already there does nothing, which is what
+bounds the list instead of a cap.
+
+**Where a pane is standing inside an archive is refused**, with the reason in
+the window rather than in a second modal. A path in there belongs to that
+archive's own store, where the same spelling means a completely different
+file; the probe that removed this check kept `/` — the archive's own root — as
+a favourite that would have sent the pane to the root of the disk on the next
+run.
+
 **A favourite whose directory is gone leaves the pane where it was**, with the
 reason next to the path. Unlike a drive, a favourite has no mount to fall back
 to, and sending the pane somewhere nobody named would be a worse answer than

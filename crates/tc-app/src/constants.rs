@@ -385,6 +385,15 @@ pub const PACK_FALLBACK_NAME: &str = "archive";
 pub const EDIT_IN_ARCHIVE: &str =
     "This file is inside an archive. F3 shows it; editing it needs it unpacked first.";
 
+/// Why the favourites list refuses to keep where a pane is standing.
+///
+/// A path inside an archive belongs to that archive's own store, where the
+/// same spelling means a completely different file — so a favourite made of
+/// one would either fail on the next run or, worse, resolve against the real
+/// filesystem.
+pub const FAVOURITE_IN_ARCHIVE: &str =
+    "This pane is inside an archive, which is not a directory to come back to.";
+
 pub const COMMAND_IN_ARCHIVE: &str =
     "This pane is inside an archive, which is not a directory a command can run in.";
 
@@ -395,9 +404,15 @@ pub const COMMAND_PROMPT_SUFFIX: &str = "$";
 /// Title of the drive selector Alt+F1 / Alt+F2 open.
 pub const TITLE_DRIVES: &str = "Drives";
 
-/// The `Ctrl+D` window, and what it says before anything is in it.
+/// The `Ctrl+D` window.
 pub const TITLE_FAVOURITES: &str = "Favourite directories";
-pub const FAVOURITES_EMPTY: &str = "No favourite directories yet";
+
+/// The row that keeps where the active pane is, and what it teaches.
+///
+/// The hint is where `Delete` is documented: a key that removes something
+/// and is written down nowhere the user looks is a key nobody finds.
+pub const FAVOURITES_ADD: &str = "Add the current directory";
+pub const FAVOURITES_ADD_HINT: &str = "Del removes the row under the cursor";
 
 pub const BUTTON_CLOSE: &str = "Close";
 

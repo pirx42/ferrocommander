@@ -15,14 +15,16 @@ use std::sync::Arc;
 
 use gtk::glib;
 
+use tc_core::config;
 use tc_core::ops::{DeleteMode, Destination, Job};
 use tc_core::vfs::{LocalFs, VfsError, VfsPath};
 
 use crate::constants::{
-    COMMAND_IN_ARCHIVE, EDIT_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT, PATTERN_DEFAULT, PROMPT_COPY,
-    PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK, PROMPT_PATTERN, RIGHT_PANE,
-    TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY,
-    TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK, TITLE_UNMARK_PATTERN,
+    COMMAND_IN_ARCHIVE, EDIT_IN_ARCHIVE, FAVOURITE_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT,
+    PATTERN_DEFAULT, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK,
+    PROMPT_PATTERN, RIGHT_PANE, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE,
+    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK,
+    TITLE_UNMARK_PATTERN,
 };
 use crate::jobs::Packing;
 use crate::keymap::Action;
@@ -315,11 +317,43 @@ pub(crate) fn start_favourites(shell: &Rc<RefCell<Shell>>) {
     };
 
     let going = shell.clone();
-    dialogs::open_favourites(&window, &favourites, move |target| {
-        let index = going.borrow().active;
-        let loading = going.borrow_mut().panes[index].leave_for(target);
-        await_listing(&going, index, Some(loading));
-    });
+    let adding = shell.clone();
+    let removing = shell.clone();
+    dialogs::open_favourites(
+        &window,
+        favourites,
+        dialogs::FavouriteHooks {
+            go: Box::new(move |target| {
+                let index = going.borrow().active;
+                let loading = going.borrow_mut().panes[index].leave_for(target);
+                await_listing(&going, index, Some(loading));
+            }),
+            add: Box::new(move || {
+                let mut state = adding.borrow_mut();
+                // A path inside an archive belongs to that archive's own
+                // store, where the same spelling means a different file. Kept,
+                // it would either fail on the next run or resolve against the
+                // real filesystem — which is the worse of the two.
+                if state.active_pane().in_archive() {
+                    return Err(FAVOURITE_IN_ARCHIVE);
+                }
+                let directory = state.active_pane().target_dir();
+                config::remember_favourite(&mut state.favourites, &directory);
+                let list = state.favourites.clone();
+                drop(state);
+                remember(&adding);
+                Ok(list)
+            }),
+            remove: Box::new(move |target| {
+                let mut state = removing.borrow_mut();
+                config::forget_favourite(&mut state.favourites, &target);
+                let list = state.favourites.clone();
+                drop(state);
+                remember(&removing);
+                list
+            }),
+        },
+    );
 }
 
 /// Alt+F1 / Alt+F2: offer `target` a list of places to go.

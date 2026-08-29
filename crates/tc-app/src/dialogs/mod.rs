@@ -36,7 +36,7 @@ use crate::constants::{
 };
 use crate::format::failure_lines;
 
-pub use favourites::open as open_favourites;
+pub use favourites::{open as open_favourites, Hooks as FavouriteHooks};
 pub use multi_rename::MultiRename;
 pub use progress_view::ProgressView;
 pub use search::Search;
