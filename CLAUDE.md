@@ -51,9 +51,21 @@ cargo build --release      # Release build
 optional garnish: without them `cargo test --workspace` fails, by design —
 a UI test that quietly skips is worse than no UI test.
 
+The Windows lint step needs its target installed once —
+`rustup target add x86_64-pc-windows-gnu`. No `sudo`, and nothing else in the
+gate asks for it, so a fresh clone fails only at that one step.
+
+**If your global git config sets `autocrlf = true`,** turn it off for this
+repository (`git config core.autocrlf false`). On Linux it rewrites the
+LF-stored files to CRLF on checkout, and `scripts/green-gate.sh` then dies on
+its own shebang with `/usr/bin/env: 'bash\r'` — a failure that says nothing
+about what it is really about.
+
 The end-to-end suite (`cargo test -p tc-app --test ui`) drives the real
-binary with real key presses on a private X server and takes about half a
-minute; it runs one app at a time on purpose. See
+binary with real key presses on a private X server and takes **about seven
+and a half minutes**: 138 tests that each start an X server and an app, one at
+a time on purpose. Measured 442 s here and 530 s on a reporter's desktop, four
+runs. Budget for it before running the gate. See
 [docs/ui-shell.md](docs/ui-shell.md).
 
 The full sequence must be green before every commit — see

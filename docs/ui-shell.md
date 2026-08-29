@@ -425,8 +425,14 @@ invisible. They now find the mount the temp home actually sits on
 with sixteen GTK apps between them do not fit comfortably in a container: the
 suite went from all-green to eight failures and back between runs, always with
 apps dying at startup on a display that had just answered. A suite that fails
-randomly teaches people to ignore red, so a mutex makes them queue. The cost
-is about half a minute.
+randomly teaches people to ignore red, so a mutex makes them queue.
+
+The cost is the suite's whole runtime: 138 tests × about 3.2 s each, measured
+at 442 s here and 530 s on a reporter's Ubuntu desktop over four runs. It was
+"about half a minute" when that sentence was written and the suite had a
+handful of tests; nobody updated it as the suite grew fifteen-fold, and an
+outside reader measured it before we did. A number in a document is a claim
+like any other — this one is dated by its measurement now.
 
 Four things the harness learned the hard way, each now a check rather than a
 sleep:
