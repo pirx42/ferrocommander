@@ -14,7 +14,7 @@ pub mod plan;
 pub mod progress;
 pub mod queue;
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::time::UNIX_EPOCH;
 
 use crate::archive::constants::PACKING_SUFFIX;
@@ -740,21 +740,31 @@ impl Run<'_> {
     }
 
     /// Copies the bytes across. `Ok(false)` means a cancel interrupted it.
+    ///
+    /// The counting and the cancelling are [`Metered`]'s, which is the same
+    /// reader a pack streams through — so "how a byte is counted" and "how
+    /// soon a cancel is noticed" are decided once rather than once per
+    /// caller. The loop stays explicit because the buffer size is a decision
+    /// with a reason attached ([`COPY_BUFFER_BYTES`]) and `io::copy` picks
+    /// its own.
     fn stream(&mut self, source: &VfsPath, target: &VfsPath) -> Result<bool, VfsError> {
         let mut reader = self.source_fs.open_read(source)?;
         let mut writer = self.target_fs.create_file(target)?;
-        let mut buffer = vec![0u8; COPY_BUFFER_BYTES];
-        loop {
-            if self.cancel.is_cancelled() {
-                return Ok(false);
-            }
-            let read = reader.read(&mut buffer)?;
-            if read == 0 {
-                return Ok(true);
-            }
-            writer.write_all(&buffer[..read])?;
-            self.progress
-                .emit(Progress::Advanced { bytes: read as u64 });
+        let moved = {
+            let mut metered = Metered {
+                inner: &mut reader,
+                progress: self.progress,
+                cancel: self.cancel,
+            };
+            copy_through(&mut metered, &mut writer)
+        };
+        match moved {
+            Ok(()) => Ok(true),
+            // A cancel and a disk failure both arrive here as an error, and
+            // only the token can tell them apart — the message `Metered`
+            // carries is for a backtrace, not for this decision.
+            Err(_) if self.cancel.is_cancelled() => Ok(false),
+            Err(error) => Err(VfsError::from(error)),
         }
     }
 
@@ -818,11 +828,28 @@ fn inside(target: &VfsPath) -> String {
     target.as_str().trim_start_matches(SEPARATOR).to_string()
 }
 
+/// Moves every byte from `reader` to `writer`, in turns of
+/// [`COPY_BUFFER_BYTES`].
+///
+/// Not `io::copy`: the buffer size is how coarse a cancel is, which is a
+/// decision with a reason next to it, and `io::copy` chooses its own.
+fn copy_through(reader: &mut impl std::io::Read, writer: &mut impl Write) -> std::io::Result<()> {
+    let mut buffer = vec![0u8; COPY_BUFFER_BYTES];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            return Ok(());
+        }
+        writer.write_all(&buffer[..read])?;
+    }
+}
+
 /// A reader that counts what passes through it and stops on a cancel.
 ///
-/// The packer is handed this rather than a path, so the counting and the
-/// cancelling stay here — one implementation for every format, instead of one
-/// per format that each has to remember.
+/// **The only place either happens.** A copy streams through it and so does a
+/// pack, so how a byte is counted and how soon a cancel is noticed are one
+/// decision — rather than one per caller, each free to drift and only one of
+/// them caught when it does.
 struct Metered<'a> {
     inner: &'a mut Box<dyn std::io::Read + Send>,
     progress: &'a mut dyn ProgressSink,

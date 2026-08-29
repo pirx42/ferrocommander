@@ -500,6 +500,14 @@ fn a_cancel_never_leaves_a_truncated_file() {
     );
 
     assert_eq!(report.outcome, Outcome::Cancelled);
+    // And a cancel is not a failure. Nothing went wrong — the user asked it
+    // to stop — so an interrupted copy that also reported the file it was in
+    // the middle of would put a name in front of them that needs no action.
+    assert!(
+        report.failures.is_empty(),
+        "the cancel was reported as a failure: {:?}",
+        report.failures
+    );
     let source = snapshot(&LocalFs, &root.child("tree"));
     assert!(
         !snapshot(&LocalFs, &target_dir.child("tree")).is_empty(),

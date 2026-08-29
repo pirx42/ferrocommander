@@ -121,6 +121,26 @@ every header has to be read to know what is in it, and a `.tar.gz` has to be
 decompressed entirely to read them. There is no faster version of that
 question; there is only a version that says so.
 
+## Merging the two copy loops changed nothing measurable
+
+Recorded because the prime directive asks for a number, and the honest number
+here is "no signal". Copying 100 MiB as 400 files of 256 KiB, best of five,
+before and after the copy path moved onto the shared metered reader:
+
+| | Runs |
+|---|---|
+| Before | 174 ms, 158 ms |
+| After | 151 ms, 205 ms, 225 ms |
+
+The ranges overlap and the spread within one version is wider than the gap
+between them — this box's I/O is shared and noisy. The first pair looked like
+a 13% win and was not; three runs were enough to say so.
+
+Which is also what the code predicts: the same number of reads and writes of
+the same size, plus one call per turn that inlines away. **The property, not
+the timing, is what the suite holds:** the progress deltas add up to what the
+scan promised, on both the copy path and the pack path.
+
 ## What is deliberately still slow
 
 **The listing loads whole directories.** No pagination, no incremental

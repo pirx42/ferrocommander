@@ -65,6 +65,29 @@ which means "possible, just not in one step". A test pins it by asserting
 that such a move performs no directory walk at all; see
 [performance.md](performance.md).
 
+## One place counts a byte, and one place notices a cancel
+
+A copy streams through a `Metered` reader and so does a pack. It is the only
+thing that emits `Progress::Advanced` and the only thing that looks at the
+cancel token mid-file, so **how fast the bar moves and how soon a stop is
+noticed are one decision** rather than one per caller.
+
+They used to be two: the copy loop checked the token itself and signalled a
+cancel by returning `false`, while the pack path used the reader and signalled
+by erroring. Nothing was wrong with either, and that is the point — a change
+to how bytes are counted would have had to be made twice, and only one of the
+two had a test that the deltas add up to what the scan promised. Both do now.
+
+The loop itself stays explicit rather than becoming `io::copy`, because the
+buffer size is a decision with a reason attached: it is also how coarse a
+cancel is (`COPY_BUFFER_BYTES`, 64 KiB), and `io::copy` picks its own.
+
+A cancel and a disk failure both arrive at the caller as an error, and **only
+the token tells them apart** — the message the reader carries is for a
+backtrace, not for that decision. A cancel is then not a failure: an
+interrupted copy reports none, because nothing went wrong and a name in front
+of the user needs an action attached to it.
+
 ## Progress
 
 `Progress::Scanned { files, bytes }` comes first and is what everything else
