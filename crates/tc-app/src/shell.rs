@@ -178,10 +178,18 @@ impl Shell {
         let mut settings = config::Settings {
             // A window that has already gone keeps the size last written,
             // rather than reporting zero on the way out.
+            //
+            // **`default_width`, not `width`** — the same property
+            // `remember_window_size` listens to. They are two different
+            // things: `width()` is the current allocation, and nothing
+            // notifies about it here, so a change it saw and the property
+            // that woke the save could disagree. A test report has one
+            // instance of exactly that shape: a resize whose *height* reached
+            // the settings file and whose width did not.
             window: match self.window() {
                 Some(window) => config::WindowSettings {
-                    width: window.width(),
-                    height: window.height(),
+                    width: window.default_width(),
+                    height: window.default_height(),
                 },
                 None => self.saved.window,
             },

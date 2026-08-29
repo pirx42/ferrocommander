@@ -39,7 +39,15 @@ after *every* keystroke that reaches an action
 
 The window size is the one change that arrives from outside the keymap, so it
 is watched separately, through GTK's own `default-width` / `default-height`
-notifications.
+notifications — **and those are the properties the saved value is read from
+too**. They are not the same as `width()`/`height()`, which are the current
+allocation and notify nothing here: listening to one and saving the other
+leaves room for a change that woke the save to disagree with the value the
+save then wrote. A test report has one instance of exactly that shape — a
+resize whose height reached the file and whose width did not, once in two
+runs. That is a plausible cause rather than a confirmed one; it could not be
+reproduced here, and what has been removed is the inconsistency, not a
+demonstrated bug.
 
 Both halves are covered end to end by tests that **kill** the app rather than
 closing it (`settings_survive_the_app_being_killed`,
