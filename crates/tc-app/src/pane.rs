@@ -699,12 +699,10 @@ impl PaneView {
     /// is TC's own rule, and it is what makes running back over a row take
     /// its mark off again.
     pub fn toggle_mark(&mut self, step: isize) {
-        self.adopt_selection();
-        self.shown
-            .listing
-            .toggle_selected(self.shown.listing.cursor());
-        self.shown.listing.move_cursor_by(step);
-        self.refresh_marks();
+        self.marking(|listing| {
+            listing.toggle_selected(listing.cursor());
+            listing.move_cursor_by(step);
+        });
     }
 
     /// Marks every row between the cursor and `target`, then goes there.
@@ -713,12 +711,10 @@ impl PaneView {
     /// jump has no direction to run back over and "flip everything I passed"
     /// is not what a person asking for "to the end" means.
     pub fn extend_mark_to(&mut self, target: usize) {
-        self.adopt_selection();
-        self.shown
-            .listing
-            .select_range(self.shown.listing.cursor(), target, true);
-        self.shown.listing.set_cursor(target);
-        self.refresh_marks();
+        self.marking(|listing| {
+            listing.select_range(listing.cursor(), target, true);
+            listing.set_cursor(target);
+        });
     }
 
     /// Exchanges everything this pane is showing with another's.
@@ -729,7 +725,11 @@ impl PaneView {
     /// along together — anything reconstructed field by field would quietly
     /// drop one of them.
     pub fn exchange_with(&mut self, other: &mut PaneView) {
-        self.adopt_selection();
+        // The *other* pane, and it is not the redundant call it looks like:
+        // dispatch adopts the active pane, and this is the one it does not
+        // touch. A click gives a pane's widget the focus and a selection of
+        // its own without making it active, so its model can be a row behind
+        // when the exchange arrives.
         other.adopt_selection();
         // One swap, not six. Naming the fields one at a time is what let the
         // backend and the archive stack be forgotten when archives arrived,
@@ -766,7 +766,6 @@ impl PaneView {
     /// be a move of the directory you are standing in. Three lines against
     /// that is a trade worth making even when the case is unreachable.
     pub fn begin_rename(&mut self) {
-        self.adopt_selection();
         if self.shown.listing.is_parent(self.shown.listing.cursor()) {
             return;
         }
@@ -843,36 +842,29 @@ impl PaneView {
     }
 
     pub fn mark_matching(&mut self, pattern: &str, selected: bool) {
-        self.shown.listing.select_matching(pattern, selected);
-        self.refresh_marks();
+        self.marking(|listing| listing.select_matching(pattern, selected));
     }
 
     /// Flips the visible files, leaving directories alone — Total Commander's
     /// `Num *`. `including_folders` is its `Shift+Num *`.
     pub fn invert_marks(&mut self, including_folders: bool) {
-        if including_folders {
-            self.shown.listing.invert_selection();
-        } else {
-            self.shown.listing.invert_selection_files();
-        }
-        self.refresh_marks();
+        self.marking(|listing| match including_folders {
+            true => listing.invert_selection(),
+            false => listing.invert_selection_files(),
+        });
     }
 
     pub fn mark_all(&mut self) {
-        self.shown.listing.select_all();
-        self.refresh_marks();
+        self.marking(Listing::select_all);
     }
 
     pub fn unmark_all(&mut self) {
-        self.shown.listing.clear_selection();
-        self.refresh_marks();
+        self.marking(Listing::clear_selection);
     }
 
     /// `Alt+Num ±`: every visible file sharing the cursor row's extension.
     pub fn mark_same_extension(&mut self, selected: bool) {
-        self.adopt_selection();
-        self.shown.listing.select_same_extension(selected);
-        self.refresh_marks();
+        self.marking(|listing| listing.select_same_extension(selected));
     }
 
     /// Puts away what is marked, so `Num /` can bring it back.
@@ -886,8 +878,24 @@ impl PaneView {
     /// `Num /`: the selection from before the last operation.
     pub fn restore_marks(&mut self) {
         let remembered = std::mem::take(&mut self.shown.remembered_marks);
-        self.shown.listing.set_selected_names(&remembered);
+        self.marking(|listing| listing.set_selected_names(&remembered));
         self.shown.remembered_marks = remembered;
+    }
+
+    /// Changes what is marked, and repaints exactly the rows that now say
+    /// something different.
+    ///
+    /// Every mark operation goes through here, so the repaint is not an
+    /// obligation an author can forget. It has been forgotten once: marks
+    /// stopped repainting because a mutated-in-place row was never re-bound,
+    /// and a mark operation that skips [`refresh_marks`](Self::refresh_marks)
+    /// does not fail — it silently changes nothing on screen.
+    ///
+    /// **No `adopt_selection` here.** The widget's selection is adopted once
+    /// per dispatched action, before the action runs, and nothing reaches a
+    /// mark operation any other way.
+    fn marking(&mut self, change: impl FnOnce(&mut Listing)) {
+        change(&mut self.shown.listing);
         self.refresh_marks();
     }
 
@@ -930,6 +938,12 @@ impl PaneView {
     ///
     /// Paging is deliberately left to the widget: it knows the height of the
     /// viewport, and the model has no idea how many rows are on screen.
+    ///
+    /// **The contract: the active pane's selection is adopted once per
+    /// dispatched action, before the action runs.** So nothing reached from
+    /// `dispatch` — no handler, no method on this type — has to call this,
+    /// and a new action gets it for free. The one other caller is the pane
+    /// exchange, which adopts the pane `dispatch` never touches.
     pub fn adopt_selection(&mut self) {
         if let Some(cursor) = adopted_cursor(self.selection.selected()) {
             self.shown.listing.set_cursor(cursor);

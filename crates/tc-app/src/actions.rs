@@ -40,6 +40,13 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     // The widget may have moved its own selection since the last action —
     // Page Up/Down are not bound here and go straight to the ColumnView.
     // Catch the model up before acting on a stale cursor.
+    //
+    // **Once, here, for every action.** This used to be repeated inside the
+    // handlers and inside `PaneView`'s own methods, where every call after
+    // this one was a no-op — no main-loop turn runs in between — and where
+    // nobody could tell which of the eleven was the load-bearing one. The
+    // contract is on `PaneView::adopt_selection`; the only other caller is
+    // the pane exchange, which adopts the pane this line does not.
     shell.borrow_mut().active_pane().adopt_selection();
 
     match action {
@@ -91,7 +98,6 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::CommandHistory => show_command_history(shell),
         Action::InsertName => {
             let mut state = shell.borrow_mut();
-            state.active_pane().adopt_selection();
             // The row under the cursor, `..` included: `cd ..` is a perfectly
             // good thing to build this way, and there is no harm in the name.
             if let Some(name) = state.active_pane().current_name() {
@@ -509,7 +515,6 @@ pub(crate) fn start_multi_rename(shell: &Rc<RefCell<Shell>>) {
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        state.active_pane().adopt_selection();
         let pane = state.active_pane();
         let names: Vec<String> = jobs::sources(pane.listing())
             .iter()
@@ -669,7 +674,6 @@ pub(crate) fn start_viewing(shell: &Rc<RefCell<Shell>>) {
         let Some(window) = state.window.upgrade() else {
             return;
         };
-        state.active_pane().adopt_selection();
         let Some(path) = state.active_pane().current_file() else {
             return;
         };
@@ -687,7 +691,6 @@ pub(crate) fn start_viewing(shell: &Rc<RefCell<Shell>>) {
 /// F4: hand the file under the cursor to the editor from the settings.
 pub(crate) fn start_editing(shell: &Rc<RefCell<Shell>>) {
     let mut state = shell.borrow_mut();
-    state.active_pane().adopt_selection();
     let Some(path) = state.active_pane().current_file() else {
         return;
     };

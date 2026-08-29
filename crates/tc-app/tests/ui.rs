@@ -2033,6 +2033,31 @@ fn page_down_then_f5_acts_on_the_row_the_widget_moved_to() {
     );
 }
 
+#[test]
+fn page_down_then_space_marks_the_row_the_widget_moved_to() {
+    // The same stale-cursor trap as the F5 test above, on the path where the
+    // adopting used to be written out again: marking. The mark has to land on
+    // the row the page left the widget on, not on the row the model still
+    // thinks it is on — so `Home` afterwards, which moves the cursor away and
+    // leaves the mark as the only thing F5 can be acting on.
+    let app = in_src_and_dst(with_a_tall_directory);
+
+    app.key("Home");
+    app.key("Next");
+    app.key("space");
+    app.key("Home");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    let copied = await_any_copy(&app);
+    assert!(
+        copied.starts_with("row"),
+        "F5 copied {copied:?} rather than the row the page landed on"
+    );
+}
+
 /// Waits for anything at all to appear in `dst`, and says what it was.
 fn await_any_copy(app: &App) -> String {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);

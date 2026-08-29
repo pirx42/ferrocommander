@@ -182,6 +182,21 @@ asking. So the traffic runs both ways:
 - **Widget → model** at the start of every dispatched action, via
   `adopt_selection`.
 
+**Exactly once, in `dispatch`.** The adoption used to be written out again in
+four handlers and six `PaneView` methods, all of them reached only *through*
+`dispatch` and therefore all of them no-ops — no main-loop turn runs in
+between — which left nobody able to say which call was the load-bearing one.
+The rule now lives with the method: the active pane's selection is adopted
+once per dispatched action, before the action runs. The one other caller is
+the pane exchange, and it adopts the **other** pane — a click gives a pane's
+widget the focus and a selection of its own without making it active, so that
+one is not the same call.
+
+Every mark operation goes through `PaneView::marking`, which repaints the rows
+that changed. That is structure rather than discipline: a mark operation that
+forgets the repaint does not fail, it silently changes nothing on screen —
+which this project has already shipped once.
+
 `sync_cursor` does three things in one `ColumnView::scroll_to` call —
 **select**, **focus**, and **scroll into view**. All three are needed.
 Selecting alone moves nothing: only the widget's own key handling scrolls,
