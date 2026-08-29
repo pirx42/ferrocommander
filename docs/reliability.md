@@ -66,6 +66,14 @@ suite and end to end through the real binary.
 | `crates/tc-core/tests/search.rs` | the walk: every hit and no others, refusals skipped, cancellation ([search.md](search.md)) |
 | `crates/tc-app/tests/ui.rs` | the real binary, driven by real key presses ([ui-shell.md](ui-shell.md)) |
 
+**The doubles every suite shares live in `crates/tc-core/tests/common/`** —
+the tree builder, the snapshot comparison, the `delegate_vfs!` macro, and the
+two conflict resolvers: `NoConflictsExpected`, which fails the test if the
+engine asks anything at all, and `Scripted`, which answers in order and
+records what it was asked. Both existed twice under two names until the
+architecture review counted them. A double that only one suite needs stays in
+that suite, and no two of them share a name.
+
 Failure injection is done with decorators around `VirtualFs` — one that
 counts reads and directory walks, one that reports every rename as crossing a
 filesystem, one that cancels partway through a file, one that fails a read

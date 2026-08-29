@@ -18,8 +18,66 @@
 use std::collections::BTreeMap;
 use std::io::Read;
 
+use tc_core::ops::{Answer, Conflict, ConflictResolver};
 use tc_core::vfs::{LocalFs, VfsPath, VirtualFs};
 use tempfile::TempDir;
+
+// ------------------------------------------------------------- resolvers
+
+/// Refuses to be asked. Any conflict at all fails the test that used it.
+///
+/// Most jobs under test write into somewhere empty, so a question is not a
+/// case to answer but a bug: the engine found something it should not have,
+/// and a resolver that quietly said "overwrite" would hide it.
+pub struct NoConflictsExpected;
+
+impl ConflictResolver for NoConflictsExpected {
+    fn resolve(&mut self, conflict: &Conflict) -> Answer {
+        panic!("unexpected conflict at {}", conflict.target);
+    }
+}
+
+/// Answers whatever it was handed, in order, and records what it was asked.
+///
+/// The last answer stands for every question after it, so `always` is the
+/// same thing with one entry — a job that asks twice when it should ask once
+/// is caught by [`questions`](Self::questions), not by running out of
+/// answers.
+pub struct Scripted {
+    answers: Vec<Answer>,
+    asked: Vec<Conflict>,
+}
+
+impl Scripted {
+    pub fn new(answers: Vec<Answer>) -> Self {
+        Scripted {
+            answers,
+            asked: Vec::new(),
+        }
+    }
+
+    pub fn always(answer: Answer) -> Self {
+        Scripted::new(vec![answer])
+    }
+
+    /// How many times it was asked.
+    pub fn questions(&self) -> usize {
+        self.asked.len()
+    }
+
+    /// What it was asked, in order.
+    pub fn asked(&self) -> &[Conflict] {
+        &self.asked
+    }
+}
+
+impl ConflictResolver for Scripted {
+    fn resolve(&mut self, conflict: &Conflict) -> Answer {
+        self.asked.push(conflict.clone());
+        let index = (self.asked.len() - 1).min(self.answers.len() - 1);
+        self.answers[index]
+    }
+}
 
 /// A whole tree as relative path to contents, `None` for a directory.
 ///

@@ -10,66 +10,31 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use tc_core::ops::{
-    self, Answer, ApplyToAll, CancelToken, Conflict, ConflictResolver, DeleteMode, Destination,
-    Job, Outcome, Progress, Report, Resolution, Silent,
+    self, Answer, ApplyToAll, CancelToken, ConflictResolver, DeleteMode, Destination, Job, Outcome,
+    Progress, Report, Resolution, Silent,
 };
 use tc_core::vfs::{Entry, LocalFs, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
 
 mod common;
 
-use common::{byte_sum, delegate_vfs, exists, file_count, fixture, snapshot, Snapshot};
-
-// --------------------------------------------------------------- resolvers
-
-/// Answers whatever it was handed, in order, and counts the questions.
-struct Scripted {
-    answers: Vec<Answer>,
-    asked: Vec<Conflict>,
-}
-
-impl Scripted {
-    fn new(answers: Vec<Answer>) -> Self {
-        Scripted {
-            answers,
-            asked: Vec::new(),
-        }
-    }
-
-    fn always(answer: Answer) -> Self {
-        Scripted::new(vec![answer])
-    }
-}
-
-impl ConflictResolver for Scripted {
-    fn resolve(&mut self, conflict: &Conflict) -> Answer {
-        self.asked.push(conflict.clone());
-        let index = (self.asked.len() - 1).min(self.answers.len() - 1);
-        self.answers[index]
-    }
-}
-
-/// Refuses to be asked. Any conflict at all fails the test that used it.
-struct NoConflictsExpected;
-
-impl ConflictResolver for NoConflictsExpected {
-    fn resolve(&mut self, conflict: &Conflict) -> Answer {
-        panic!("unexpected conflict at {}", conflict.target);
-    }
-}
+use common::{
+    byte_sum, delegate_vfs, exists, file_count, fixture, snapshot, NoConflictsExpected, Scripted,
+    Snapshot,
+};
 
 // -------------------------------------------------------------- decorators
 
 /// Counts the work a job does, so a test can prove it did none.
-struct Counting<'a> {
+struct CountingBackend<'a> {
     inner: &'a dyn VirtualFs,
     reads: AtomicUsize,
     walks: AtomicUsize,
 }
 
-impl<'a> Counting<'a> {
+impl<'a> CountingBackend<'a> {
     fn new(inner: &'a dyn VirtualFs) -> Self {
-        Counting {
+        CountingBackend {
             inner,
             reads: AtomicUsize::new(0),
             walks: AtomicUsize::new(0),
@@ -149,7 +114,7 @@ struct RecordingTrash<'a> {
     trashed: Mutex<Vec<VfsPath>>,
 }
 
-impl Counting<'_> {
+impl CountingBackend<'_> {
     fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
         self.inner.create_file(path)
     }
@@ -266,7 +231,7 @@ impl RecordingTrash<'_> {
     }
 }
 
-delegate_vfs!(Counting<'_>);
+delegate_vfs!(CountingBackend<'_>);
 delegate_vfs!(AlwaysCrossDevice<'_>);
 delegate_vfs!(CancelsMidFile<'_>);
 delegate_vfs!(FailsMidRead<'_>);
@@ -375,7 +340,7 @@ fn a_move_within_one_filesystem_neither_reads_nor_walks() {
     // into a scan followed by a rename. No value assertion would notice
     // either: the resulting tree is identical.
     let (_dir, root) = fixture();
-    let counting = Counting::new(&LocalFs);
+    let counting = CountingBackend::new(&LocalFs);
     let target_dir = root.child("into");
 
     run_clean(
@@ -663,7 +628,7 @@ fn apply_to_all_asks_exactly_once_however_many_collide() {
     );
 
     // Five collisions, one question. Without the wrapper this is five.
-    assert_eq!(resolver.into_inner().asked.len(), 1);
+    assert_eq!(resolver.into_inner().questions(), 1);
 }
 
 #[test]
@@ -1259,7 +1224,7 @@ mod awkward_corners {
             &CancelToken::new(),
         );
 
-        assert_eq!(resolver.asked.len(), 1);
+        assert_eq!(resolver.questions(), 1);
         assert_eq!(
             snapshot(&LocalFs, &target_dir),
             Snapshot::from([("/a.txt".to_string(), Some(b"hello world".to_vec()))])

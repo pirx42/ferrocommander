@@ -8,7 +8,7 @@
 
 mod common;
 
-use common::delegate_vfs;
+use common::{delegate_vfs, NoConflictsExpected, Scripted};
 
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -17,8 +17,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use tc_core::archive::{format_for, ArchiveFs, Format};
 use tc_core::ops::{
-    self, Answer, CancelToken, Conflict, ConflictResolver, DeleteMode, Destination, Job, Progress,
-    Report, Resolution, Silent,
+    self, Answer, CancelToken, DeleteMode, Destination, Job, Progress, Report, Resolution, Silent,
 };
 use tc_core::vfs::{Attributes, Entry, EntryKind, LocalFs, Store, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
@@ -92,7 +91,7 @@ const READS_PER_ENTRIES: (usize, usize) = (5, 2);
 /// How long the stored entry in the window test is: several container buffers,
 /// so decoding its prefix would be visibly more than one read.
 const STORED_BODY: usize = 512 * 1024;
-/// What [`Counting`] calls its one file.
+/// What [`CountedFile`] calls its one file.
 const CONTAINER: &str = "/a.zip";
 
 /// A backend holding one archive in memory, counting the reads of it.
@@ -101,14 +100,14 @@ const CONTAINER: &str = "/a.zip";
 /// page cache would answer a different question — how fast the kernel is —
 /// than the one being asked, which is how many times this layer asks at all.
 #[derive(Clone)]
-struct Counting {
+struct CountedFile {
     bytes: Arc<Vec<u8>>,
     reads: Arc<AtomicUsize>,
 }
 
-impl Counting {
-    fn over(bytes: Vec<u8>) -> Arc<Counting> {
-        Arc::new(Counting {
+impl CountedFile {
+    fn over(bytes: Vec<u8>) -> Arc<CountedFile> {
+        Arc::new(CountedFile {
             bytes: Arc::new(bytes),
             reads: Arc::new(AtomicUsize::new(0)),
         })
@@ -119,7 +118,7 @@ impl Counting {
     }
 }
 
-impl VirtualFs for Counting {
+impl VirtualFs for CountedFile {
     fn store(&self) -> Store {
         Store::LOCAL
     }
@@ -611,7 +610,7 @@ fn opening_an_archive_does_not_read_the_container_once_per_entry() {
     let items: Vec<Item> = (0..ENTRY_COUNT)
         .map(|index| stored(&format!("file{index}"), b"y"))
         .collect();
-    let counted = Counting::over(zip_bytes(&items));
+    let counted = CountedFile::over(zip_bytes(&items));
 
     let archive = ArchiveFs::open(counted.clone(), &VfsPath::new(CONTAINER)).unwrap();
     assert_eq!(
@@ -636,7 +635,7 @@ fn browsing_an_open_archive_does_not_read_the_container_at_all() {
     let items: Vec<Item> = (0..ENTRY_COUNT)
         .map(|index| stored(&format!("dir{}/file{index}", index % 10), b"y"))
         .collect();
-    let counted = Counting::over(zip_bytes(&items));
+    let counted = CountedFile::over(zip_bytes(&items));
     let archive = ArchiveFs::open(counted.clone(), &VfsPath::new(CONTAINER)).unwrap();
 
     let opened = counted.reads();
@@ -658,7 +657,7 @@ fn a_window_of_a_stored_entry_does_not_read_everything_before_it() {
     // compressed entry has to be decoded from its start — the honest cost of a
     // format with no seek — but paying it for an entry that is not compressed
     // would make a jpeg inside a zip page like a compressed one.
-    let counted = Counting::over(zip_bytes(&[stored("big", &vec![b'z'; STORED_BODY])]));
+    let counted = CountedFile::over(zip_bytes(&[stored("big", &vec![b'z'; STORED_BODY])]));
     let archive = ArchiveFs::open(counted.clone(), &VfsPath::new(CONTAINER)).unwrap();
 
     let before = counted.reads();
@@ -754,7 +753,7 @@ fn a_move_between_two_stores_never_renames() {
         },
         &archive,
         &watched,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut Silent,
         &CancelToken::new(),
     );
@@ -783,7 +782,7 @@ fn a_move_within_one_store_still_takes_the_shortcut() {
         },
         &watched,
         &watched,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut Silent,
         &CancelToken::new(),
     );
@@ -816,7 +815,7 @@ fn unpacking_into_a_root_is_not_mistaken_for_a_copy_onto_itself() {
         },
         &archive,
         &target,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut Silent,
         &CancelToken::new(),
     );
@@ -908,7 +907,7 @@ fn packing_reports_every_byte_it_read() {
         },
         &LocalFs,
         &LocalFs,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut events,
         &CancelToken::new(),
     );
@@ -951,7 +950,7 @@ fn a_pack_that_is_cancelled_leaves_no_archive_at_all() {
         },
         &LocalFs,
         &LocalFs,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut Silent,
         &cancel,
     );
@@ -974,7 +973,7 @@ fn packing_a_second_time_asks_before_replacing() {
     let archive = LocalFs::vfs_path(dir.path()).child("out.zip");
     std::fs::write(dir.path().join("out.zip"), b"not really an archive").unwrap();
 
-    let mut asked = Asked::new(Answer::once(Resolution::Skip));
+    let mut asked = Scripted::always(Answer::once(Resolution::Skip));
     ops::run(
         &Job::Pack {
             sources: vec![LocalFs::vfs_path(&tree)],
@@ -988,7 +987,7 @@ fn packing_a_second_time_asks_before_replacing() {
         &CancelToken::new(),
     );
 
-    assert_eq!(asked.questions, 1, "nothing was asked");
+    assert_eq!(asked.questions(), 1, "nothing was asked");
     assert_eq!(
         std::fs::read(dir.path().join("out.zip")).unwrap(),
         b"not really an archive",
@@ -1010,7 +1009,7 @@ fn pack(directory: &std::path::Path, sources: &[VfsPath], name: &str) {
         },
         &LocalFs,
         &LocalFs,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut Silent,
         &CancelToken::new(),
     );
@@ -1018,28 +1017,6 @@ fn pack(directory: &std::path::Path, sources: &[VfsPath], name: &str) {
         report.is_clean(),
         "packing {name} was not clean: {report:?}"
     );
-}
-
-/// A resolver that answers once and counts the questions.
-struct Asked {
-    answer: Answer,
-    questions: usize,
-}
-
-impl Asked {
-    fn new(answer: Answer) -> Asked {
-        Asked {
-            answer,
-            questions: 0,
-        }
-    }
-}
-
-impl ConflictResolver for Asked {
-    fn resolve(&mut self, _conflict: &Conflict) -> Answer {
-        self.questions += 1;
-        self.answer
-    }
 }
 
 #[test]
@@ -1060,7 +1037,7 @@ fn a_job_that_would_write_into_an_archive_is_refused_once() {
         },
         &LocalFs,
         &archive,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut Silent,
         &CancelToken::new(),
     );
@@ -1096,7 +1073,7 @@ fn creating_and_deleting_inside_an_archive_are_refused_too() {
             &job,
             &archive,
             &archive,
-            &mut Refuse,
+            &mut NoConflictsExpected,
             &mut Silent,
             &CancelToken::new(),
         );
@@ -1147,19 +1124,10 @@ fn transfer(archive: &ArchiveFs, into: &VfsPath, moving: bool) -> Report {
         &job,
         archive,
         &LocalFs,
-        &mut Refuse,
+        &mut NoConflictsExpected,
         &mut Silent,
         &CancelToken::new(),
     )
-}
-
-/// A resolver for jobs that must not meet a conflict at all.
-struct Refuse;
-
-impl ConflictResolver for Refuse {
-    fn resolve(&mut self, conflict: &Conflict) -> Answer {
-        panic!("unexpected conflict: {conflict:?}");
-    }
 }
 
 /// A `LocalFs` that counts the renames attempted through it.
