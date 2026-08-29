@@ -232,6 +232,13 @@ pub struct PaneView {
     /// Which entry to put the cursor on when that read arrives — the directory
     /// just left, when stepping up.
     focus_on_arrival: Option<String>,
+    /// Where each directory was scrolled to when this pane left it.
+    ///
+    /// A session's memory, not a saved one: it needs no cap and no settings
+    /// file that grows with every directory ever visited, and coming back to
+    /// where you were matters within a session in a way it does not across a
+    /// restart.
+    scrolled_to: std::collections::HashMap<String, f64>,
     /// Which directory [`watch`](Self::watch) is about, so the shell can tell
     /// when navigation has left it behind.
     watched: Option<VfsPath>,
@@ -343,6 +350,7 @@ impl PaneView {
             scroller,
             wanted: None,
             focus_on_arrival: None,
+            scrolled_to: std::collections::HashMap::new(),
             walking: None,
             measuring: None,
             transition: Transition::Stay,
@@ -1252,12 +1260,40 @@ impl PaneView {
 
     /// Records that a move to `dir` is in flight, whatever backend answers it.
     fn start(&mut self, dir: VfsPath, focus: Option<String>) {
+        // Where this directory was left, so coming back to it lands where you
+        // were rather than at the cursor's row. Recorded on the way out
+        // because that is the last moment the offset is still the one the
+        // user was looking at.
+        self.remember_scroll();
         // A filter belongs to the directory it was typed in. Carrying it into
         // the next one would show an empty pane and no reason why.
         self.filter_bar.set_text("");
         self.filter_bar.set_visible(false);
         self.focus_on_arrival = focus;
         self.wanted = Some(dir);
+    }
+
+    /// Writes down where the directory on screen is scrolled to.
+    fn remember_scroll(&mut self) {
+        let offset = self.scroller.vadjustment().value();
+        self.scrolled_to
+            .insert(self.shown.listing.dir().as_str().to_string(), offset);
+    }
+
+    /// Puts the view back where this directory was left, if it has been here
+    /// before.
+    ///
+    /// After the rows exist and after the cursor has been placed: GTK scrolls
+    /// to keep the focused row visible, so restoring first would be undone by
+    /// the thing it is meant to override. The offset is clamped by the
+    /// adjustment itself, which is what makes a directory that shrank while
+    /// you were below it land at its end rather than past it.
+    fn restore_scroll(&self) {
+        let Some(&offset) = self.scrolled_to.get(self.shown.listing.dir().as_str()) else {
+            return;
+        };
+        let adjustment = self.scroller.vadjustment();
+        glib::idle_add_local_once(move || adjustment.set_value(offset));
     }
 
     /// Puts the cursor on `path` when the listing being read arrives.
@@ -1330,6 +1366,7 @@ impl PaneView {
                 }
                 self.shown.listing = listing;
                 self.error = None;
+                self.restore_scroll();
             }
             Err(reason) => {
                 let name = dir.file_name().unwrap_or(dir.as_str()).to_string();

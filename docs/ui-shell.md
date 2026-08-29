@@ -389,6 +389,15 @@ meaning under Wayland at all, and `spawn_app` now pins `GDK_BACKEND` beside
 `GDK_BACKEND=wayland` in the environment and, without the pin, every test
 fails the same way.
 
+**A scroll offset is the one thing this suite cannot see.** It is not a
+window title, a file on disk or a key press, so `xdotool` has no way to read
+it — which is why the per-directory scroll memory is checked by
+`scripts/check-scroll-memory.sh` instead: it drives the real app and leaves
+screenshots. The case it sets up is the one the *cursor* cannot explain, with
+the cursor left on the first row and the view wheeled far down, because
+returning to a cursor at the top would show the top whether the memory works
+or not.
+
 **The per-user directories are pinned too, not just `HOME`.** The app follows
 the freedesktop rule — `$XDG_CONFIG_HOME`, or `~/.config` when it is unset —
 so an ambient `XDG_CONFIG_HOME` beats the private home and the settings file
