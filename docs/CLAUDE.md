@@ -71,7 +71,9 @@ cross-references instead of duplication.
   | [branch view](plans/archive/2026-08-29-branch-view.md) | Total Commander's `Ctrl+B`: the walk, the listing that is not a mode, the two keys that read a row's name as something to write, and three tests that were wrong before they were right |
   | [folder sizes](plans/archive/2026-08-29-folder-sizes.md) | Total Commander's `Alt+Shift+Enter`: the scan, the size that goes where the status total and the sort already look — and the watcher bug that made the feature not work at all |
 
-  No plan is currently active.
+  One plan is **active**:
+  [an Ubuntu package](plans/2026-08-29-ubuntu-package.md) — a `.deb` built
+  on every commit to `main`, and the first CI this repository has had.
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
