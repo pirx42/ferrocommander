@@ -4,14 +4,15 @@
 //! decision the dialogs make is testable without a window — the same split
 //! `navigation.rs` uses for the cursor keys.
 
-use tc_core::listing::Listing;
+use tc_core::listing::{split_name, Listing};
 use tc_core::ops::{DeleteMode, Destination};
 use tc_core::vfs::constants::SEPARATOR;
 use tc_core::vfs::VfsPath;
 
 use crate::constants::{
-    DELETE_PROMPT_PERMANENT, DELETE_PROMPT_TRASH, KIND_DIRECTORY, KIND_FILE, QUOTE_CLOSE,
-    QUOTE_OPEN, SELECTION_STATUS, SUBJECT_MANY,
+    DELETE_PROMPT_PERMANENT, DELETE_PROMPT_TRASH, KIND_DIRECTORY, KIND_FILE,
+    PACK_DEFAULT_EXTENSION, PACK_FALLBACK_NAME, QUOTE_CLOSE, QUOTE_OPEN, SELECTION_STATUS,
+    SUBJECT_MANY,
 };
 use crate::progress::human_bytes;
 
@@ -110,6 +111,47 @@ pub fn selection_status(listing: &Listing) -> String {
         .replace("{total}", &visible.count.to_string())
         .replace("{marked_bytes}", &human_bytes(marked.bytes))
         .replace("{total_bytes}", &human_bytes(visible.bytes))
+}
+
+/// Where the name typed into Alt+F5's field puts the archive.
+///
+/// A bare name lands beside the sources, exactly as it does for F5 and F6:
+/// the field arrives prefilled with a path beside the *other* pane and
+/// selected, so somebody who types over it with one word means "here", and a
+/// program that read that as the root of the disk would be answering a
+/// question nobody asked.
+///
+/// `None` for nothing at all.
+pub fn packed_at(input: &str, source_dir: &VfsPath) -> Option<VfsPath> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(match trimmed.contains(SEPARATOR) {
+        true => VfsPath::new(trimmed),
+        false => source_dir.child(trimmed),
+    })
+}
+
+/// The archive name Alt+F5 offers: beside `dir`, named after what is being
+/// packed.
+///
+/// After the cursor row when that is the whole job, and after the directory
+/// the files are in when several are — which is what somebody would have typed
+/// themselves, and the reason the field arrives selected so they can type over
+/// it instead.
+pub fn prefilled_archive(dir: &VfsPath, listing: &Listing, count: usize) -> String {
+    let subject = if count == 1 {
+        listing
+            .current()
+            .map(|entry| split_name(&entry.name).0.to_string())
+    } else {
+        listing.dir().file_name().map(str::to_string)
+    };
+    let name = subject
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| PACK_FALLBACK_NAME.to_string());
+    format!("{}{name}{PACK_DEFAULT_EXTENSION}", prefilled_target(dir))
 }
 
 #[cfg(test)]

@@ -41,3 +41,10 @@ pub const ONTO_ITSELF: &str = "source and destination are the same";
 ///
 /// The walk would keep finding what it had just written.
 pub const INTO_ITSELF: &str = "the destination is inside the source";
+
+/// What a read aborted by a cancel reports.
+///
+/// Never shown: the caller asks the cancel token, which is the only thing that
+/// can tell a cancel apart from a disk failure. It exists so the error is not
+/// empty in a backtrace.
+pub const PACK_CANCELLED: &str = "cancelled";

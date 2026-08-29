@@ -35,6 +35,8 @@ pub enum Action {
     GoParent,
     /// F5 — copy the entry under the cursor.
     Copy,
+    /// Alt+F5.
+    Pack,
     /// F6 — move it, or rename it in place.
     Move,
     /// Ctrl+R — re-read the directory, keeping marks, cursor and position.
@@ -210,6 +212,13 @@ static BINDINGS: &[Binding] = &[
         key: Key::F5,
         modifiers: PLAIN,
         action: Action::Copy,
+    },
+    // Total Commander's own key for it, and the reason Alt+F5 rather than a
+    // letter: it sits beside the copy it is a kind of.
+    Binding {
+        key: Key::F5,
+        modifiers: ModifierType::ALT_MASK,
+        action: Action::Pack,
     },
     Binding {
         key: Key::F6,
@@ -487,6 +496,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("activate", Action::Activate),
     ("go_parent", Action::GoParent),
     ("copy", Action::Copy),
+    ("pack", Action::Pack),
     ("move", Action::Move),
     ("reread", Action::Reread),
     ("search", Action::Search),
@@ -734,6 +744,7 @@ mod tests {
             (Key::F3, PLAIN, Action::View),
             (Key::F4, PLAIN, Action::Edit),
             (Key::F5, PLAIN, Action::Copy),
+            (Key::F5, ModifierType::ALT_MASK, Action::Pack),
             (Key::F6, PLAIN, Action::Move),
             (Key::F4, ModifierType::SHIFT_MASK, Action::CreateFile),
             (Key::F6, ModifierType::SHIFT_MASK, Action::RenameInline),

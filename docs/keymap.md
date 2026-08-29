@@ -36,6 +36,7 @@
 | `Ctrl+↓`, `Alt+F8` | The command history — see [command-line.md](command-line.md) |
 | `Ctrl+Enter` | Put the name under the cursor into the command line |
 | `Alt+F7` | Find files below the active pane — see [search.md](search.md) |
+| `Alt+F5` | Pack what is marked into a new archive — see [archives.md](archives.md) |
 | `Ctrl+M` | Rename what is marked by a rule — see [multi-rename.md](multi-rename.md) |
 | `Ctrl+Z` | Put the last multi-rename back |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |

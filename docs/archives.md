@@ -113,6 +113,45 @@ entry comes out, and the archive reports `ReadOnly` for the half it will not
 do. Nothing is lost and the reason is on screen, which is the honest outcome
 for an operation half of which is impossible.
 
+## Packing — `Alt+F5`
+
+The extension picks the format, by the same rule that decides whether Enter
+walks into a file. One rule, so a name this writes is a name that opens again;
+a name that decides nothing — `.rar` — is refused rather than answered with a
+guess.
+
+The **scan, the progress, the cancel and the failure list are the engine's**.
+A pack is `ops::run` with exactly one step replaced: "write these bytes at the
+destination" becomes "append this entry", behind a `Packer` trait with three
+methods. Nothing about a format reaches `ops`, and nothing about jobs reaches
+the packer.
+
+The packer is handed a **reader**, not a path. That reader is the engine's: it
+counts the bytes for the progress bar and refuses to go on after a cancel, so
+the counting and the cancelling exist once rather than once per format.
+
+**An archive that exists is an archive that finished.** The bytes go to a
+temporary name beside the final one and are renamed into place at the end — a
+rename within one directory, so there is no moment where the name exists
+holding half an archive. A cancelled or failed pack removes the temporary and
+leaves nothing at all: not an empty archive, and not a half-written one under
+a name somebody will later open.
+
+For the same reason a pack **stops at the first refusal** rather than carrying
+on. A copy that skips one file leaves a tree missing a file, and the failure
+list explains it; an archive that skipped one is a single file somebody will
+keep, and the explanation is long gone by the time it matters.
+
+A file keeps its date and its mode. On Windows there is no Unix mode to
+record, so none is written, rather than a Win32 attribute mask that would read
+on Linux as a permission nobody asked for. A directory's date is read with one
+extra `stat` per directory: it is not on the scan's task, because no copy can
+restore a directory's date — and an archive can hold one.
+
+Zip counts its dates from 1980 and stores no zone, so a date is written as the
+UTC calendar date the reader gives back, and anything before 1980 is written
+as no date rather than as a wrong one.
+
 ## What does not work inside an archive, and says so
 
 - **The directory watcher is off.** There is no operating-system path to watch,
@@ -180,12 +219,12 @@ place where the wrapper, not the entry, is what costs.
 
 ## Formats
 
-| | Read | Notes |
-|---|---|---|
-| `.zip` | yes | deflate and stored |
-| `.tar` | yes | read in place, like a zip |
-| `.tar.gz`, `.tgz` | yes | one gzip stream around a tar — see below |
-| `.7z`, `.rar` | no | see [future-improvements.md](future-improvements.md) |
+| | Read | Write | Notes |
+|---|---|---|---|
+| `.zip` | yes | yes | reads deflate and stored, writes deflate |
+| `.tar` | yes | yes | read in place, like a zip |
+| `.tar.gz`, `.tgz` | yes | yes | one gzip stream around a tar — see below |
+| `.7z`, `.rar` | no | no | see [future-improvements.md](future-improvements.md) |
 
 The `zip` crate is a **parser** here and nothing else: it is depended on with
 its default features off, so no compressor comes with it, and the entry bytes

@@ -17,7 +17,8 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use tc_core::archive::{format_for, ArchiveFs, Format};
 use tc_core::ops::{
-    self, Answer, CancelToken, Conflict, ConflictResolver, Destination, Job, Report, Silent,
+    self, Answer, CancelToken, Conflict, ConflictResolver, Destination, Job, Report, Resolution,
+    Silent,
 };
 use tc_core::vfs::{Attributes, Entry, EntryKind, LocalFs, Store, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
@@ -825,6 +826,198 @@ fn unpacking_into_a_root_is_not_mistaken_for_a_copy_onto_itself() {
         std::fs::read_to_string(into.join("notes.txt")).unwrap(),
         "packed"
     );
+}
+
+#[test]
+fn packing_then_unpacking_gives_back_the_same_tree() {
+    // The invariant this phase exists to keep. Not "the names look right":
+    // the same files, the same bytes, the same directories, including an
+    // empty one, an empty file and a non-ASCII name — for every format this
+    // build can write.
+    for name in ["out.zip", "out.tar", "out.tar.gz"] {
+        let dir = TempDir::new().unwrap();
+        let tree = dir.path().join("tree");
+        common::build_tree(&tree);
+        let into = dir.path().join("into");
+        std::fs::create_dir(&into).unwrap();
+
+        pack(dir.path(), &[LocalFs::vfs_path(&tree)], name);
+        let archive = open_container(dir.path(), name);
+        unpack(&archive, &LocalFs::vfs_path(&into));
+
+        assert_eq!(
+            common::snapshot(&LocalFs, &LocalFs::vfs_path(&into.join("tree"))),
+            common::snapshot(&LocalFs, &LocalFs::vfs_path(&tree)),
+            "{name} did not give back what it was given"
+        );
+    }
+}
+
+#[test]
+fn a_packed_file_keeps_its_date_and_its_executable_bit() {
+    // An executable that comes back without its `+x` is a broken copy, which
+    // makes this a reliability property rather than a nicety — and the date is
+    // what a backup is sorted by.
+    for name in ["out.zip", "out.tar"] {
+        let dir = TempDir::new().unwrap();
+        let tree = dir.path().join("tree");
+        std::fs::create_dir(&tree).unwrap();
+        let script = tree.join("run.sh");
+        std::fs::write(&script, "#!/bin/sh\necho hello\n").unwrap();
+        let stamp = std::time::UNIX_EPOCH + std::time::Duration::from_secs(STAMPED_UNIX);
+        LocalFs
+            .set_modified(&LocalFs::vfs_path(&script), stamp)
+            .unwrap();
+        LocalFs
+            .set_attributes(
+                &LocalFs::vfs_path(&script),
+                tc_core::vfs::attributes_from_unix_mode(0o755),
+            )
+            .unwrap();
+
+        pack(dir.path(), &[LocalFs::vfs_path(&script)], name);
+        let archive = open_container(dir.path(), name);
+        let packed = archive.stat(&VfsPath::new("/run.sh")).unwrap();
+
+        assert_eq!(packed.modified, stamp, "{name} lost the date");
+        assert_eq!(
+            tc_core::vfs::render_attributes(packed.attributes),
+            tc_core::vfs::render_attributes(tc_core::vfs::attributes_from_unix_mode(0o755)),
+            "{name} lost the mode"
+        );
+    }
+}
+
+#[test]
+fn a_pack_that_is_cancelled_leaves_no_archive_at_all() {
+    // Not an empty one, and not a half-written one under the name somebody
+    // will later open: an archive that exists is an archive that finished.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    let cancel = CancelToken::new();
+    cancel.cancel();
+
+    ops::run(
+        &Job::Pack {
+            sources: vec![LocalFs::vfs_path(&tree)],
+            archive: LocalFs::vfs_path(dir.path()).child("out.zip"),
+        },
+        &LocalFs,
+        &LocalFs,
+        &mut Refuse,
+        &mut Silent,
+        &cancel,
+    );
+
+    let left: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(left, ["tree"], "a cancelled pack left something behind");
+}
+
+#[test]
+fn packing_into_a_name_that_is_not_an_archive_is_refused() {
+    // One rule decides what opens as an archive and what packs into one, so a
+    // name this writes is a name that opens again.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+
+    let report = ops::run(
+        &Job::Pack {
+            sources: vec![LocalFs::vfs_path(&tree)],
+            archive: LocalFs::vfs_path(dir.path()).child("out.rar"),
+        },
+        &LocalFs,
+        &LocalFs,
+        &mut Refuse,
+        &mut Silent,
+        &CancelToken::new(),
+    );
+
+    assert!(
+        report
+            .failures
+            .iter()
+            .any(|(_, error)| *error == VfsError::NotAnArchive),
+        "packing into a .rar was allowed: {report:?}"
+    );
+    assert!(!dir.path().join("out.rar").exists());
+}
+
+#[test]
+fn packing_a_second_time_asks_before_replacing() {
+    // The archive is a destination like any other, so an existing one asks
+    // the question every other destination asks rather than being overwritten
+    // where a user cannot see it.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    let archive = LocalFs::vfs_path(dir.path()).child("out.zip");
+    std::fs::write(dir.path().join("out.zip"), b"not really an archive").unwrap();
+
+    let mut asked = Asked::new(Answer::once(Resolution::Skip));
+    ops::run(
+        &Job::Pack {
+            sources: vec![LocalFs::vfs_path(&tree)],
+            archive,
+        },
+        &LocalFs,
+        &LocalFs,
+        &mut asked,
+        &mut Silent,
+        &CancelToken::new(),
+    );
+
+    assert_eq!(asked.questions, 1, "nothing was asked");
+    assert_eq!(
+        std::fs::read(dir.path().join("out.zip")).unwrap(),
+        b"not really an archive",
+        "the answer was ignored"
+    );
+}
+
+/// Packs `sources` into `name` beside them, and insists it went cleanly.
+fn pack(directory: &std::path::Path, sources: &[VfsPath], name: &str) {
+    let report = ops::run(
+        &Job::Pack {
+            sources: sources.to_vec(),
+            archive: LocalFs::vfs_path(directory).child(name),
+        },
+        &LocalFs,
+        &LocalFs,
+        &mut Refuse,
+        &mut Silent,
+        &CancelToken::new(),
+    );
+    assert!(
+        report.is_clean(),
+        "packing {name} was not clean: {report:?}"
+    );
+}
+
+/// A resolver that answers once and counts the questions.
+struct Asked {
+    answer: Answer,
+    questions: usize,
+}
+
+impl Asked {
+    fn new(answer: Answer) -> Asked {
+        Asked {
+            answer,
+            questions: 0,
+        }
+    }
+}
+
+impl ConflictResolver for Asked {
+    fn resolve(&mut self, _conflict: &Conflict) -> Answer {
+        self.questions += 1;
+        self.answer
+    }
 }
 
 /// The top-level entries of an archive, as the paths a job takes.

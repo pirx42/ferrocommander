@@ -363,6 +363,16 @@ pub const TITLE_HISTORY: &str = "Command history";
 /// Title of the window a command's output lands in.
 pub const TITLE_OUTPUT: &str = "Command output";
 
+/// Alt+F5: the title, the prompt, and what the name field starts as.
+pub const TITLE_PACK: &str = "Pack";
+pub const PROMPT_PACK: &str = "Pack into archive (the extension picks the format):";
+/// What Alt+F5 appends when it makes up a name. Zip because it is the format
+/// every other program on both target platforms can open.
+pub const PACK_DEFAULT_EXTENSION: &str = ".zip";
+/// What the offered name falls back to when there is nothing to name it after
+/// — packing from a filesystem root, which has no name of its own.
+pub const PACK_FALLBACK_NAME: &str = "archive";
+
 /// What the command line says when the active pane is inside an archive.
 ///
 /// A path inside an archive is not somewhere a process can run, and running

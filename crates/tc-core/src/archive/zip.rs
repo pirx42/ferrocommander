@@ -113,7 +113,7 @@ fn as_system_time(stamp: zip::DateTime) -> Option<SystemTime> {
 /// Days from 1970-01-01 to a proleptic-Gregorian date, by Howard Hinnant's
 /// `days_from_civil`. Shifting the year to start in March makes the leap day
 /// the last day of the year, which is what removes every special case.
-fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+pub(super) fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
     let year = year - i64::from(month <= 2);
     let era = year.div_euclid(YEARS_PER_ERA);
     let year_of_era = year.rem_euclid(YEARS_PER_ERA);

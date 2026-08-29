@@ -52,6 +52,11 @@ mod imp {
         Attributes::from_raw(mode)
     }
 
+    /// And back out again, for writing one into an archive.
+    pub fn unix_mode_of(attributes: Attributes) -> Option<u32> {
+        Some(attributes.raw())
+    }
+
     /// `rwxr-xr-x`, the form every Unix tool prints.
     pub fn render_attributes(attributes: Attributes) -> String {
         const FLAGS: [(u32, char); 9] = [
@@ -255,6 +260,13 @@ mod imp {
         Attributes::default()
     }
 
+    /// Nothing here is a Unix mode, so an archive written on Windows records
+    /// none — rather than a Win32 attribute mask that would read on Linux as
+    /// a permission nobody asked for.
+    pub fn unix_mode_of(_attributes: Attributes) -> Option<u32> {
+        None
+    }
+
     /// `RHSA`, the letters Total Commander shows, with a dash where a flag is
     /// absent.
     pub fn render_attributes(attributes: Attributes) -> String {
@@ -358,6 +370,7 @@ mod imp {
 pub use imp::{
     attributes, attributes_from_unix_mode, config_dir, from_std_path, home_dir, is_hidden,
     mount_points, render_attributes, root_entries, set_attributes, to_std_path, trash_error,
+    unix_mode_of,
 };
 
 #[cfg(test)]

@@ -15,7 +15,11 @@ pub mod progress;
 pub mod queue;
 
 use std::io::{Read, Write};
+use std::time::UNIX_EPOCH;
 
+use crate::archive::constants::PACKING_SUFFIX;
+use crate::archive::{self, Packer};
+use crate::vfs::constants::SEPARATOR;
 use crate::vfs::{Attributes, VfsError, VfsPath, VirtualFs};
 
 pub use cancel::CancelToken;
@@ -25,7 +29,7 @@ pub use progress::{Outcome, Progress, ProgressSink, Report, Silent};
 pub use queue::{ConflictRequest, JobHandle, JobQueue};
 
 use conflict::{conflict_at, free_name_beside};
-use constants::{COPY_BUFFER_BYTES, INTO_ITSELF, ONTO_ITSELF};
+use constants::{COPY_BUFFER_BYTES, INTO_ITSELF, ONTO_ITSELF, PACK_CANCELLED};
 
 /// Where a deleted entry goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +86,15 @@ pub enum Job {
     CreateDir { path: VfsPath },
     /// Shift+F4. An empty file, for an editor to open.
     CreateFile { path: VfsPath },
+    /// Alt+F5. Packs `sources` into a new archive on the target backend.
+    ///
+    /// The format comes from `archive`'s own name, by the same rule that
+    /// decides whether Enter walks into a file — one rule, so a name this
+    /// packs into is a name that opens again.
+    Pack {
+        sources: Vec<VfsPath>,
+        archive: VfsPath,
+    },
 }
 
 /// Runs a job to completion and reports what happened.
@@ -204,6 +217,7 @@ impl Run<'_> {
                 });
                 self.transfer(plan, true);
             }
+            Job::Pack { sources, archive } => self.pack(sources, archive),
             Job::Delete { paths, mode } => {
                 let plan = plan::plan_removal(self.source_fs, paths, *mode == DeleteMode::Trash);
                 self.remove(plan);
@@ -250,6 +264,121 @@ impl Run<'_> {
                 return;
             }
         }
+    }
+
+    /// Packs `sources` into a new archive at `archive` on the target backend.
+    ///
+    /// The scan, the progress, the cancel and the failure list are the ones
+    /// every other job uses; only "write these bytes at the destination" is
+    /// different, and that is a [`Packer`](crate::archive::Packer). Nothing
+    /// about a format reaches this module.
+    ///
+    /// The bytes go to a temporary name beside the archive and are renamed
+    /// into place at the end, so an interrupted pack leaves nothing that looks
+    /// like a finished archive. A rename within one directory is atomic, so
+    /// there is no moment where the name exists holding half an archive.
+    fn pack(&mut self, sources: &[VfsPath], archive: &VfsPath) {
+        let Some(format) = archive.file_name().and_then(archive::format_for) else {
+            self.fail(archive, VfsError::NotAnArchive);
+            return;
+        };
+        let target = match self.settle(archive, false, archive.clone()) {
+            Landing::Proceed { target, .. } => target,
+            Landing::Skip | Landing::Failed => return,
+            Landing::Abort => return,
+        };
+
+        // Named from the final name, so two packs into one directory cannot
+        // collide on the temporary either.
+        let partial = beside(&target, PACKING_SUFFIX);
+        let plan = plan::plan_transfer(self.source_fs, sources, |source| {
+            VfsPath::root().child(source.file_name().unwrap_or_default())
+        });
+        self.announce(&plan);
+
+        let sink = match self.target_fs.create_file(&partial) {
+            Ok(sink) => sink,
+            Err(error) => return self.fail(&partial, error),
+        };
+        let outcome = self.fill(archive::packer(format, sink), &plan);
+
+        // A pack that did not finish leaves no archive at all — not an empty
+        // one, and not a half-written one under the name somebody will later
+        // open.
+        if outcome.is_err() || self.stopped() {
+            let _ = self.target_fs.remove_file(&partial);
+            if let Err(error) = outcome {
+                self.fail(archive, error);
+            }
+            return;
+        }
+        if let Err(error) = self.target_fs.rename(&partial, &target) {
+            let _ = self.target_fs.remove_file(&partial);
+            self.fail(&target, error);
+        }
+    }
+
+    /// Feeds a plan's tasks to a packer, stopping at the first refusal.
+    ///
+    /// Stopping rather than carrying on: a copy that skips one file leaves a
+    /// tree missing a file, which the failure list explains. An archive that
+    /// skipped one is a single file somebody will keep — so a pack is all or
+    /// nothing.
+    fn fill(&mut self, mut packer: Box<dyn Packer>, plan: &Plan) -> Result<(), VfsError> {
+        for item in &plan.items {
+            for (path, error) in &item.failures {
+                self.fail(path, error.clone());
+            }
+            for task in &item.tasks {
+                if self.stopped() {
+                    return Ok(());
+                }
+                match task {
+                    Task::MakeDir { source, target } => {
+                        // A directory's date and mode are not on the task —
+                        // no copy can restore a directory's date, so nothing
+                        // needed them until now — and an archive can hold
+                        // them, so they are worth one stat each.
+                        let about = self.source_fs.stat(source).ok();
+                        packer.add_dir(
+                            &inside(target),
+                            about.as_ref().map_or(UNIX_EPOCH, |entry| entry.modified),
+                            about.map(|entry| entry.attributes).unwrap_or_default(),
+                        )?
+                    }
+                    Task::CopyFile {
+                        source,
+                        target,
+                        size,
+                        modified,
+                        attributes,
+                    } => {
+                        self.progress.emit(Progress::Started {
+                            path: source.clone(),
+                        });
+                        let mut reader = self.source_fs.open_read(source)?;
+                        let mut metered = Metered {
+                            inner: &mut reader,
+                            progress: self.progress,
+                            cancel: self.cancel,
+                        };
+                        packer.add_file(
+                            &inside(target),
+                            *size,
+                            *modified,
+                            *attributes,
+                            &mut metered,
+                        )?;
+                        self.progress.emit(Progress::Finished {
+                            path: source.clone(),
+                        });
+                    }
+                    // A pack builds; it never removes.
+                    Task::RemoveFile { .. } | Task::RemoveDir { .. } | Task::Trash { .. } => {}
+                }
+            }
+        }
+        packer.finish()
     }
 
     fn remove(&mut self, plan: Plan) {
@@ -626,5 +755,44 @@ impl Run<'_> {
             return true;
         }
         self.outcome != Outcome::Completed
+    }
+}
+
+/// A sibling of `path` with `suffix` on the end of its name.
+fn beside(path: &VfsPath, suffix: &str) -> VfsPath {
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => parent.child(&format!("{name}{suffix}")),
+        _ => path.clone(),
+    }
+}
+
+/// An entry's name inside an archive: the planned target path without its
+/// leading separator, which is what both formats store.
+fn inside(target: &VfsPath) -> String {
+    target.as_str().trim_start_matches(SEPARATOR).to_string()
+}
+
+/// A reader that counts what passes through it and stops on a cancel.
+///
+/// The packer is handed this rather than a path, so the counting and the
+/// cancelling stay here — one implementation for every format, instead of one
+/// per format that each has to remember.
+struct Metered<'a> {
+    inner: &'a mut Box<dyn std::io::Read + Send>,
+    progress: &'a mut dyn ProgressSink,
+    cancel: &'a CancelToken,
+}
+
+impl std::io::Read for Metered<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if self.cancel.is_cancelled() {
+            // The message is never read: the caller asks the token, which is
+            // the only thing that can tell a cancel from a disk failure.
+            return Err(std::io::Error::other(PACK_CANCELLED));
+        }
+        let read = self.inner.read(buffer)?;
+        self.progress
+            .emit(Progress::Advanced { bytes: read as u64 });
+        Ok(read)
     }
 }

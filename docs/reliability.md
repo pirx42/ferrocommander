@@ -46,6 +46,7 @@ Each of these was found by writing the test, not by reading the code:
 | A conflict dialog with no focused button: answerable only with the mouse | the end-to-end UI suite |
 | Every copy silently dropped the original's permissions, so an executable arrived unrunnable | taking the requirement seriously enough to give `Entry` a mode |
 | Sorting a pane and then copying one file put the order back to name | writing the end-to-end test for sorting |
+| A move out of an archive would have handed the archive's `/packed.txt` to the local filesystem, where it names a file at the root of the disk | asking what a second backend does to a rule written for one |
 
 The second one is the one to remember. Both panes open at the same directory,
 so F5 on a file with the prefilled target accepted was enough — no editing, no
@@ -60,7 +61,7 @@ suite and end to end through the real binary.
 | `crates/tc-core/tests/queue.rs` | the background queue: ordering, the conflict round trip, cancelling from outside |
 | `crates/tc-core/tests/local_fs.rs` | the filesystem backend, per call |
 | `crates/tc-core/tests/trash.rs` | that a trashed file is still recoverable |
-| `crates/tc-core/tests/archive.rs` | reading an archive: escaping names, checksums, and what it refuses to write ([archives.md](archives.md)) |
+| `crates/tc-core/tests/archive.rs` | archives: escaping names, checksums, what refuses to be written, and the pack→unpack roundtrip ([archives.md](archives.md)) |
 | `crates/tc-core/tests/rename.rs` | the multi-rename rules, as a table, plus what they refuse ([multi-rename.md](multi-rename.md)) |
 | `crates/tc-core/tests/search.rs` | the walk: every hit and no others, refusals skipped, cancellation ([search.md](search.md)) |
 | `crates/tc-app/tests/ui.rs` | the real binary, driven by real key presses ([ui-shell.md](ui-shell.md)) |

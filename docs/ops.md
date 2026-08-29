@@ -26,6 +26,22 @@ the same dialog and what the user typed is what decides, so a separate job
 would have been a second name for a shape that already existed. The parsing
 rule is in [keymap.md](keymap.md).
 
+## Packing is the same job with one step replaced
+
+`Job::Pack` uses the same scan, the same progress events, the same cancel and
+the same failure list as a copy. Only "write these bytes at the destination"
+is different, and that is a `Packer` — three methods, one per format, in
+[archives.md](archives.md). Nothing about an archive format reaches this
+module; the format comes from the archive's own name.
+
+The packer is handed a reader rather than a path, so counting the bytes and
+stopping on a cancel stay here and exist once instead of once per format.
+
+The bytes go to a temporary name beside the archive and are renamed into place
+at the end, and a pack stops at the first refusal instead of carrying on: a
+copy that skips a file leaves a tree missing one, which the failure list
+explains, but an archive that skipped one is a single file somebody will keep.
+
 ## Scan, then execute
 
 A job is first walked into a `Plan`: a list of `Item`s — one per top-level

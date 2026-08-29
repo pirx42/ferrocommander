@@ -29,10 +29,10 @@ use tc_core::vfs::{LocalFs, VfsPath};
 use constants::{
     APP_ID, APP_TITLE, CLASS_DRIVE_BAR, COMMAND_IN_ARCHIVE, CONFLICT_PROMPT, DRIVE_BAR_SPACING,
     LEFT_PANE, NEW_FILE_DEFAULT, PANE_COUNT, PANE_SPACING, PANE_SPLIT_RATIO, PATTERN_DEFAULT,
-    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE,
+    PROGRESS_DELAY, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK,
     PROMPT_PATTERN, RIGHT_PANE, SETTINGS_SAVE_DELAY, SETTINGS_UNREADABLE, SETTINGS_UNWRITABLE,
     STYLESHEET, TITLE_CONFLICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE,
-    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT,
+    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK,
     TITLE_UNMARK_PATTERN,
 };
 use keymap::{Action, Keymap};
@@ -296,6 +296,7 @@ fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::ToggleHidden => shell.borrow_mut().active_pane().toggle_hidden(),
         Action::Copy => start_transfer(shell, true),
         Action::Move => start_transfer(shell, false),
+        Action::Pack => start_pack(shell),
         Action::RenameInline => shell.borrow_mut().active_pane().begin_rename(),
         Action::CreateDir => start_create_dir(shell),
         Action::Search => start_search(shell),
@@ -1065,6 +1066,48 @@ fn undo_rename(shell: &Rc<RefCell<Shell>>) {
             },
         );
     }
+}
+
+/// Alt+F5: pack what is marked into a new archive.
+///
+/// The name is asked for the way a copy destination is, prefilled beside the
+/// other pane with the cursor row's name and a `.zip` on the end — which is
+/// what somebody wanted nine times in ten, and which they can type over. The
+/// extension is the whole choice of format: one rule decides what opens as an
+/// archive and what packs into one, so a name this writes is a name that opens
+/// again (`docs/archives.md`).
+fn start_pack(shell: &Rc<RefCell<Shell>>) {
+    let (window, sources, source_dir, prefill) = {
+        let state = shell.borrow();
+        let pane = &state.panes[state.active];
+        let sources = jobs::sources(pane.listing());
+        if sources.is_empty() {
+            return;
+        }
+        let Some(window) = state.window.upgrade() else {
+            return;
+        };
+        let prefill = jobs::prefilled_archive(
+            &state.panes[state.other()].target_dir(),
+            pane.listing(),
+            sources.len(),
+        );
+        (window, sources, pane.listing().dir().clone(), prefill)
+    };
+
+    let shell = shell.clone();
+    dialogs::ask_text(&window, TITLE_PACK, PROMPT_PACK, &prefill, move |text| {
+        let Some(archive) = jobs::packed_at(&text, &source_dir) else {
+            return;
+        };
+        submit(
+            &shell,
+            Job::Pack {
+                sources: sources.clone(),
+                archive,
+            },
+        );
+    });
 }
 
 /// Alt+F7: find files below the active pane's directory.

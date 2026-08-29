@@ -57,3 +57,15 @@ pub const WINDOWS_SEPARATOR: char = '\\';
 pub const TAR_EXTENSION: &str = "tar";
 pub const TGZ_EXTENSION: &str = "tgz";
 pub const TAR_GZ_SUFFIX: &str = ".tar.gz";
+
+/// The first year a zip date can express. Written as no date at all rather
+/// than clamped: a file dated 1970 in an archive that says 1980 is a wrong
+/// answer, and none is an honest one.
+pub const ZIP_EPOCH_YEAR: i64 = 1980;
+
+/// What a pack writes to before it is a finished archive.
+///
+/// Renamed into place at the end, so an interrupted pack leaves nothing that
+/// looks like an archive — and the rename is on the same directory, so it is
+/// atomic.
+pub const PACKING_SUFFIX: &str = ".packing";

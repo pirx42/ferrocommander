@@ -62,6 +62,15 @@ pub fn attributes_from_unix_mode(mode: u32) -> Attributes {
     platform::attributes_from_unix_mode(mode)
 }
 
+/// The Unix mode an archive should record for `attributes`, if any.
+///
+/// The inverse of [`attributes_from_unix_mode`], and the same reasoning: what
+/// the bits *mean* is this module's business, so the archive layer asks rather
+/// than reading the raw value itself.
+pub fn unix_mode_of(attributes: Attributes) -> Option<u32> {
+    platform::unix_mode_of(attributes)
+}
+
 /// The attributes of an entry, written the way the platform writes them:
 /// `rwxr-xr-x` on Unix, `RHSA` on Windows.
 pub fn render_attributes(attributes: Attributes) -> String {

@@ -42,6 +42,7 @@ const DIALOG_HISTORY: &str = "Command history";
 const DIALOG_NEW_FILE: &str = "New file";
 const DIALOG_SEARCH: &str = "Find files";
 const DIALOG_RENAME: &str = "Multi-rename";
+const DIALOG_PACK: &str = "Pack";
 
 /// Where the settings file lands inside a test's private home. Spelled out
 /// rather than read from `tc-core`, for the same reason the dialog titles
@@ -624,6 +625,56 @@ fn a_search_that_finds_nothing_says_so_and_stays_open() {
 
     app.settle();
     assert!(app.has_dialog(DIALOG_SEARCH), "the search window closed");
+}
+
+#[test]
+fn alt_f5_packs_what_is_marked_and_the_result_opens_again() {
+    // Packing and then walking into what was packed, which is the only
+    // assertion that covers both halves at once: a writer nothing can read is
+    // not a feature.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — mark both files.
+    app.keys(&["Home", "Down", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+
+    app.key("alt+F5");
+    app.focus_dialog(DIALOG_PACK);
+    app.type_text("packed.zip");
+    app.key("Return");
+    app.await_exists("src/packed.zip");
+
+    // `..`, nested, data.bin, notes.txt, packed.zip — walk into it.
+    app.focus_main();
+    app.keys(&["Home", "Down", "Down", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/packed.zip", "/dst");
+
+    // Inside: `..`, data.bin, notes.txt. Copy the text file back out.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/notes.txt", SOURCE_TEXT);
+}
+
+#[test]
+fn packing_into_a_name_that_names_no_format_makes_nothing() {
+    // The extension is the whole choice of format, so a name with none is a
+    // question the program cannot answer — and answering it by guessing would
+    // write a zip called `.rar`.
+    let app = in_src_and_dst(arrange);
+    cursor_on_notes(&app);
+
+    app.key("alt+F5");
+    app.focus_dialog(DIALOG_PACK);
+    app.type_text("nope.rar");
+    app.key("Return");
+
+    app.focus_dialog(DIALOG_FAILURES);
+    app.key("Return");
+    app.settle();
+    assert!(!app.path("src/nope.rar").exists(), "a .rar was written");
 }
 
 #[test]

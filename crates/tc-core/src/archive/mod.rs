@@ -15,6 +15,7 @@
 pub mod constants;
 mod entry;
 mod index;
+mod pack;
 mod reader;
 mod tar;
 mod zip;
@@ -24,6 +25,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::vfs::{Attributes, Entry, Store, VfsError, VfsPath, VirtualFs};
+
+pub use pack::{packer, Packer, Sink};
 
 use constants::{TAR_EXTENSION, TAR_GZ_SUFFIX, TGZ_EXTENSION, ZIP_EXTENSION};
 use index::Index;
