@@ -33,8 +33,9 @@ pub fn index(container: &Container, fallback: SystemTime) -> Result<Index, VfsEr
     let mut index = Index::new(fallback);
     for position in 0..archive.len() {
         // `by_index_raw` reads the local header without starting a decoder,
-        // which is what makes `data_start` known — and it is the only thing
-        // this loop wants from the entry.
+        // which is what makes `data_start` known — the offset past the 30-byte
+        // header and its variable-length name and extra fields, and the only
+        // thing this loop wants from the entry.
         let entry = archive
             .by_index_raw(position)
             .map_err(|err| VfsError::Io(NOT_AN_ARCHIVE.replace("{reason}", &err.to_string())))?;

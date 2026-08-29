@@ -15,7 +15,7 @@ use crate::constants::{
     PACK_DEFAULT_EXTENSION, PACK_FALLBACK_NAME, QUOTE_CLOSE, QUOTE_OPEN, SELECTION_STATUS,
     SUBJECT_MANY,
 };
-use crate::progress::human_bytes;
+use crate::format::human_bytes;
 
 /// What an operation would act on: everything marked, or the row under the
 /// cursor when nothing is marked.

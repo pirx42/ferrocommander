@@ -36,12 +36,14 @@ pub(crate) struct Shell {
     pub(crate) active: usize,
     /// Every file operation goes through here, so they run one at a time and
     /// off the UI thread.
-    pub(crate) queue: JobQueue,
-    /// Weak, or the window would own the shell that owns the window.
-    pub(crate) window: glib::WeakRef<gtk::ApplicationWindow>,
+    queue: JobQueue,
+    /// Weak, or the window would own the shell that owns the window. Read
+    /// through [`window`](Self::window), which is the only thing anyone wants
+    /// from it.
+    window: glib::WeakRef<gtk::ApplicationWindow>,
     /// Where the settings file goes, or `None` when the platform offers
     /// nowhere to put one.
-    pub(crate) config_root: Option<VfsPath>,
+    config_root: Option<VfsPath>,
     /// What was last written. Compared against the current state so that
     /// moving the cursor around does not rewrite an identical file.
     pub(crate) saved: config::Settings,
@@ -68,7 +70,7 @@ pub(crate) struct Shell {
     /// Whether a write is already scheduled. One pending write picks up
     /// whatever the settings are when it runs, so a burst of changes costs
     /// one file write rather than one each.
-    pub(crate) save_queued: bool,
+    save_queued: bool,
 }
 
 impl Shell {
@@ -96,6 +98,16 @@ impl Shell {
         };
         shell.update_active();
         shell
+    }
+
+    /// The window, while there still is one.
+    ///
+    /// `None` once it has been closed: a dialog opened from a handler that
+    /// outlived the window would have nothing to be modal to. Every handler
+    /// that opens one starts here, which is why it is a method rather than
+    /// nine copies of the same `upgrade()`.
+    pub(crate) fn window(&self) -> Option<gtk::ApplicationWindow> {
+        self.window.upgrade()
     }
 
     pub(crate) fn active_pane(&mut self) -> &mut PaneView {
@@ -158,7 +170,7 @@ impl Shell {
         let mut settings = config::Settings {
             // A window that has already gone keeps the size last written,
             // rather than reporting zero on the way out.
-            window: match self.window.upgrade() {
+            window: match self.window() {
                 Some(window) => config::WindowSettings {
                     width: window.width(),
                     height: window.height(),
@@ -284,7 +296,7 @@ pub(crate) fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl Fn
             // a job that finishes first simply never opens one, and a job
             // that moves no bytes at all never qualifies.
             if view.is_none() && meter.has_work() && started.elapsed() >= PROGRESS_DELAY {
-                let Some(window) = showing.borrow().window.upgrade() else {
+                let Some(window) = showing.borrow().window() else {
                     return;
                 };
                 view = Some(dialogs::ProgressView::open(&window, cancel.clone()));
@@ -301,7 +313,7 @@ pub(crate) fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl Fn
     let asking = shell.clone();
     glib::spawn_future_local(async move {
         while let Ok(request) = conflicts.recv().await {
-            let Some(window) = asking.borrow().window.upgrade() else {
+            let Some(window) = asking.borrow().window() else {
                 // Nothing left to ask with. Dropping the question is read as
                 // abort, which is what the engine should do here.
                 return;
@@ -332,7 +344,7 @@ pub(crate) fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl Fn
         // Everything that went wrong, once, after the panes show the truth —
         // not one dialog per file while the job is still running.
         if !report.failures.is_empty() {
-            if let Some(window) = finishing.borrow().window.upgrade() {
+            if let Some(window) = finishing.borrow().window() {
                 dialogs::show_failures(&window, &report.failures);
             }
             return;

@@ -33,7 +33,7 @@ use crate::constants::{
     DIALOG_MARGIN, DIALOG_SPACING, DIALOG_WIDTH, DRIVE_LIST_HEIGHT, ENTRY_WIDTH_CHARS,
     FAILURE_LIST_HEIGHT, OUTPUT_HEIGHT, TITLE_FAILURES, XALIGN_LEFT,
 };
-use crate::progress::failure_lines;
+use crate::format::failure_lines;
 
 pub use multi_rename::MultiRename;
 pub use progress_view::ProgressView;

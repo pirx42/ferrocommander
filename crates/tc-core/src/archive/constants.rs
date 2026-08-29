@@ -13,10 +13,6 @@ pub const ZIP_EXTENSION: &str = "zip";
 /// the same window the viewer asks for, which makes one viewer page one pass.
 pub const CONTAINER_BUFFER: usize = 64 * 1024;
 
-/// The zip local file header, before its variable-length name and extra
-/// fields. Only used to explain what the parser already knows.
-pub const ZIP_LOCAL_HEADER_BYTES: u64 = 30;
-
 /// What an entry compressed by a method this build cannot decode reports.
 pub const UNSUPPORTED_METHOD: &str = "compression method {method} is not supported";
 

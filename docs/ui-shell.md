@@ -110,7 +110,9 @@ lingers after a click looks broken.
 
 The arithmetic behind the bar is in `progress.rs` and is pure: `Meter` folds
 the event stream into a fraction, a caption and the current path. `Advanced`
-carries a delta, so summing it is the window's job, not the engine's.
+carries a delta, so summing it is the window's job, not the engine's. **How a
+number is written** — byte counts, a time left, the failure lines — is
+`format.rs`, because two of its three callers want no meter at all.
 
 **Failures are shown once, at the end**, after the panes have been reloaded —
 not one dialog per file while the job is still running. A long list is cut off

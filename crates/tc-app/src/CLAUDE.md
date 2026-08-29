@@ -17,7 +17,8 @@ for every answer. **Nothing here touches the filesystem directly.**
 | `navigation.rs` | where a navigation keystroke leads — pure, over a `Listing` |
 | `jobs.rs` | what a file-operation keystroke asks for — pure, over a `Listing` and the typed text |
 | `command_line.rs` | the entry at the bottom, and what a typed line means |
-| `progress.rs` | the throughput meter and the human-readable renderings |
+| `progress.rs` | the throughput meter: events folded into a fraction, a caption and a path |
+| `format.rs` | how a byte count, a time left and a failure are written for a person |
 | `row.rs` | one row of a pane, as GTK needs it |
 | `constants.rs` | every string, size and delay the shell uses |
 
@@ -26,6 +27,11 @@ for every answer. **Nothing here touches the filesystem directly.**
 - **The borrow is dropped before anything that can call back.** A dialog
   always can, so an action reads what it needs out of the shell, drops the
   `RefCell` borrow, and only then opens one.
+- **The shell's own state stays private.** `Shell`'s fields are
+  crate-visible only where something outside `shell.rs` actually reads them;
+  the queue, the settings path and the pending-write flag are its own
+  business, and the window is reached through `Shell::window()` because
+  `None` — the window is gone — is the only thing anyone has to handle.
 - **Decisions live in the pure modules.** `navigation.rs` and `jobs.rs` are
   functions over a `Listing` and a string, so what a key means is testable
   without a display server; the rest of this crate is wiring.

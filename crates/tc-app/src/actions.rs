@@ -148,7 +148,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
 pub(crate) fn show_command_history(shell: &Rc<RefCell<Shell>>) {
     let (window, history) = {
         let state = shell.borrow();
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         (window, state.command_history.clone())
@@ -193,7 +193,7 @@ pub(crate) fn run_command(shell: &Rc<RefCell<Shell>>) {
         // path happens to mean on the real filesystem, which is how a command
         // meant for an archive ends up acting on somebody's home directory.
         if state.active_pane().in_archive() {
-            let window = state.window.upgrade();
+            let window = state.window();
             drop(state);
             if let Some(window) = window {
                 dialogs::show_output(&window, TITLE_OUTPUT, COMMAND_IN_ARCHIVE);
@@ -255,7 +255,7 @@ pub(crate) fn spawn_command(shell: &Rc<RefCell<Shell>>, directory: VfsPath, line
         if !outcome.worth_showing() {
             return;
         }
-        let Some(window) = shell.borrow().window.upgrade() else {
+        let Some(window) = shell.borrow().window() else {
             return;
         };
         dialogs::show_output(&window, TITLE_OUTPUT, &outcome.output);
@@ -301,7 +301,7 @@ pub(crate) fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &Vfs
 /// opposite rule to `Ctrl+←/→` above, and deliberately so: an arrow has a
 /// direction to be relative to and a number does not.
 pub(crate) fn start_drive_selection(shell: &Rc<RefCell<Shell>>, target: usize) {
-    let Some(window) = shell.borrow().window.upgrade() else {
+    let Some(window) = shell.borrow().window() else {
         return;
     };
     let places: Vec<(String, String)> = tc_core::vfs::mount_points()
@@ -366,7 +366,7 @@ pub(crate) fn start_transfer(shell: &Rc<RefCell<Shell>>, copying: bool) {
         if sources.is_empty() {
             return;
         }
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         let prefill = jobs::prefilled_target(&state.panes[state.other()].target_dir());
@@ -403,7 +403,7 @@ pub(crate) fn start_transfer(shell: &Rc<RefCell<Shell>>, copying: bool) {
 
 /// `Num +` and `Num −`: mark or unmark everything matching a wildcard.
 pub(crate) fn start_pattern_marking(shell: &Rc<RefCell<Shell>>, marking: bool) {
-    let Some(window) = shell.borrow().window.upgrade() else {
+    let Some(window) = shell.borrow().window() else {
         return;
     };
     let title = if marking {
@@ -434,7 +434,7 @@ pub(crate) fn start_pattern_marking(shell: &Rc<RefCell<Shell>>, marking: bool) {
 pub(crate) fn start_create_dir(shell: &Rc<RefCell<Shell>>) {
     let (window, dir) = {
         let state = shell.borrow();
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         (window, state.panes[state.active].target_dir())
@@ -471,7 +471,7 @@ pub(crate) fn start_delete(shell: &Rc<RefCell<Shell>>, mode: DeleteMode) {
         if paths.is_empty() {
             return;
         }
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         let subject = jobs::subject(pane.listing(), paths.len());
@@ -512,7 +512,7 @@ pub(crate) fn start_delete(shell: &Rc<RefCell<Shell>>, mode: DeleteMode) {
 pub(crate) fn start_multi_rename(shell: &Rc<RefCell<Shell>>) {
     let (window, directory, names) = {
         let mut state = shell.borrow_mut();
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         let pane = state.active_pane();
@@ -590,7 +590,7 @@ pub(crate) fn start_pack(shell: &Rc<RefCell<Shell>>) {
         if sources.is_empty() {
             return;
         }
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         // Beside the *other* pane, which is where the archive is written and
@@ -637,7 +637,7 @@ pub(crate) fn start_pack(shell: &Rc<RefCell<Shell>>) {
 pub(crate) fn start_search(shell: &Rc<RefCell<Shell>>) {
     let (window, fs, root) = {
         let mut state = shell.borrow_mut();
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         let root = state.active_pane().target_dir();
@@ -671,7 +671,7 @@ pub(crate) fn start_search(shell: &Rc<RefCell<Shell>>) {
 pub(crate) fn start_viewing(shell: &Rc<RefCell<Shell>>) {
     let (window, fs, path) = {
         let mut state = shell.borrow_mut();
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         let Some(path) = state.active_pane().current_file() else {
@@ -700,7 +700,7 @@ pub(crate) fn start_editing(shell: &Rc<RefCell<Shell>>) {
     // when saved. F3 reads through the backend and works; F4 hands the file
     // over and cannot (`docs/archives.md`).
     if state.active_pane().in_archive() {
-        let window = state.window.upgrade();
+        let window = state.window();
         drop(state);
         if let Some(window) = window {
             dialogs::show_output(&window, TITLE_OUTPUT, EDIT_IN_ARCHIVE);
@@ -723,7 +723,7 @@ pub(crate) fn start_editing(shell: &Rc<RefCell<Shell>>) {
 pub(crate) fn start_create_file(shell: &Rc<RefCell<Shell>>) {
     let (window, directory) = {
         let mut state = shell.borrow_mut();
-        let Some(window) = state.window.upgrade() else {
+        let Some(window) = state.window() else {
             return;
         };
         let directory = state.active_pane().target_dir();

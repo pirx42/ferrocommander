@@ -11,6 +11,7 @@ mod actions;
 mod command_line;
 mod constants;
 mod dialogs;
+mod format;
 mod jobs;
 mod keymap;
 mod navigation;
