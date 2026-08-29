@@ -76,6 +76,18 @@ const MAIN_WINDOW: &str = "FerroCommander";
 
 /// Where the app's own output goes, inside its private home.
 const APP_LOG: &str = "app.log";
+/// Where the private X server's own output goes, for the same reason.
+const XVFB_LOG: &str = "xvfb.log";
+
+/// How many times a launch is retried when it could not reach the display.
+///
+/// See the retry in [`App::start`] for what it is for. Three rather than one,
+/// because the point is to make an environment hiccup invisible and a second
+/// hiccup is not less of one.
+const LAUNCH_ATTEMPTS: usize = 3;
+
+/// What GTK writes when it cannot connect to the display it was given.
+const DISPLAY_REFUSED: &str = "Failed to open display";
 
 /// Every app gets its own display number, so nothing collides even when a
 /// previous one is still shutting down.
@@ -128,7 +140,7 @@ impl App {
         require("xdotool", "xdotool");
 
         let display = format!(":{}", NEXT_DISPLAY.fetch_add(1, Ordering::Relaxed));
-        let xvfb_log = home.path().join("xvfb.log");
+        let xvfb_log = home.path().join(XVFB_LOG);
         let screen = format!("{SCREEN_WIDTH}x{SCREEN_HEIGHT}x{SCREEN_DEPTH}");
         let xvfb = Command::new("Xvfb")
             .args([&display, "-screen", "0", &screen])
@@ -151,37 +163,44 @@ impl App {
         await_until(READY_TIMEOUT, || display_is_up(&display))
             .unwrap_or_else(|| panic!("X display {display} never came up"));
 
-        // Kept rather than discarded: when the app dies at startup the reason
-        // is the only useful thing there is, and "no window appeared" is not
-        // it.
-        let log = home.path().join(APP_LOG);
-        let app = Command::new(env!("CARGO_BIN_EXE_tc-app"))
-            .env("DISPLAY", &display)
-            .env("HOME", home.path())
-            // Otherwise this hands off to an already-running instance.
-            .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nope")
-            .stdout(Stdio::from(
-                std::fs::File::create(&log).expect("a log file"),
-            ))
-            .stderr(Stdio::from(
-                std::fs::File::options()
-                    .append(true)
-                    .open(&log)
-                    .expect("the log file"),
-            ))
-            .spawn()
-            .expect("the binary starts");
+        // The display answered `getdisplaygeometry` above and can still
+        // refuse a connection: Xvfb accepts on the socket a moment before it
+        // is ready for clients. Observed as four of 104 tests failing in one
+        // run and none in the next, always with "Failed to open display" in
+        // the app's log — which says nothing about the program under test,
+        // and a suite that fails randomly teaches people to ignore red.
+        //
+        // Retried rather than slept away: the retry is bounded, costs nothing
+        // when it is not needed, and cannot hide a real crash, which does not
+        // carry that message. A sleep long enough to always work would be a
+        // minute added to every run.
+        let mut attempt = 0;
+        let (app, window) = loop {
+            attempt += 1;
+            let mut app = spawn_app(home.path(), &display);
+            match await_main_window(&mut app, home.path(), &display) {
+                Ok(window) => break (app, window),
+                Err(reason) => {
+                    let _ = app.kill();
+                    let _ = app.wait();
+                    assert!(
+                        reason.contains(DISPLAY_REFUSED) && attempt < LAUNCH_ATTEMPTS,
+                        "{reason}"
+                    );
+                    std::thread::sleep(FOCUS_SETTLE);
+                }
+            }
+        };
 
-        let mut app = App {
+        let app = App {
             display,
             home,
             xvfb,
             app,
-            window: String::new(),
+            window,
             closed: false,
             _turn: turn,
         };
-        app.window = app.await_main_window().expect("the main window appears");
         app.focus_main();
         app
     }
@@ -333,8 +352,7 @@ impl App {
         if focused == window {
             return true;
         }
-        self.window_name(&focused)
-            .is_some_and(|name| name.contains(title))
+        window_name_on(&self.display, &focused).is_some_and(|name| name.contains(title))
     }
 
     /// The id of whatever currently has the keyboard focus.
@@ -431,33 +449,6 @@ impl App {
         std::thread::sleep(Duration::from_millis(750));
     }
 
-    /// Waits for the main window, giving up early if the app has already
-    /// exited — otherwise a crash at startup costs the full timeout and
-    /// reports the wrong problem.
-    fn await_main_window(&mut self) -> Option<String> {
-        let deadline = Instant::now() + READY_TIMEOUT;
-        loop {
-            if let Some(window) = self.find_window(MAIN_WINDOW) {
-                return Some(window);
-            }
-            if let Ok(Some(status)) = self.app.try_wait() {
-                let log =
-                    std::fs::read_to_string(self.home.path().join(APP_LOG)).unwrap_or_default();
-                let xvfb =
-                    std::fs::read_to_string(self.home.path().join("xvfb.log")).unwrap_or_default();
-                panic!(
-                    "the app exited before showing a window on {}: {status}\n\
-                     --- app ---\n{log}\n--- xvfb ---\n{xvfb}",
-                    self.display
-                );
-            }
-            if Instant::now() >= deadline {
-                return None;
-            }
-            std::thread::sleep(POLL);
-        }
-    }
-
     fn await_window(&self, title: &str, timeout: Duration) -> Option<String> {
         let deadline = Instant::now() + timeout;
         loop {
@@ -482,42 +473,12 @@ impl App {
     ///
     /// Plain `contains` on a name this side has no such surprises.
     fn find_window(&self, title: &str) -> Option<String> {
-        self.windows()
-            .into_iter()
-            .find(|(_, name)| name.contains(title))
-            .map(|(id, _)| id)
+        find_window_on(&self.display, title)
     }
 
     /// Every window that has a name, as `(id, name)`.
     fn windows(&self) -> Vec<(String, String)> {
-        let output = Command::new("xdotool")
-            .env("DISPLAY", &self.display)
-            // `.` matches any window that has a name at all — the one place a
-            // regex is wanted.
-            .args(["search", "--name", "."])
-            .stderr(Stdio::null())
-            .output();
-        let Ok(output) = output else {
-            return Vec::new();
-        };
-        String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .filter_map(|id| {
-                let name = self.window_name(id)?;
-                (!name.is_empty()).then(|| (id.to_string(), name))
-            })
-            .collect()
-    }
-
-    /// The name X has for one window id, if it has one.
-    fn window_name(&self, id: &str) -> Option<String> {
-        let output = Command::new("xdotool")
-            .env("DISPLAY", &self.display)
-            .args(["getwindowname", id])
-            .stderr(Stdio::null())
-            .output()
-            .ok()?;
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        windows_on(&self.display)
     }
 
     /// Resizes the main window, the way dragging its corner would.
@@ -609,4 +570,99 @@ fn require(binary: &str, package: &str) {
         return;
     }
     panic!("{binary} is needed for the UI tests — install the {package} package");
+}
+
+/// Starts the binary on `display`, with its own home and its output kept.
+///
+/// The log is kept rather than discarded because when the app dies at startup
+/// the reason is the only useful thing there is, and "no window appeared" is
+/// not it.
+fn spawn_app(home: &Path, display: &str) -> Child {
+    let log = home.join(APP_LOG);
+    Command::new(env!("CARGO_BIN_EXE_tc-app"))
+        .env("DISPLAY", display)
+        .env("HOME", home)
+        // Otherwise this hands off to an already-running instance.
+        .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nope")
+        .stdout(Stdio::from(
+            std::fs::File::create(&log).expect("a log file"),
+        ))
+        .stderr(Stdio::from(
+            std::fs::File::options()
+                .append(true)
+                .open(&log)
+                .expect("the log file"),
+        ))
+        .spawn()
+        .expect("the binary starts")
+}
+
+/// Waits for the main window, giving up early if the app has already exited —
+/// otherwise a crash at startup costs the full timeout and reports the wrong
+/// problem.
+///
+/// A free function over the raw child rather than a method, because it runs
+/// before there is an `App`: a launch the display refused is retried, and an
+/// `App` that owned the display would have to be taken apart to do it.
+fn await_main_window(app: &mut Child, home: &Path, display: &str) -> Result<String, String> {
+    let deadline = Instant::now() + READY_TIMEOUT;
+    loop {
+        if let Some(window) = find_window_on(display, MAIN_WINDOW) {
+            return Ok(window);
+        }
+        if let Ok(Some(status)) = app.try_wait() {
+            let log = std::fs::read_to_string(home.join(APP_LOG)).unwrap_or_default();
+            let xvfb = std::fs::read_to_string(home.join(XVFB_LOG)).unwrap_or_default();
+            return Err(format!(
+                "the app exited before showing a window on {display}: {status}\n\
+                 --- app ---\n{log}\n--- xvfb ---\n{xvfb}"
+            ));
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "no window appeared on {display} within {READY_TIMEOUT:?}"
+            ));
+        }
+        std::thread::sleep(POLL);
+    }
+}
+
+/// The id of a window on `display` whose name contains `title`.
+fn find_window_on(display: &str, title: &str) -> Option<String> {
+    windows_on(display)
+        .into_iter()
+        .find(|(_, name)| name.contains(title))
+        .map(|(id, _)| id)
+}
+
+/// Every window on `display` that has a name, as `(id, name)`.
+fn windows_on(display: &str) -> Vec<(String, String)> {
+    let output = Command::new("xdotool")
+        .env("DISPLAY", display)
+        // `.` matches any window that has a name at all — the one place a
+        // regex is wanted.
+        .args(["search", "--name", "."])
+        .stderr(Stdio::null())
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|id| {
+            let name = window_name_on(display, id)?;
+            (!name.is_empty()).then(|| (id.to_string(), name))
+        })
+        .collect()
+}
+
+/// The name X has for one window id, if it has one.
+fn window_name_on(display: &str, id: &str) -> Option<String> {
+    let output = Command::new("xdotool")
+        .env("DISPLAY", display)
+        .args(["getwindowname", id])
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }

@@ -330,7 +330,13 @@ sleep:
   connection slightly before its screen is ready, and an app that connects in
   that window dies with "Failed to open display". The probe requires the
   geometry to come back at the size that was asked for, which cannot pass
-  early.
+  early — and, because that probe is *still* not quite enough, a launch that
+  dies with exactly that message is retried up to three times. Four of 104
+  tests failed that way in one run and none in the next, which is the shape of
+  an environment problem and not of anything this suite is about. The retry is
+  bounded and matched on the message, so a real crash at startup still fails
+  on the first attempt with its own log attached; a sleep long enough to
+  always work would be a minute added to every run.
 - **Asking for the focus is not getting it.** Without confirming the focus
   landed, a key press reaches the window that *used* to have it — which is how
   a directory name typed into a dialog ended up in the main window, where
