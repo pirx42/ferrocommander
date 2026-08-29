@@ -181,11 +181,17 @@ walks into a file. One rule, so a name this writes is a name that opens again;
 a name that decides nothing — `.rar` — is refused rather than answered with a
 guess.
 
+**The reading happens where the name was typed**, in `jobs::packed_at`: the
+dialog's answer becomes a path *and* a `Format`, or a refusal shown then and
+there. So an unanswerable name costs no job at all — nothing is queued,
+nothing is written under a temporary name, and the marks are still there for
+the next answer.
+
 The **scan, the progress, the cancel and the failure list are the engine's**.
 A pack is `ops::run` with exactly one step replaced: "write these bytes at the
 destination" becomes "append this entry", behind a `Packer` trait with three
-methods. Nothing about a format reaches `ops`, and nothing about jobs reaches
-the packer.
+methods. No file name is read for its meaning in `ops`, and nothing about jobs
+reaches the packer.
 
 The packer is handed a **reader**, not a path. That reader is the engine's: it
 counts the bytes for the progress bar and refuses to go on after a cancel, so

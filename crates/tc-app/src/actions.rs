@@ -16,7 +16,7 @@ use std::sync::Arc;
 use gtk::glib;
 
 use tc_core::ops::{DeleteMode, Destination, Job};
-use tc_core::vfs::{LocalFs, VfsPath};
+use tc_core::vfs::{LocalFs, VfsError, VfsPath};
 
 use crate::constants::{
     COMMAND_IN_ARCHIVE, EDIT_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT, PATTERN_DEFAULT, PROMPT_COPY,
@@ -24,6 +24,7 @@ use crate::constants::{
     TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY,
     TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK, TITLE_UNMARK_PATTERN,
 };
+use crate::jobs::Packing;
 use crate::keymap::Action;
 use crate::shell::{await_listing, await_listing_or, remember, resync_watches};
 use crate::shell::{submit, submit_then, Shell, Writes};
@@ -597,18 +598,27 @@ pub(crate) fn start_pack(shell: &Rc<RefCell<Shell>>) {
     };
 
     let shell = shell.clone();
+    let refusing = window.clone();
     dialogs::ask_text(&window, TITLE_PACK, PROMPT_PACK, &prefill, move |text| {
-        let Some(archive) = jobs::packed_at(&text, &into) else {
-            return;
-        };
-        submit(
-            &shell,
-            Job::Pack {
-                sources: sources.clone(),
-                archive,
-            },
-            Writes::IntoOtherPane,
-        );
+        match jobs::packed_at(&text, &into) {
+            Packing::Nothing => {}
+            // Refused before anything starts, because there is nothing to
+            // start: the name names no packer. The same list a job's
+            // failures are shown in, so one unreadable answer looks like any
+            // other.
+            Packing::NoFormat(archive) => {
+                dialogs::show_failures(&refusing, &[(archive, VfsError::NotAnArchive)]);
+            }
+            Packing::Into(archive, format) => submit(
+                &shell,
+                Job::Pack {
+                    sources: sources.clone(),
+                    archive,
+                    format,
+                },
+                Writes::IntoOtherPane,
+            ),
+        }
     });
 }
 

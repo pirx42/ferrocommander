@@ -31,8 +31,12 @@ rule is in [keymap.md](keymap.md).
 `Job::Pack` uses the same scan, the same progress events, the same cancel and
 the same failure list as a copy. Only "write these bytes at the destination"
 is different, and that is a `Packer` — three methods, one per format, in
-[archives.md](archives.md). Nothing about an archive format reaches this
-module; the format comes from the archive's own name.
+[archives.md](archives.md). No file name is read for its meaning here: the
+job arrives with its `Format` already decided, chosen from the archive's name
+by whoever asked for the pack. The claim that "nothing about a format reaches
+`ops`" used to be a claim the code did not keep — `Job::Pack` looked the
+extension up itself and failed the job over an answer it could have refused
+before starting.
 
 The packer is handed a reader rather than a path, so counting the bytes and
 stopping on a cancel stay here and exist once instead of once per format.

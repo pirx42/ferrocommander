@@ -18,7 +18,7 @@ use std::io::Write;
 use std::time::UNIX_EPOCH;
 
 use crate::archive::constants::PACKING_SUFFIX;
-use crate::archive::{self, Packer};
+use crate::archive::{self, Format, Packer};
 use crate::vfs::constants::SEPARATOR;
 use crate::vfs::{Attributes, VfsError, VfsPath, VirtualFs};
 
@@ -88,12 +88,14 @@ pub enum Job {
     CreateFile { path: VfsPath },
     /// Alt+F5. Packs `sources` into a new archive on the target backend.
     ///
-    /// The format comes from `archive`'s own name, by the same rule that
-    /// decides whether Enter walks into a file — one rule, so a name this
-    /// packs into is a name that opens again.
+    /// The format arrives decided. Nothing in this module knows a file
+    /// name's meaning: whoever asked for the pack read the extension, by the
+    /// same rule that decides whether Enter walks into a file — one rule, so
+    /// a name this packs into is a name that opens again.
     Pack {
         sources: Vec<VfsPath>,
         archive: VfsPath,
+        format: Format,
     },
 }
 
@@ -263,7 +265,11 @@ impl Run<'_> {
                 });
                 self.transfer(plan, true);
             }
-            Job::Pack { sources, archive } => self.pack(sources, archive),
+            Job::Pack {
+                sources,
+                archive,
+                format,
+            } => self.pack(sources, archive, *format),
             Job::Delete { paths, mode } => {
                 let plan = plan::plan_removal(self.source_fs, paths, *mode == DeleteMode::Trash);
                 self.remove(plan);
@@ -316,18 +322,15 @@ impl Run<'_> {
     ///
     /// The scan, the progress, the cancel and the failure list are the ones
     /// every other job uses; only "write these bytes at the destination" is
-    /// different, and that is a [`Packer`](crate::archive::Packer). Nothing
-    /// about a format reaches this module.
+    /// different, and that is a [`Packer`](crate::archive::Packer). The
+    /// choice of one arrives made: no file name is read for its meaning
+    /// here.
     ///
     /// The bytes go to a temporary name beside the archive and are renamed
     /// into place at the end, so an interrupted pack leaves nothing that looks
     /// like a finished archive. A rename within one directory is atomic, so
     /// there is no moment where the name exists holding half an archive.
-    fn pack(&mut self, sources: &[VfsPath], archive: &VfsPath) {
-        let Some(format) = archive.file_name().and_then(archive::format_for) else {
-            self.fail(archive, VfsError::NotAnArchive);
-            return;
-        };
+    fn pack(&mut self, sources: &[VfsPath], archive: &VfsPath, format: Format) {
         let target = match self.settle(archive, false, archive.clone()) {
             Landing::Proceed { target, .. } => target,
             Landing::Skip | Landing::Failed => return,

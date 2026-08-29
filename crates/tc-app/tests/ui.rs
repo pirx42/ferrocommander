@@ -680,10 +680,12 @@ fn alt_f5_packs_what_is_marked_and_the_result_opens_again() {
 }
 
 #[test]
-fn packing_into_a_name_that_names_no_format_makes_nothing() {
+fn packing_into_a_name_that_names_no_format_is_refused_before_anything_starts() {
     // The extension is the whole choice of format, so a name with none is a
     // question the program cannot answer — and answering it by guessing would
-    // write a zip called `.rar`.
+    // write a zip called `.rar`. The refusal belongs to the name, not to a
+    // job that fails afterwards: nothing is written, nothing is left
+    // half-written under a temporary name, and the next answer still works.
     let app = in_src_and_dst(arrange);
     cursor_on_notes(&app);
 
@@ -695,7 +697,19 @@ fn packing_into_a_name_that_names_no_format_makes_nothing() {
     app.focus_dialog(DIALOG_FAILURES);
     app.key("Return");
     app.settle();
-    assert!(!app.path("dst/nope.rar").exists(), "a .rar was written");
+    let left: Vec<String> = std::fs::read_dir(app.path("dst"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("nope"))
+        .collect();
+    assert!(left.is_empty(), "the refused name left {left:?}");
+
+    app.focus_main();
+    app.key("alt+F5");
+    app.focus_dialog(DIALOG_PACK);
+    app.type_text("yes.zip");
+    app.key("Return");
+    app.await_exists("dst/yes.zip");
 }
 
 #[test]

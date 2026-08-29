@@ -904,6 +904,7 @@ fn packing_reports_every_byte_it_read() {
         &Job::Pack {
             sources: vec![LocalFs::vfs_path(&tree)],
             archive: LocalFs::vfs_path(dir.path()).child("out.zip"),
+            format: Format::Zip,
         },
         &LocalFs,
         &LocalFs,
@@ -946,6 +947,7 @@ fn a_pack_that_is_cancelled_leaves_no_archive_at_all() {
         &Job::Pack {
             sources: vec![LocalFs::vfs_path(&tree)],
             archive: LocalFs::vfs_path(dir.path()).child("out.zip"),
+            format: Format::Zip,
         },
         &LocalFs,
         &LocalFs,
@@ -959,36 +961,6 @@ fn a_pack_that_is_cancelled_leaves_no_archive_at_all() {
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(left, ["tree"], "a cancelled pack left something behind");
-}
-
-#[test]
-fn packing_into_a_name_that_is_not_an_archive_is_refused() {
-    // One rule decides what opens as an archive and what packs into one, so a
-    // name this writes is a name that opens again.
-    let dir = TempDir::new().unwrap();
-    let tree = dir.path().join("tree");
-    common::build_tree(&tree);
-
-    let report = ops::run(
-        &Job::Pack {
-            sources: vec![LocalFs::vfs_path(&tree)],
-            archive: LocalFs::vfs_path(dir.path()).child("out.rar"),
-        },
-        &LocalFs,
-        &LocalFs,
-        &mut Refuse,
-        &mut Silent,
-        &CancelToken::new(),
-    );
-
-    assert!(
-        report
-            .failures
-            .iter()
-            .any(|(_, error)| *error == VfsError::NotAnArchive),
-        "packing into a .rar was allowed: {report:?}"
-    );
-    assert!(!dir.path().join("out.rar").exists());
 }
 
 #[test]
@@ -1007,6 +979,7 @@ fn packing_a_second_time_asks_before_replacing() {
         &Job::Pack {
             sources: vec![LocalFs::vfs_path(&tree)],
             archive,
+            format: Format::Zip,
         },
         &LocalFs,
         &LocalFs,
@@ -1024,11 +997,16 @@ fn packing_a_second_time_asks_before_replacing() {
 }
 
 /// Packs `sources` into `name` beside them, and insists it went cleanly.
+///
+/// The format comes from the name here the way the shell reads it from the
+/// name the user typed — one rule, so what these tests write is what
+/// [`format_for`] would open again.
 fn pack(directory: &std::path::Path, sources: &[VfsPath], name: &str) {
     let report = ops::run(
         &Job::Pack {
             sources: sources.to_vec(),
             archive: LocalFs::vfs_path(directory).child(name),
+            format: format_for(name).expect("the test packs into a name that names a format"),
         },
         &LocalFs,
         &LocalFs,

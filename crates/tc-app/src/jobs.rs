@@ -4,6 +4,7 @@
 //! decision the dialogs make is testable without a window — the same split
 //! `navigation.rs` uses for the cursor keys.
 
+use tc_core::archive::{format_for, Format};
 use tc_core::listing::{split_name, Listing};
 use tc_core::ops::{DeleteMode, Destination};
 use tc_core::vfs::constants::SEPARATOR;
@@ -113,24 +114,44 @@ pub fn selection_status(listing: &Listing) -> String {
         .replace("{total_bytes}", &human_bytes(visible.bytes))
 }
 
-/// Where the name typed into Alt+F5's field puts the archive.
+/// What the name typed into Alt+F5's field asks for.
+///
+/// The extension is the whole choice of format, so reading the name is also
+/// choosing the packer — one rule decides what opens as an archive and what
+/// packs into one, so a name this writes is a name that opens again
+/// (`docs/archives.md`).
+pub enum Packing {
+    /// Nothing was typed; the keystroke ends here without a word.
+    Nothing,
+    /// A name whose extension names no format this program writes. The
+    /// question is unanswerable rather than the job being impossible, so it
+    /// is refused where it was asked.
+    NoFormat(VfsPath),
+    /// Pack into this archive, with this packer.
+    Into(VfsPath, Format),
+}
+
+/// Where the name typed into Alt+F5's field puts the archive, and in which
+/// format.
 ///
 /// A bare name lands in `into` — the directory the field was prefilled with,
 /// which is also the pane the archive is written on. The two have to agree or
 /// a name typed over the prefill goes somewhere the prefill never mentioned,
 /// and a program that read a bare name as the root of the disk would be
 /// answering a question nobody asked.
-///
-/// `None` for nothing at all.
-pub fn packed_at(input: &str, into: &VfsPath) -> Option<VfsPath> {
+pub fn packed_at(input: &str, into: &VfsPath) -> Packing {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return None;
+        return Packing::Nothing;
     }
-    Some(match trimmed.contains(SEPARATOR) {
+    let archive = match trimmed.contains(SEPARATOR) {
         true => VfsPath::new(trimmed),
         false => into.child(trimmed),
-    })
+    };
+    match archive.file_name().and_then(format_for) {
+        Some(format) => Packing::Into(archive, format),
+        None => Packing::NoFormat(archive),
+    }
 }
 
 /// The archive name Alt+F5 offers: beside `dir`, named after what is being
@@ -344,6 +365,52 @@ mod tests {
         let dir = subject(&listing_with_cursor_on("photos"), 1);
         assert_ne!(file, dir);
         assert!(dir.contains(KIND_DIRECTORY));
+    }
+
+    #[test]
+    fn a_bare_archive_name_lands_beside_the_other_pane() {
+        let into = VfsPath::new("/home/pirx/dst");
+        let Packing::Into(archive, format) = packed_at("  out.zip  ", &into) else {
+            panic!("a .zip was not read as one");
+        };
+        assert_eq!(archive, VfsPath::new("/home/pirx/dst/out.zip"));
+        assert_eq!(format, Format::Zip);
+    }
+
+    #[test]
+    fn a_typed_path_goes_where_it_says_and_still_names_its_format() {
+        let Packing::Into(archive, format) =
+            packed_at("/elsewhere/backup.tar.gz", &VfsPath::new("/home/pirx/dst"))
+        else {
+            panic!("a .tar.gz was not read as one");
+        };
+        assert_eq!(archive, VfsPath::new("/elsewhere/backup.tar.gz"));
+        assert_eq!(format, Format::TarGz);
+    }
+
+    #[test]
+    fn a_name_that_names_no_format_is_refused_rather_than_guessed() {
+        // The extension is the whole choice of format, so guessing would
+        // write a zip under a name that says `.rar` — and one rule decides
+        // what opens as an archive and what packs into one, so a name this
+        // refuses is a name nothing would open.
+        let into = VfsPath::new("/home/pirx/dst");
+        assert!(matches!(packed_at("out.rar", &into), Packing::NoFormat(_)));
+        assert!(matches!(packed_at("out", &into), Packing::NoFormat(_)));
+        assert!(matches!(packed_at("   ", &into), Packing::Nothing));
+    }
+
+    #[test]
+    fn the_offered_name_is_one_the_field_would_accept_back() {
+        // The prefill and the reading of it are one loop: pressing Return on
+        // what Alt+F5 offers has to be a job, never a refusal.
+        let listing = listing_with_cursor_on("notes.txt");
+        let into = VfsPath::new("/home/pirx/dst");
+        let offered = prefilled_archive(&into, &listing, 1);
+        assert!(
+            matches!(packed_at(&offered, &into), Packing::Into(..)),
+            "the prefilled name {offered} would be refused"
+        );
     }
 
     #[test]
