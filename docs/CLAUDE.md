@@ -68,6 +68,12 @@ cross-references instead of duplication.
   | [phase 6 — archives](plans/archive/2026-08-28-phase6-archives.md) | archives as directories, unpacking through the copy engine, `Alt+F5` to pack |
   | [phase 7 — the audit](plans/archive/2026-08-29-phase7-refactoring-audit.md) | the closing sweep: rules that drifted, files whose names stopped describing them, the documentation pass |
 
+  One plan is **active**, and it proposes rather than builds:
+  [architecture and redundancy review](plans/2026-08-29-architecture-and-redundancy-review.md)
+  — what a whole-codebase read found after phase 7, with a proposal per
+  finding, the things it checked and found sound, and the one candidate
+  finding that did not survive checking.
+
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
 

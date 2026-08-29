@@ -94,6 +94,7 @@ The project is in its build-up phase; this table grows with the code.
 | Look up v1 scope / architecture | [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md) |
 | What was built, and what it cost | [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md) § 8 — v1 is implemented, all seven phases |
 | Known gaps left open on purpose | [docs/future-improvements.md](docs/future-improvements.md) |
+| What a whole-codebase review found, and what it proposes | [docs/plans/2026-08-29-architecture-and-redundancy-review.md](docs/plans/2026-08-29-architecture-and-redundancy-review.md) |
 | How fast things are, and what is still slow | [docs/performance.md](docs/performance.md) |
 | What "reliable" means, and where the tests live | [docs/reliability.md](docs/reliability.md) |
 | Which crate — and which module — a thing belongs in | [crates/CLAUDE.md](crates/CLAUDE.md) |
