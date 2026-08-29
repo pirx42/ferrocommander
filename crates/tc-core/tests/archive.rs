@@ -17,8 +17,8 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use tc_core::archive::{format_for, ArchiveFs, Format};
 use tc_core::ops::{
-    self, Answer, CancelToken, Conflict, ConflictResolver, DeleteMode, Destination, Job, Report,
-    Resolution, Silent,
+    self, Answer, CancelToken, Conflict, ConflictResolver, DeleteMode, Destination, Job, Progress,
+    Report, Resolution, Silent,
 };
 use tc_core::vfs::{Attributes, Entry, EntryKind, LocalFs, Store, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
@@ -886,6 +886,50 @@ fn a_packed_file_keeps_its_date_and_its_executable_bit() {
             "{name} lost the mode"
         );
     }
+}
+
+#[test]
+fn packing_reports_every_byte_it_read() {
+    // The same conservation statement the copy engine makes, for the other
+    // path that counts bytes. A pack reads through its own metered reader
+    // rather than through the copy loop, so "the deltas add up to the total
+    // the scan promised" has to be asserted here too — otherwise the two
+    // could drift and only one of them would be caught.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    let mut events = Vec::new();
+
+    let report = ops::run(
+        &Job::Pack {
+            sources: vec![LocalFs::vfs_path(&tree)],
+            archive: LocalFs::vfs_path(dir.path()).child("out.zip"),
+        },
+        &LocalFs,
+        &LocalFs,
+        &mut Refuse,
+        &mut events,
+        &CancelToken::new(),
+    );
+    assert!(report.is_clean(), "the pack was not clean: {report:?}");
+
+    let scanned = events
+        .iter()
+        .find_map(|event| match event {
+            Progress::Scanned { bytes, .. } => Some(*bytes),
+            _ => None,
+        })
+        .expect("a job announces its totals");
+    let advanced: u64 = events
+        .iter()
+        .filter_map(|event| match event {
+            Progress::Advanced { bytes } => Some(*bytes),
+            _ => None,
+        })
+        .sum();
+
+    assert_eq!(advanced, scanned, "the bar would not have reached the end");
+    assert!(scanned > 0, "the fixture has bytes in it");
 }
 
 #[test]

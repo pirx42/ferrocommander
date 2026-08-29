@@ -153,10 +153,10 @@ covers every binding except `Ctrl+Q` and `Backspace` — quitting would end the
 app the test is driving, and going up a directory has no filesystem effect to
 assert on. Both were verified by hand.
 
-Also uncovered: the Page Up/Down selection-adoption path, which needs a
-directory taller than the viewport and an assertion about which row the cursor
-is on — neither of which the filesystem can answer. That one wants a way to
-read the pane's state from outside.
+*(The Page Up/Down selection-adoption path used to be listed here as needing
+"an assertion about which row the cursor is on, which the filesystem cannot
+answer". It can: F5 with nothing marked copies the cursor row, so the
+filesystem says which row that was. Covered since the architecture review.)*
 
 **Text on screen is not covered either.** The path bar and the command-line
 prompt are GTK labels, and the suite can see window titles and the filesystem

@@ -22,6 +22,10 @@ const SOURCE_TEXT: &str = "hello from the source";
 /// What a colliding target holds before the job touches it.
 const EXISTING_TEXT: &str = "already here";
 
+/// How many rows [`with_a_tall_directory`] adds. Comfortably more than a
+/// 700-pixel window shows, so one Page Down cannot reach the end.
+const TALL_DIRECTORY_ROWS: usize = 200;
+
 /// Contents of the file inside `src/bundle.zip`, so an assertion can tell an
 /// unpacked copy from anything else with that name.
 const ARCHIVED_TEXT: &str = "this one came out of the zip";
@@ -70,6 +74,15 @@ fn with_an_archive(home: &Path) {
         std::io::Write::write_all(&mut writer, contents.as_bytes()).unwrap();
     }
     writer.finish().unwrap();
+}
+
+/// A `src` with far more rows than fit on screen, so Page Down has somewhere
+/// to go. Names sort in creation order and say which row they are.
+fn with_a_tall_directory(home: &Path) {
+    arrange(home);
+    for index in 0..TALL_DIRECTORY_ROWS {
+        std::fs::write(home.join(format!("src/row{index:03}.txt")), "x").unwrap();
+    }
 }
 
 /// Same, with a second `.txt` so the extension keys have something to pick
@@ -1973,6 +1986,136 @@ fn ctrl_u_exchanges_the_panes_and_the_marks_come_along() {
         !app.path("dst/notes.txt").exists(),
         "the mark was lost in the exchange and F5 fell back to the cursor"
     );
+}
+
+#[test]
+fn page_down_then_f5_acts_on_the_row_the_widget_moved_to() {
+    // Page Up/Down are deliberately *not* bound: the widget knows the height
+    // of the viewport and the model does not. So the widget moves its own
+    // selection without telling the model, and every action starts by
+    // adopting it — otherwise the next key acts on a row the user stopped
+    // looking at a page ago.
+    //
+    // Recorded in future-improvements.md as needing "an assertion about which
+    // row the cursor is on, which the filesystem cannot answer". It can: F5
+    // with nothing marked copies the cursor row, so the filesystem says which
+    // row that was.
+    let app = in_src_and_dst(with_a_tall_directory);
+
+    // Home puts the model cursor on `..`, which is not a thing F5 will copy.
+    app.key("Home");
+    app.key("Next");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    // Something arrived, and it is not the row Home left the model on: the
+    // model took over the selection the widget had moved.
+    let copied = await_any_copy(&app);
+    assert!(
+        copied.starts_with("row"),
+        "F5 copied {copied:?} rather than a row the page landed on"
+    );
+}
+
+/// Waits for anything at all to appear in `dst`, and says what it was.
+fn await_any_copy(app: &App) -> String {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let arrived: Vec<String> = std::fs::read_dir(app.path("dst"))
+            .expect("dst exists")
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        if let Some(name) = arrived.first() {
+            return name.clone();
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "nothing was copied: the model acted on a stale cursor"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+}
+
+#[test]
+fn ctrl_u_carries_the_sort_order_and_the_hidden_files_setting() {
+    // The exchange swaps six fields by name. Two tests already cover the
+    // listing and the backend; these are the ones nothing was watching, and
+    // the settings file is where they are observable from outside.
+    let app = in_src_and_dst(arrange);
+    // Left pane only: sort by size, and show the dot-files.
+    app.key("ctrl+F6");
+    app.key("ctrl+h");
+    await_pane_sort(&app, 0, "size", true);
+
+    app.key("ctrl+u");
+
+    // What the left pane had is now the right pane's, and the right pane's
+    // defaults are now the left's.
+    await_pane_sort(&app, 1, "size", true);
+    await_pane_sort(&app, 0, "name", false);
+}
+
+#[test]
+fn ctrl_u_carries_the_selection_a_job_spent() {
+    // `Num /` restores the marks the last operation consumed, and those live
+    // beside the listing rather than in it — so the exchange has to carry
+    // them too, and nothing was checking that it did.
+    let app = in_src_and_dst(with_two_text_files);
+    // Mark both .txt files and spend them on a copy.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("alt+KP_Add");
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/other.txt");
+    app.settle();
+
+    app.focus_main();
+    app.key("ctrl+u");
+    await_panes_at(&app, "/dst", "/src");
+
+    // The right pane shows src now. Bring the spent marks back there and
+    // delete them: the two .txt files go, data.bin stays.
+    app.key("Tab");
+    app.key("KP_Divide");
+    app.key("F8");
+    app.focus_dialog(DIALOG_DELETE);
+    app.key("space");
+
+    app.await_gone("src/notes.txt");
+    app.await_gone("src/other.txt");
+    assert!(
+        app.path("src/data.bin").exists(),
+        "the exchange lost the spent selection, or widened it"
+    );
+}
+
+/// Waits until the app has recorded that pane's ordering and hidden-file flag.
+fn await_pane_sort(app: &App, index: usize, key: &str, hidden: bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let recorded = recorded_pane(app.home(), index);
+        if recorded == (key.to_string(), hidden) {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "pane {index} never recorded {key}/hidden={hidden}: {recorded:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+}
+
+/// One pane's sort key and hidden-file flag, read back the way the app wrote
+/// them.
+fn recorded_pane(home: &Path, index: usize) -> (String, bool) {
+    let config = VfsPath::new(home.join(".config").to_str().unwrap());
+    let (settings, complaint) = tc_core::config::load(&LocalFs, &config);
+    assert_eq!(complaint, None, "the settings could not be read back");
+    let pane = settings.pane(index);
+    (pane.sort_key.clone(), pane.show_hidden)
 }
 
 #[test]
