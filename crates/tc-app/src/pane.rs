@@ -100,6 +100,11 @@ impl Column {
     fn value(self, row: &Row) -> &str {
         match self {
             Column::Name => &row.name,
+            // While a row is being renamed the entry holds the *whole* name,
+            // extension and all, so an Ext column showing it too puts the
+            // same three characters on screen twice — once editable and once
+            // not, which reads as two different things to change.
+            Column::Ext if row.renaming => "",
             Column::Ext => &row.ext,
             Column::Size => &row.size,
             Column::Modified => &row.modified,
@@ -376,7 +381,15 @@ impl PaneView {
     /// somewhere they cannot navigate out of; landing on the nearest
     /// surviving ancestor keeps the pane usable.
     pub fn reload_after_job(&mut self) {
-        let focused = self.shown.listing.current().map(|entry| entry.name.clone());
+        // A job that said where the cursor should end up wins over where the
+        // cursor is now. After a rename the name it is on does not exist any
+        // more, so keeping it means focusing nothing and clamping to the top
+        // row — leaving the file somebody just named off screen under a name
+        // they then have to go and find.
+        let focused = self
+            .focus_on_arrival
+            .take()
+            .or_else(|| self.shown.listing.current().map(|entry| entry.name.clone()));
         let mut listing = match self.is_branch() {
             true => self.walk_again(),
             false => {
@@ -1549,6 +1562,29 @@ mod tests {
             selected,
             renaming,
         }
+    }
+
+    #[test]
+    fn the_ext_column_stands_down_while_the_row_is_renamed() {
+        // Reported from the field: Shift+F6 puts the whole name in the entry,
+        // extension and all, and the Ext column went on showing it too — the
+        // same three characters twice, once editable and once not.
+        let editing = row(false, true);
+        assert_eq!(
+            Column::Ext.value(&editing),
+            "",
+            "the extension is shown twice"
+        );
+        assert_eq!(
+            Column::Name.value(&editing),
+            "notes",
+            "the name column is the entry's business, not blanked here"
+        );
+
+        // Every other column goes on saying what it said: the row is being
+        // renamed, not hidden.
+        assert_eq!(Column::Size.value(&editing), "0");
+        assert_eq!(Column::Ext.value(&row(false, false)), "txt");
     }
 
     #[test]

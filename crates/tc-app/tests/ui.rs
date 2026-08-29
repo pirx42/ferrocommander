@@ -3331,6 +3331,31 @@ fn ctrl_down_offers_a_command_that_was_run_before() {
 }
 
 #[test]
+fn the_cursor_follows_a_renamed_file_to_its_new_name() {
+    // Reported from the field: after Shift+F6 and Enter the cursor jumped to
+    // the top row, leaving the file just named off screen under a name the
+    // user then had to go and find.
+    //
+    // Asserted by acting on the cursor rather than by looking at it: F5 copies
+    // the row under it, so a copy of the new name is proof of where it is.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("shift+F6");
+    app.settle();
+    app.key("ctrl+a");
+    app.type_text("zzz-last.txt");
+    app.key("Return");
+    app.await_exists("src/zzz-last.txt");
+
+    // It sorts last, so a cursor that fell back to the top is nowhere near it.
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/zzz-last.txt");
+}
+
+#[test]
 fn enter_on_a_file_hands_it_to_the_desktop() {
     // Reported from the field: Enter on a file did nothing at all, which is
     // what `keymap.md` said it did. It now opens the file the way the desktop

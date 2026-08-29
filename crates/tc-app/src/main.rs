@@ -252,6 +252,12 @@ fn wire_inline_rename(shell: &Rc<RefCell<Shell>>, index: usize) {
             return;
         }
         let target = hooked.borrow().panes[index].listing().dir().child(trimmed);
+        // The cursor follows the file to its new name. A rename ends in a
+        // fresh listing, and the entry the cursor was kept on does not exist
+        // in it any more — so without this the cursor falls back to the top
+        // row, and the file somebody just named is somewhere off screen under
+        // a name they have to go and find.
+        hooked.borrow_mut().panes[index].focus_on_arrival(&target);
         submit(
             &hooked,
             Job::Move {
