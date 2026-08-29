@@ -3,7 +3,8 @@
 //! Split out of `progress.rs`, which held both the throughput arithmetic and
 //! the rendering: two of the three callers of these want no meter at all.
 //! Pure functions over plain values, so every one of them is tested without a
-//! window.
+//! window. A row's *timestamp* is not here: rendering one needs
+//! `glib::DateTime` for the local time zone, and this module is glib-free.
 
 use std::time::Duration;
 
@@ -11,8 +12,25 @@ use tc_core::vfs::{VfsError, VfsPath};
 
 use crate::constants::{
     BYTE_DECIMALS, BYTE_STEP, BYTE_UNITS, FAILURES_MORE, FAILURES_SHOWN, FAILURE_FORMAT,
-    MINUTES_PER_HOUR, SECONDS_PER_MINUTE,
+    MINUTES_PER_HOUR, SECONDS_PER_MINUTE, THOUSANDS_GROUP, THOUSANDS_SEPARATOR,
 };
+
+/// The size column: `1234567` becomes `1 234 567`.
+///
+/// Exact digits rather than [`human_bytes`], because a listing is where
+/// somebody compares two files and `1.2 MiB` twice does not: Total Commander
+/// shows the count and the units belong to the progress caption.
+pub fn group_digits(value: u64) -> String {
+    let digits = value.to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / THOUSANDS_GROUP);
+    for (position, digit) in digits.chars().enumerate() {
+        if position > 0 && (digits.len() - position).is_multiple_of(THOUSANDS_GROUP) {
+            grouped.push(THOUSANDS_SEPARATOR);
+        }
+        grouped.push(digit);
+    }
+    grouped
+}
 
 /// A duration as a person reads a time left: `0:07`, `2:35`, `1:02:35`.
 ///

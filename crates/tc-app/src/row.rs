@@ -10,7 +10,8 @@ use gtk::glib;
 use tc_core::listing::split_name;
 use tc_core::vfs::Entry;
 
-use crate::constants::{DATE_FORMAT, DIR_SIZE_LABEL, THOUSANDS_GROUP, THOUSANDS_SEPARATOR};
+use crate::constants::{DATE_FORMAT, DIR_SIZE_LABEL};
+use crate::format::group_digits;
 
 /// One rendered row: four column strings plus what the UI needs to style it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,19 +73,6 @@ impl Row {
             selected,
         }
     }
-}
-
-/// `1234567` becomes `1 234 567`.
-fn group_digits(value: u64) -> String {
-    let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len() + digits.len() / THOUSANDS_GROUP);
-    for (position, digit) in digits.chars().enumerate() {
-        if position > 0 && (digits.len() - position).is_multiple_of(THOUSANDS_GROUP) {
-            grouped.push(THOUSANDS_SEPARATOR);
-        }
-        grouped.push(digit);
-    }
-    grouped
 }
 
 /// Formats a timestamp in the viewer's local time zone.

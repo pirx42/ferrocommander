@@ -174,6 +174,21 @@ Pattern selection uses `tc-core::glob` — `*` and `?`, case-insensitive, which
 is what Total Commander accepts and what a person types. It lives outside
 `listing` because the [search](search.md) uses the same matcher.
 
+### When the selection should become its own type — and why it has not
+
+Fourteen of `Listing`'s public methods are selection, which is a third of the
+object. Extracting a `Selection` over the `Vec<bool>` was considered by the
+2026-08-29 architecture review and **deliberately declined**: most of these
+operations need the *view* — the visible rows after the hidden-file flag and
+the quick filter — and some need `split_name`, so the extracted type would
+take the view as a parameter on nearly every call. That is a seam with a cost
+and no defect behind it.
+
+The threshold is written down instead, because it is the half that is useful
+later: **extract it if the selection API grows past about sixteen methods, or
+the first time a second thing has to hold a selection.** Until one of those
+happens, splitting it is churn.
+
 ### Files-only is the default, directories the opt-in
 
 `invert_selection_files` flips the visible **files**; `invert_selection` flips

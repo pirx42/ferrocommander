@@ -1,6 +1,8 @@
 # Architecture and redundancy review
 
-**Status:** Proposed — findings only, nothing applied
+**Status:** Implemented — all nine items, plus the audit phase
+(commits `5c601ef`…`3ad55f8` on `claude/architecture-and-redundancy-fixes`;
+`git log --grep "architecture-and-redundancy-review"`)
 **Scope:** the whole of `crates/`, 14 139 lines of code and 9 730 of tests
 **Follows:** the phase 7 audit
 ([archive/2026-08-29-phase7-refactoring-audit.md](archive/2026-08-29-phase7-refactoring-audit.md)),
@@ -327,3 +329,46 @@ file is already open, and are not worth a day of their own.
 and two of the nine are explicitly recommendations *not* to act (§ 2.4, and
 the "leave it alone" half of § 1). The document exists so the next person
 changing one of these files knows what was already noticed.
+
+## 7. What was actually done
+
+One commit per item, coverage checked before each one: for every finding the
+test that pinned the current behaviour was found first and **probed** — the
+effect disabled, the suite re-run — and only a probe that bit counted as
+coverage (skill [59](../skills/59-mutation-probe-over-coverage-percent.md)).
+Where nothing bit, the test came first, in its own commit (`5c601ef`).
+
+| | Finding | Commit | Deviation from the proposal |
+|---|---|---|---|
+| 0 | coverage pre-check | `5c601ef` | three end-to-end tests and one core test added where a probe found nothing biting |
+| 1 | § 4 `Action::ALL` | `c02e3b0`, `ca604af` | `ALL` is `#[cfg(test)]`, not `pub` — see below |
+| 2 | § 3.1 one copy loop | `ad25acc` | none; the benchmark was re-run and found **no measurable change** ([performance.md](../performance.md)) |
+| 3 | § 2.3 `Contents` | `1c13d3b` | none |
+| 4 | § 2.1 `listing` | `0da7b3d` | none |
+| 5 | §§ 3.2, 3.3 | `72d04fb` | **nine** deletions, not ten: `exchange_with`'s `other.adopt_selection()` is not the same call, and `marking` does not adopt |
+| 6 | §§ 2.5, 3.6 | `83dbe0e` | `window` went private too, once the accessor left it no outside reader |
+| 7 | § 3.4 test doubles | `3ad55f8` | both `Counting`s renamed (`CountingBackend`, `CountedFile`), not one |
+| 8 | § 2.2 `ops`/archive | `a8ae20d` | option (a), the owner's choice: `Job::Pack` carries a `Format` |
+| 9 | §§ 3.5, 3.7 | `83dbe0e` | `row.rs` was **not** a caller of `progress.rs`, as claimed — the callers are `jobs.rs` and `dialogs/mod.rs` |
+
+**§ 2.4 was declined, as proposed**, and the threshold that would change that
+answer is now written where somebody will meet it:
+[listing.md](../listing.md) § "When the selection should become its own type".
+
+### The one mistake worth recording
+
+Item 1 was committed with `clippy -D warnings` **failing**. The gate had been
+run as a `&&` chain with the output truncated, so a red clippy hid behind a
+green test run. Fixed in `ca604af`, and the cause fixed with it:
+`scripts/green-gate.sh` now runs all six steps, reports each by name, and
+fails loudly. Every commit after it went through that script.
+
+### Audit phase (skill [49](../skills/49-final-phase-refactoring-audit.md))
+
+Re-reading the nine commits as one diff found one thing: item 9 created
+`format.rs` for "how a number is written for a person" while leaving
+`group_digits` — the size column's thousands separator — behind in `row.rs`,
+which made the new module's own claim false. Moved, with the reason it is not
+`human_bytes` written down. The row's *timestamp* stayed in `row.rs`
+deliberately: it needs `glib::DateTime` for the local time zone, and
+`format.rs` is glib-free.
