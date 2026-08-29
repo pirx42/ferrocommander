@@ -118,6 +118,73 @@ pub enum Action {
     ToggleHidden,
     Quit,
 }
+impl Action {
+    /// Every action there is.
+    ///
+    /// Hand-written, and the one list here that the compiler does not check —
+    /// so a new variant has to be added here as well as to the enum. What
+    /// makes that worth it is [`every_action_can_be_named`], which walks this
+    /// list and insists each entry has a name in [`ACTION_NAMES`]: without
+    /// it, an action added to the enum and to `dispatch` but to neither table
+    /// compiles, runs, and can never be reached or rebound by anyone.
+    ///
+    /// `SortBy` is spelled out per key, because a sort key is part of the
+    /// action rather than an argument to it.
+    pub const ALL: [Action; 52] = [
+        Action::SwitchPane,
+        Action::CursorUp,
+        Action::CursorDown,
+        Action::CursorFirst,
+        Action::CursorLast,
+        Action::Activate,
+        Action::GoParent,
+        Action::Copy,
+        Action::Pack,
+        Action::Move,
+        Action::Reread,
+        Action::Search,
+        Action::MultiRename,
+        Action::UndoRename,
+        Action::View,
+        Action::Edit,
+        Action::CreateFile,
+        Action::RenameInline,
+        Action::CreateDir,
+        Action::Delete,
+        Action::DeletePermanently,
+        Action::ToggleMark,
+        Action::ToggleMarkAndAdvance,
+        Action::ToggleMarkAndRetreat,
+        Action::ExtendMarkToFirst,
+        Action::ExtendMarkToLast,
+        Action::ExtendMarkPageUp,
+        Action::ExtendMarkPageDown,
+        Action::MarkByPattern,
+        Action::UnmarkByPattern,
+        Action::InvertMarks,
+        Action::InvertMarksIncludingFolders,
+        Action::MarkSameExtension,
+        Action::UnmarkSameExtension,
+        Action::RestoreMarks,
+        Action::MarkAll,
+        Action::UnmarkAll,
+        Action::QuickFilter,
+        Action::ClearFilter,
+        Action::SortBy(SortKey::Name),
+        Action::SortBy(SortKey::Ext),
+        Action::SortBy(SortKey::Size),
+        Action::SortBy(SortKey::Modified),
+        Action::CommandHistory,
+        Action::InsertName,
+        Action::SelectDriveLeft,
+        Action::SelectDriveRight,
+        Action::CloneToRight,
+        Action::CloneToLeft,
+        Action::ExchangePanes,
+        Action::ToggleHidden,
+        Action::Quit,
+    ];
+}
 
 struct Binding {
     key: Key,
@@ -857,6 +924,37 @@ mod tests {
         for (key, modifiers, action) in expected {
             assert_eq!(bound(key, modifiers), Some(action), "{key:?}");
         }
+    }
+
+    #[test]
+    fn every_action_can_be_named() {
+        // The gap the other two tables leave between them: one walks
+        // BINDINGS and one walks ACTION_NAMES, so an action in *neither* —
+        // added to the enum and to `dispatch`, and nowhere else — passes both
+        // while being unreachable and unnameable. This one walks the actions.
+        for action in Action::ALL {
+            assert!(
+                ACTION_NAMES.iter().any(|(_, named)| *named == action),
+                "{action:?} has no name in ACTION_NAMES, so nobody can bind it"
+            );
+        }
+    }
+
+    #[test]
+    fn the_action_list_names_each_action_once() {
+        // `ALL` is hand-written, so it can go wrong in the other direction
+        // too: a variant listed twice would make the walk above look thorough
+        // while covering one fewer action than it appears to.
+        let mut seen = Vec::new();
+        for action in Action::ALL {
+            assert!(!seen.contains(&action), "{action:?} is in ALL twice");
+            seen.push(action);
+        }
+        assert_eq!(
+            seen.len(),
+            ACTION_NAMES.len(),
+            "ALL and ACTION_NAMES disagree about how many actions there are"
+        );
     }
 
     #[test]
