@@ -99,6 +99,12 @@ million files is a lot of memory for a `u64`.
 - **Escape mid-scan** leaves the sizes already found in place and stops the
   rest. Unlike the branch walk, a partial answer here is not misleading:
   each folder's number is its own and complete.
+
+  **Not tested end to end**, and for the reason the branch view's cancel was
+  not either: on a fixture this suite can afford, every folder is counted
+  before a second keystroke arrives, so pressing `Escape` into a running scan
+  is a race dressed as an assertion. The cancel's own half — that a stopped
+  scan reports a partial answer — is pinned headlessly.
 - **A re-read forgets them**, including the one nudged by the watcher while
   a scan is still running.
 - **Marked files are counted, not scanned**, and the status line total agrees

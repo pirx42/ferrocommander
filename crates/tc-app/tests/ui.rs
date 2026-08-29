@@ -1855,6 +1855,18 @@ fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
     );
 }
 
+/// `src` with two folders of very different weight, and an empty `dst`.
+///
+/// Uncounted they are both zero and tie, so the name breaks it; counted they
+/// do not. That is what makes the sort able to say whether counting happened.
+fn with_two_folders(home: &Path) {
+    std::fs::create_dir_all(home.join("src/big")).unwrap();
+    std::fs::create_dir_all(home.join("src/small")).unwrap();
+    std::fs::create_dir(home.join("dst")).unwrap();
+    std::fs::write(home.join("src/big/data.bin"), vec![9u8; 4096]).unwrap();
+    std::fs::write(home.join("src/small/tiny.txt"), "x").unwrap();
+}
+
 #[test]
 fn alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it() {
     // The size column is not something this suite can read, so the counted
@@ -1862,13 +1874,7 @@ fn alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it() {
     // size. Uncounted, both folders are zero and tie, so the name breaks it
     // and `big` comes first. Counted, `small` is genuinely smaller and leads.
     // Copying whichever the cursor lands on says which happened.
-    let app = App::launch(|home| {
-        std::fs::create_dir_all(home.join("src/big")).unwrap();
-        std::fs::create_dir_all(home.join("src/small")).unwrap();
-        std::fs::create_dir(home.join("dst")).unwrap();
-        std::fs::write(home.join("src/big/data.bin"), vec![9u8; 4096]).unwrap();
-        std::fs::write(home.join("src/small/tiny.txt"), "x").unwrap();
-    });
+    let app = App::launch(with_two_folders);
     app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
     await_panes_at(&app, "/src", "/dst");
 
@@ -1893,6 +1899,46 @@ fn alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it() {
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(landed, ["small"], "the sort could not tell them apart");
+}
+
+#[test]
+fn a_re_read_forgets_the_counted_sizes() {
+    // A re-read is a fresh answer from the filesystem, and a count carried
+    // over from before it could be stale in a way nothing on screen admits.
+    // Observed the same way the counting is: uncounted, the two folders tie
+    // at zero and the name breaks it, so `big` leads again.
+    //
+    // This pins the **sizes** going, which is the user-visible half. It does
+    // not pin the `measured` flags going with them: `read_dir` zeroes the
+    // sizes either way, so a listing that kept stale flags would still tie
+    // here — it would merely draw `0` where `<DIR>` belongs, which is a
+    // column this suite cannot read. That half is pinned headlessly, by
+    // `a_re_read_forgets_the_sizes_but_keeps_the_marks`.
+    let app = App::launch(with_two_folders);
+    app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
+    await_panes_at(&app, "/src", "/dst");
+
+    app.keys(&["Home", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+    app.key("alt+shift+Return");
+    app.settle();
+    app.key("ctrl+KP_Subtract");
+
+    app.key("ctrl+r");
+    app.settle();
+
+    app.key("ctrl+F6");
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.settle();
+
+    let landed: Vec<String> = std::fs::read_dir(app.path("dst"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(landed, ["big"], "a stale size survived the re-read");
 }
 
 #[test]

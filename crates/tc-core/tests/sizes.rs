@@ -11,7 +11,7 @@ use common::delegate_vfs;
 
 use std::io::{Read, Write};
 
-use tc_core::listing::Listing;
+use tc_core::listing::{Listing, Sort, SortKey, SortOrder};
 use tc_core::ops::CancelToken;
 use tc_core::sizes::{self, Measured};
 use tc_core::vfs::{Entry, LocalFs, VfsError, VfsPath, VirtualFs};
@@ -126,6 +126,39 @@ fn a_measured_folder_counts_towards_the_marked_total() {
 
     assert_eq!(listing.selection_summary().bytes, 4096);
     assert_eq!(listing.selection_summary().count, 1);
+}
+
+#[test]
+fn an_answer_finds_its_row_after_the_view_was_re_sorted() {
+    // Answers arrive one at a time and a person can re-sort between two of
+    // them. Keying by name rather than by row is what makes the second answer
+    // still land on its own folder — the same rule the marks follow.
+    let (_dir, root) = tree();
+    let mut listing = Listing::load(&LocalFs, root).unwrap();
+    listing.set_measured("sub", 4096, true);
+
+    // Descending by size now puts `sub` at the top of the directories, so the
+    // next answer's row is deliberately **not** the first one — an answer
+    // that went by position rather than by name would land on `sub`.
+    listing.set_sort(Sort::new(SortKey::Size, SortOrder::Descending));
+
+    let row = listing.set_measured("emptydir", 7, true).expect("the row");
+
+    assert_eq!(
+        listing.get(row).expect("an entry").name,
+        "emptydir",
+        "the answer landed on somebody else's row"
+    );
+    assert_eq!(listing.get(row).expect("an entry").size, 7);
+    assert_eq!(
+        listing
+            .iter()
+            .find(|entry| entry.name == "sub")
+            .expect("sub")
+            .size,
+        4096,
+        "the earlier answer was overwritten"
+    );
 }
 
 #[test]
