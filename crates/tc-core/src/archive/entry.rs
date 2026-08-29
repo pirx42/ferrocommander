@@ -12,18 +12,19 @@ use crate::vfs::VfsError;
 
 use super::constants::{CHECKSUM_MISMATCH, ENCRYPTED_ENTRY, UNSUPPORTED_METHOD};
 use super::index::{Bytes, Method};
-use super::reader::{Container, Region};
+use super::reader::{region, Container, Wrapper};
 
 /// A reader over one entry's decoded bytes.
 pub fn open(
     container: &Container,
+    wrapper: Wrapper,
     name: &str,
     bytes: &Bytes,
 ) -> Result<Box<dyn Read + Send>, VfsError> {
-    let region = Region::new(container, bytes.start, bytes.stored);
+    let stored = region(container, wrapper, bytes.start, bytes.stored)?;
     let decoded: Box<dyn Read + Send> = match &bytes.method {
-        Method::Stored => Box::new(region),
-        Method::Deflated => Box::new(flate2::read::DeflateDecoder::new(region)),
+        Method::Stored => stored,
+        Method::Deflated => Box::new(flate2::read::DeflateDecoder::new(stored)),
         Method::Encrypted => return Err(VfsError::Io(ENCRYPTED_ENTRY.replace("{name}", name))),
         Method::Unsupported(method) => {
             return Err(VfsError::Io(UNSUPPORTED_METHOD.replace("{method}", method)))

@@ -52,3 +52,8 @@ pub const MARCH_SHIFT_DENOMINATOR: i64 = 5;
 /// What an archive written on Windows separates its entry names with. Turned
 /// into the one separator `VfsPath` knows before anything else looks at a name.
 pub const WINDOWS_SEPARATOR: char = '\\';
+
+/// The tar extensions, and the double one `.tar.gz` ends in.
+pub const TAR_EXTENSION: &str = "tar";
+pub const TGZ_EXTENSION: &str = "tgz";
+pub const TAR_GZ_SUFFIX: &str = ".tar.gz";

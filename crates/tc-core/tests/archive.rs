@@ -181,6 +181,39 @@ fn open(items: &[Item]) -> (TempDir, ArchiveFs) {
     open_bytes(zip_bytes(items), "test.zip")
 }
 
+/// The same items as a tar. Compression is the container's business here, so
+/// `Item::compressed` is ignored.
+fn tar_bytes(items: &[Item]) -> Vec<u8> {
+    let mut builder = tar::Builder::new(Vec::new());
+    for item in items {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(item.contents.len() as u64);
+        header.set_mode(0o644);
+        header.set_mtime(STAMPED_UNIX);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, &item.name, item.contents.as_slice())
+            .unwrap();
+    }
+    builder.into_inner().unwrap()
+}
+
+fn gzip(bytes: Vec<u8>) -> Vec<u8> {
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&bytes).unwrap();
+    encoder.finish().unwrap()
+}
+
+/// One of the archives written by another program, from `tests/fixtures/`.
+fn fixture(name: &str) -> Vec<u8> {
+    std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name),
+    )
+    .unwrap()
+}
+
 fn names(fs: &ArchiveFs, at: &str) -> Vec<String> {
     let mut found: Vec<String> = fs
         .read_dir(&VfsPath::new(at))
@@ -205,11 +238,7 @@ fn a_zip_written_by_another_program_reads_as_a_directory() {
     // The one fixture this crate did not write. Everything else here proves
     // the index against the writer it was built with, which is a claim about
     // this crate and not about the format.
-    let bytes = std::fs::read(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/interop.zip"),
-    )
-    .unwrap();
-    let (_dir, archive) = open_bytes(bytes, "interop.zip");
+    let (_dir, archive) = open_bytes(fixture("interop.zip"), "interop.zip");
 
     assert_eq!(names(&archive, "/"), ["empty", "notes.txt", "sub"]);
     assert_eq!(names(&archive, "/sub"), ["inner.txt"]);
@@ -219,6 +248,71 @@ fn a_zip_written_by_another_program_reads_as_a_directory() {
         b"hello from a real zip\n"
     );
     assert_eq!(read(&archive, "/sub/inner.txt").unwrap(), b"deep\n");
+}
+
+#[test]
+fn a_tar_reads_as_a_directory_the_same_way_a_zip_does() {
+    // A different format behind the same interface: the assertions are the
+    // ones the zip tests make, because that is the whole claim.
+    let (_dir, archive) = open_bytes(tar_bytes(&[stored("a/b/c.txt", b"nested")]), "t.tar");
+
+    assert_eq!(names(&archive, "/"), ["a"]);
+    assert_eq!(names(&archive, "/a/b"), ["c.txt"]);
+    assert_eq!(read(&archive, "/a/b/c.txt").unwrap(), b"nested");
+}
+
+#[test]
+fn a_tar_gz_written_by_another_program_reads_as_a_directory() {
+    // GNU tar's output, gzipped, symlink and all. Its entries are named `./x`,
+    // which is a shape this crate's own writer never produces.
+    let (_dir, archive) = open_bytes(fixture("interop.tar.gz"), "interop.tar.gz");
+
+    assert_eq!(names(&archive, "/"), ["empty", "notes.txt", "sub"]);
+    assert_eq!(
+        read(&archive, "/notes.txt").unwrap(),
+        b"hello from a real zip\n"
+    );
+    assert_eq!(read(&archive, "/sub/inner.txt").unwrap(), b"deep\n");
+}
+
+#[test]
+fn a_symlink_in_a_tar_is_passed_over_rather_than_unpacked_as_an_empty_file() {
+    // Its recorded size is zero, so listing it as a file would unpack it as an
+    // empty one — a copy that quietly got it wrong, which is the failure this
+    // project's reliability requirement is about. The fixture holds
+    // `link.txt -> notes.txt`.
+    let (_dir, archive) = open_bytes(fixture("interop.tar.gz"), "interop.tar.gz");
+
+    assert!(
+        !names(&archive, "/").contains(&"link.txt".to_string()),
+        "the symlink was listed: {:?}",
+        names(&archive, "/")
+    );
+}
+
+#[test]
+fn every_window_of_a_gzipped_entry_reads_the_same_bytes_the_stream_does() {
+    // The wrapper is the second thing between a window and the container, and
+    // the offsets it works in are the decompressed ones. Getting that wrong
+    // reads the neighbouring entry, which is a copy of the wrong file.
+    let body: &[u8] = b"the second entry, whose offset is not zero";
+    let (_dir, archive) = open_bytes(
+        gzip(tar_bytes(&[
+            stored("first", b"padding padding"),
+            stored("second", body),
+        ])),
+        "t.tar.gz",
+    );
+
+    assert_eq!(read(&archive, "/second").unwrap(), body);
+    for offset in [0u64, 1, 17, body.len() as u64] {
+        let window = archive
+            .read_at(&VfsPath::new("/second"), offset, 8)
+            .unwrap();
+        let from = (offset as usize).min(body.len());
+        let to = (from + 8).min(body.len());
+        assert_eq!(window, &body[from..to], "offset {offset}");
+    }
 }
 
 #[test]
@@ -450,11 +544,25 @@ fn a_file_that_is_not_an_archive_by_name_is_not_opened_as_one() {
 
 #[test]
 fn the_extension_decides_which_format_and_case_does_not_matter() {
-    for name in ["a.zip", "a.ZIP", "a.Zip", "some.name.zip"] {
-        assert_eq!(format_for(name), Some(Format::Zip), "{name}");
-    }
-    for name in ["a.txt", "zip", "a.zipper", ""] {
-        assert_eq!(format_for(name), None, "{name}");
+    let cases = [
+        ("a.zip", Some(Format::Zip)),
+        ("a.ZIP", Some(Format::Zip)),
+        ("some.name.zip", Some(Format::Zip)),
+        ("a.tar", Some(Format::Tar)),
+        ("a.TAR", Some(Format::Tar)),
+        ("a.tgz", Some(Format::TarGz)),
+        // Before the single extension, or this reads as a gzip of something
+        // unknown rather than as the tar it is.
+        ("a.tar.gz", Some(Format::TarGz)),
+        ("A.Tar.Gz", Some(Format::TarGz)),
+        ("a.txt", None),
+        ("a.gz", None),
+        ("zip", None),
+        ("a.zipper", None),
+        ("", None),
+    ];
+    for (name, expected) in cases {
+        assert_eq!(format_for(name), expected, "{name}");
     }
 }
 

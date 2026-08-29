@@ -12,6 +12,7 @@ async-channel.workspace = true
 flate2.workspace = true
 notify.workspace = true
 serde.workspace = true
+tar.workspace = true
 toml.workspace = true
 toml_edit.workspace = true
 trash.workspace = true
@@ -19,9 +20,11 @@ zip.workspace = true
 
 [dev-dependencies]
 async-channel.workspace = true
+flate2.workspace = true
 tempfile.workspace = true
-# The archive tests build their own zips. Reading back what this same crate
-# wrote proves the index and the decoders, not that anybody else's zip parses
-# — `tests/fixtures/interop.zip`, written by Info-ZIP's `zip(1)`, is what
-# proves that.
+# The archive tests build their own archives. Reading back what this same
+# crate wrote proves the index and the decoders, not that anybody else's
+# archive parses — `tests/fixtures/interop.zip` (Info-ZIP `zip(1)`) and
+# `tests/fixtures/interop.tar.gz` (GNU `tar(1)`) are what prove that.
+tar.workspace = true
 zip.workspace = true

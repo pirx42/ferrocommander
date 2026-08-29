@@ -86,15 +86,24 @@ would not also have to hold it.
 a viewer into the middle of a large compressed member is O(offset). That is
 the honest cost of a format with no seek; a cache would move the cost, not
 remove it. A **stored** entry is read straight out of the container, so the
-common case of an already-compressed payload — a jpeg in a zip — pages as fast
-as a file. Measured figures: [performance.md](performance.md).
+common case of an already-compressed payload — a jpeg in a zip, anything in a
+plain tar — pages as fast as a file. Measured figures:
+[performance.md](performance.md).
+
+**Opening a tar is a full scan**, because a tar has no index; opening a
+`.tar.gz` decompresses the whole stream to read the headers. There is no faster
+version of that question. And because a gzip stream has no seek either, *every*
+entry in a `.tar.gz` is reached by decompressing everything before it — the one
+place where the wrapper, not the entry, is what costs.
 
 ## Formats
 
-| | Read | Write | Notes |
-|---|---|---|---|
-| `.zip` | yes | | deflate and stored |
-| `.7z`, `.rar` | no | no | see [future-improvements.md](future-improvements.md) |
+| | Read | Notes |
+|---|---|---|
+| `.zip` | yes | deflate and stored |
+| `.tar` | yes | read in place, like a zip |
+| `.tar.gz`, `.tgz` | yes | one gzip stream around a tar — see below |
+| `.7z`, `.rar` | no | see [future-improvements.md](future-improvements.md) |
 
 The `zip` crate is a **parser** here and nothing else: it is depended on with
 its default features off, so no compressor comes with it, and the entry bytes
@@ -108,6 +117,19 @@ being an hour out in a column is a smaller lie than showing no date. It also
 stores seconds halved, so odd seconds do not exist in the format and a reader
 that invented the missing one would be claiming to know something the file does
 not say.
+
+## What a tar holds that a listing cannot show
+
+A tar records symlinks, hard links, devices and fifos. None of them is listed.
+There is nowhere in a pane to say what a symlink inside an archive points at,
+and their recorded size is zero — so listing one would unpack it as an empty
+file, which is a copy that quietly got it wrong and exactly what
+[reliability.md](reliability.md) is about. Named in
+[future-improvements.md](future-improvements.md) rather than left as a
+surprise.
+
+A tar also records no checksum of an entry's contents, only of its header, so
+nothing there can be verified the way a zip's CRC is.
 
 ## Directories that are not there
 

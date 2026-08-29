@@ -25,14 +25,24 @@ is what the date column shows.
 the Windows equivalent, weighed against how much a directory's mtime is worth.
 *From:* [vfs.md](vfs.md), phase 2 sub-phase A.
 
-**Only zip is readable, and `.7z` and `.rar` never will be here.**
+**`.7z` and `.rar` are not read, and probably never will be here.**
 `.rar` has no freely licensed extractor — unrar's licence forbids using it to
 build a competing archiver — and a 7z decoder is a large dependency with no
-evidence anybody here wants it. `.tar` and `.tar.gz` are wanted and are
-phase 6 sub-phase B. An archive in an unsupported format stays an ordinary
-file: it is listed, viewed and copied, it simply does not open as a directory.
-*Home:* `.tar` next; the other two only if somebody asks with a use for them.
+evidence anybody here wants it. An archive in an unsupported format stays an
+ordinary file: it is listed, viewed and copied, it simply does not open as a
+directory.
+*Home:* only if somebody asks with a use for it.
 *From:* [archives.md](archives.md), phase 6 sub-phase A.
+
+**A symlink inside a tar is not listed.**
+Nor are hard links, devices or fifos. A pane has nowhere to show what a link
+inside an archive points at, and their recorded size is zero — so listing one
+would unpack it as an empty file, which is worse than not listing it. A zip
+made on Unix stores a symlink as a file whose contents are the target, and
+those *are* listed, as the files they claim to be.
+*Home:* wants an `Entry` that can carry a link target the pane can render, and
+an unpacker that creates links rather than files.
+*From:* [archives.md](archives.md), phase 6 sub-phase B.
 
 **Undo is one multi-rename deep.**
 `Ctrl+Z` puts the last batch back and forgets it. Nothing else in the program

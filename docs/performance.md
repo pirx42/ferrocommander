@@ -77,21 +77,27 @@ happening.
 
 ## Archives
 
-Release build, a 10 000-entry zip with an 8 MB member, best of five.
+Release build, 10 000 entries plus an 8 MB member of pseudo-English (deflate
+gets about 2.4× on it — a repeating block compresses 400× and would make every
+compressed number here a fiction), best of three.
 
-| | Stored | Deflated |
-|---|---|---|
-| Open the archive (10 000 entries) | **49 ms** | 50 ms |
-| List one directory inside it | **24 µs** | 26 µs |
-| A 64 KB window at offset 0 | **5.7 µs** | 22 µs |
-| A 64 KB window at offset 8 MB | **5.4 µs** | 1.4 ms |
-| Stream the whole 8 MB member | 1.6 ms | 1.5 ms |
+| | zip stored | zip deflated | tar | tar.gz |
+|---|---|---|---|---|
+| Open it | 45 ms | 50 ms | 47 ms | **28 ms** |
+| List one directory inside | 22 µs | 24 µs | 23 µs | 23 µs |
+| A 64 KB window at offset 0 | **3.8 µs** | 64 µs | **4.0 µs** | 1.4 ms |
+| The same window at offset 8 MB | **3.7 µs** | 7.6 ms | **4.1 µs** | 8.7 ms |
+| Stream the whole 8 MB member | 1.0 ms | 7.5 ms | 0.83 ms | 8.8 ms |
 
-**Opening is buffered, and at 8 KiB rather than 64.** The parse seeks
+The `.tar.gz` opens fastest only because its container is a tenth of the size
+and the index pass is dominated by reading; it pays for that on every window,
+because a gzip stream has to be decompressed from the beginning to reach one.
+
+**Opening a zip is buffered, and at 8 KiB rather than 64.** The parse seeks
 constantly — the end-of-directory record, then every entry's local header —
-and each seek throws a buffer away. Unbuffered, 10 000 entries take **63 ms**;
-buffered at the default 8 KiB, **49 ms**; buffered at the 64 KiB the rest of
-the layer reads in, **152 ms**, because each seek then discards eight times as
+and each seek throws a buffer away. Unbuffered, 10 000 entries take **72 ms**;
+buffered at the default 8 KiB, **45 ms**; buffered at the 64 KiB the rest of
+the layer reads in, **155 ms**, because each seek then discards eight times as
 much. Pinned by a read *count* rather than a time: opening 200 entries is
 allowed five container reads per two entries, which sits between the 403 it
 takes buffered and the 603 it takes without.
@@ -102,12 +108,18 @@ walking around in one instant. Pinned by a test asserting the container is not
 touched.
 
 **A window of a stored entry is a window of the file.** Reading near the end of
-an 8 MB stored member costs one read; the same window of a compressed member
-costs 1.4 ms, because a deflate stream has no seek and has to be decoded from
-the start. That is the honest cost of the format — a cache would move it, not
-remove it — and it is why the fast path exists for the common case of an
-already-compressed payload sitting in a zip. Pinned by a test asserting the
-stored window takes exactly one container read.
+an 8 MB stored member costs one read; the same window of a compressed one costs
+milliseconds, because neither a deflate stream nor a gzip stream has a seek and
+both have to be decoded from the start. That is the honest cost of the format —
+a cache would move it, not remove it — and it is why the fast path exists for
+the common case of an already-compressed payload sitting in a zip or a plain
+tar. Pinned by a test asserting the stored window takes exactly one container
+read.
+
+**Opening a tar is a full scan and always will be.** A tar carries no index, so
+every header has to be read to know what is in it, and a `.tar.gz` has to be
+decompressed entirely to read them. There is no faster version of that
+question; there is only a version that says so.
 
 ## What is deliberately still slow
 

@@ -62,6 +62,11 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 # The deflate decoder those readers are built on, and the CRC that checks
 # them. Also what a `.tar.gz` is unwrapped with.
 flate2 = "1"
+# `.tar` and `.tar.gz`. The format looks simple enough that a dependency seems
+# unnecessary and is not: long names, the two header dialects, sparse members
+# and the checksum are exactly the details a hand-rolled reader gets wrong on
+# somebody else's backup.
+tar = "0.4"
 # The GTK4 bindings, pinned to the GTK 4.12 API.
 #
 # The floor was 4.0 on the assumption that the shell needed nothing newer.

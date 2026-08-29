@@ -77,6 +77,55 @@ impl Seek for Container {
     }
 }
 
+/// What, if anything, wraps the whole container.
+///
+/// A `.tar.gz` is a tar inside one gzip stream, so an entry's recorded offset
+/// is an offset into the *decompressed* tar and nothing in the container can
+/// be reached without decompressing everything before it. A `.zip` and a plain
+/// `.tar` are read in place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wrapper {
+    /// Offsets are offsets in the container itself.
+    None,
+    /// Offsets are offsets in the container once gunzipped.
+    Gzip,
+}
+
+/// The whole container, unwrapped, from the beginning.
+///
+/// What the index is built from: both tar dialects are read front to back, and
+/// a gzipped one has no other way in.
+pub fn whole(container: &Container, wrapper: Wrapper) -> Box<dyn Read + Send> {
+    match wrapper {
+        Wrapper::None => Box::new(container.reopen()),
+        Wrapper::Gzip => Box::new(flate2::read::GzDecoder::new(container.reopen())),
+    }
+}
+
+/// The stored bytes of one entry, whatever the container is wrapped in.
+///
+/// Unwrapped, this is a window; gzipped, it is the whole stream up to the
+/// entry thrown away and then the entry. That is O(offset) and there is no
+/// cheaper way — a gzip stream has no seek — so it is written down in
+/// `docs/performance.md` rather than hidden behind a cache that would only
+/// move the cost.
+pub fn region(
+    container: &Container,
+    wrapper: Wrapper,
+    start: u64,
+    length: u64,
+) -> Result<Box<dyn Read + Send>, VfsError> {
+    match wrapper {
+        Wrapper::None => Ok(Box::new(Region::new(container, start, length))),
+        Wrapper::Gzip => {
+            let mut stream = flate2::read::GzDecoder::new(container.reopen());
+            std::io::copy(&mut (&mut stream).take(start), &mut std::io::sink())
+                .map_err(VfsError::from)?;
+            Ok(Box::new(stream.take(length)))
+        }
+    }
+}
+
 /// The bytes of one entry: a bounded window on the container.
 ///
 /// Bounded rather than trusted to stop on its own, because the length comes

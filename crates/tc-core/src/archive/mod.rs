@@ -16,6 +16,7 @@ pub mod constants;
 mod entry;
 mod index;
 mod reader;
+mod tar;
 mod zip;
 
 use std::io::{Read, Write};
@@ -24,14 +25,26 @@ use std::time::SystemTime;
 
 use crate::vfs::{Attributes, Entry, VfsError, VfsPath, VirtualFs};
 
-use constants::ZIP_EXTENSION;
+use constants::{TAR_EXTENSION, TAR_GZ_SUFFIX, TGZ_EXTENSION, ZIP_EXTENSION};
 use index::Index;
-use reader::Container;
+use reader::{Container, Wrapper};
 
 /// The archive formats this build can read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Zip,
+    Tar,
+    TarGz,
+}
+
+impl Format {
+    /// What wraps the whole container in this format.
+    fn wrapper(self) -> Wrapper {
+        match self {
+            Format::Zip | Format::Tar => Wrapper::None,
+            Format::TarGz => Wrapper::Gzip,
+        }
+    }
 }
 
 /// Which format a file name announces, if any.
@@ -40,14 +53,26 @@ pub enum Format {
 /// about a mislabelled file and would cost a read of every row in every
 /// listing — the pane asks this question about every entry it draws, so it has
 /// to be free (`docs/performance.md`).
+///
+/// `.tar.gz` is checked before the single extension, or it would read as a
+/// gzip of something unknown rather than as the tar it is.
 pub fn format_for(name: &str) -> Option<Format> {
-    let extension = name.rsplit_once('.')?.1.to_ascii_lowercase();
-    (extension == ZIP_EXTENSION).then_some(Format::Zip)
+    let name = name.to_ascii_lowercase();
+    if name.ends_with(TAR_GZ_SUFFIX) {
+        return Some(Format::TarGz);
+    }
+    match name.rsplit_once('.')?.1 {
+        ZIP_EXTENSION => Some(Format::Zip),
+        TAR_EXTENSION => Some(Format::Tar),
+        TGZ_EXTENSION => Some(Format::TarGz),
+        _ => None,
+    }
 }
 
 /// A read-only [`VirtualFs`] over one archive.
 pub struct ArchiveFs {
     container: Container,
+    wrapper: Wrapper,
     index: Index,
 }
 
@@ -61,10 +86,16 @@ impl ArchiveFs {
         let stat = fs.stat(path)?;
         let format = format_for(&stat.name).ok_or(VfsError::NotAnArchive)?;
         let container = Container::new(fs, path.clone(), stat.size);
+        let wrapper = format.wrapper();
         let index = match format {
             Format::Zip => zip::index(&container, stat.modified)?,
+            Format::Tar | Format::TarGz => tar::index(&container, wrapper, stat.modified)?,
         };
-        Ok(ArchiveFs { container, index })
+        Ok(ArchiveFs {
+            container,
+            wrapper,
+            index,
+        })
     }
 
     fn node(&self, path: &VfsPath) -> Result<&index::Node, VfsError> {
@@ -93,7 +124,7 @@ impl VirtualFs for ArchiveFs {
     fn open_read(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
         let node = self.node(path)?;
         let bytes = node.bytes.as_ref().ok_or(VfsError::IsADirectory)?;
-        entry::open(&self.container, &node.entry.name, bytes)
+        entry::open(&self.container, self.wrapper, &node.entry.name, bytes)
     }
 
     /// Reads a window out of an entry.
@@ -107,13 +138,15 @@ impl VirtualFs for ArchiveFs {
     fn read_at(&self, path: &VfsPath, offset: u64, len: usize) -> Result<Vec<u8>, VfsError> {
         let node = self.node(path)?;
         let bytes = node.bytes.as_ref().ok_or(VfsError::IsADirectory)?;
-        if bytes.method == index::Method::Stored {
+        // The one case where a window of an entry is a window of the file:
+        // nothing to decode, and nothing wrapped around the container either.
+        if bytes.method == index::Method::Stored && self.wrapper == Wrapper::None {
             let start = bytes.start.saturating_add(offset.min(bytes.stored));
             let len = len.min(bytes.stored.saturating_sub(offset) as usize);
             return self.container.read_at(start, len);
         }
 
-        let mut reader = entry::open(&self.container, &node.entry.name, bytes)?;
+        let mut reader = entry::open(&self.container, self.wrapper, &node.entry.name, bytes)?;
         skip(&mut reader, offset)?;
         let mut window = vec![0u8; len];
         let filled = fill(&mut reader, &mut window)?;
