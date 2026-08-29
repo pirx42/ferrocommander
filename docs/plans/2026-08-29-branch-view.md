@@ -1,8 +1,7 @@
 # Branch view — `Ctrl+B`
 
-**Status:** Draft — awaiting approval, nothing implemented
-**Wants its own topic branch**, per skill
-[10](../skills/10-plan-lifecycle.md).
+**Status:** In Progress — approved 2026-08-29; phase 0 done, phases 1–4 to go
+**Branch:** `claude/next-phase-plan-design-lah4v5`
 
 Total Commander's branch view: one key flattens the whole tree below the pane
 into a single list of files, and everything a pane does — the quick filter,
@@ -115,6 +114,24 @@ this change walks past. So:
 - Does anything fail if `split_name` returns the whole string as the name?
 
 Whatever does not bite gets a characterization test first, in its own commit.
+
+**Done. Four of five were pinned; one was not, and it is one of the two
+things phase 3 changes.**
+
+| Probe | What was broken | Result |
+|---|---|---|
+| `Destination::of` uses the source's file name | built the destination from the whole path | **Bit**, 23 tests in `ops.rs`. |
+| `split_name` finds the extension | returned the whole string as the stem | **Bit**, 4: the name unit test, the row column test, and both extension-marking tests. |
+| Marks survive a reload **by name** | kept them by position instead | **Bit**, `a_reload_keeps_the_marks_on_the_names_that_survive`. |
+| `jobs::prefilled_archive` drops the source's extension | used the whole name | **Did not bite.** `notes.txt` offered `notes.txt.zip` and the whole suite stayed green. |
+| `begin_rename` refuses `..` | removed the guard | **Did not bite** — and was not expected to. `pane.rs` already records that a probe could not get an editor to open on `..`, and this re-ran that probe rather than trusting the note. |
+
+The prefill gap is now closed by two unit tests, re-probed so they bite
+(`5f4ff23`). The rename guard is a different case and gets no phase 0 test:
+its current behaviour is *unreachable*, which is not a behaviour a test can
+pin. **Phase 3 is what makes it reachable** — a branch row is the first name
+with a separator in it — so the test that proves the refusal belongs there,
+where it will bite.
 
 ### Phase 1 — the walk, and a listing made of it
 

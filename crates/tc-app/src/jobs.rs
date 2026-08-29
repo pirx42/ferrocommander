@@ -401,6 +401,28 @@ mod tests {
     }
 
     #[test]
+    fn the_offered_archive_name_drops_the_source_extension() {
+        // `notes.txt` offers `notes.zip`, not `notes.txt.zip`. Nothing pinned
+        // this before: a probe that used the whole name instead of its stem
+        // left the whole suite green, and the Alt+F5 prefill is code the
+        // branch-view work is about to change.
+        let listing = listing_with_cursor_on("notes.txt");
+        let offered = prefilled_archive(&VfsPath::new("/home/pirx/dst"), &listing, 1);
+
+        assert_eq!(offered, "/home/pirx/dst/notes.zip");
+    }
+
+    #[test]
+    fn several_sources_are_named_after_the_directory_they_are_in() {
+        // One name would be a lie about the other thirty-nine, so the
+        // directory's own name is what a person would have typed.
+        let listing = listing_with_cursor_on("notes.txt");
+        let offered = prefilled_archive(&VfsPath::new("/home/pirx/dst"), &listing, 40);
+
+        assert_eq!(offered, "/home/pirx/dst/pirx.zip");
+    }
+
+    #[test]
     fn the_offered_name_is_one_the_field_would_accept_back() {
         // The prefill and the reading of it are one loop: pressing Return on
         // what Alt+F5 offers has to be a job, never a refusal.
