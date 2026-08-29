@@ -121,16 +121,21 @@ pub enum Action {
 impl Action {
     /// Every action there is.
     ///
-    /// Hand-written, and the one list here that the compiler does not check —
+    /// Exists for the test below and says so: nothing the program *does*
+    /// needs a list of actions — a key resolves to one and `dispatch` matches
+    /// it — so shipping the array would be shipping something with no reader.
+    ///
+    /// Hand-written, and the one list here that the compiler does not check,
     /// so a new variant has to be added here as well as to the enum. What
-    /// makes that worth it is [`every_action_can_be_named`], which walks this
+    /// makes that worth it is `every_action_can_be_named`, which walks this
     /// list and insists each entry has a name in [`ACTION_NAMES`]: without
     /// it, an action added to the enum and to `dispatch` but to neither table
     /// compiles, runs, and can never be reached or rebound by anyone.
     ///
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
-    pub const ALL: [Action; 52] = [
+    #[cfg(test)]
+    const ALL: [Action; 52] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
