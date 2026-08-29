@@ -103,6 +103,18 @@ image has what the `apt-get` line assumes, whether `gh release delete` and
 `create` in sequence are reliable, and whether `fetch-depth: 0` really gives
 `build.rs` the commit count. Those are watched on the first real run.
 
+## The asset has no version in its name
+
+The release is rolling — one tag, replaced every commit — so its download URL
+has to be one somebody can put in a README and not revisit. GitHub's URLs end
+in the asset's own filename, and Debian convention puts the version there,
+which would change the URL on every build.
+
+So `package-deb.sh` hard-links the built package to
+`ferrocommander_amd64.deb`, and that is what gets uploaded. It costs nothing,
+and nothing is lost: the version was never in the filename to begin with, it
+is in the package, where `dpkg -I` and `apt show` read it.
+
 ## What was checked by hand, once
 
 Built here, installed with `dpkg -i`, started under Xvfb — the window came up

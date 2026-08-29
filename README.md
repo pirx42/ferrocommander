@@ -1,0 +1,92 @@
+# Ferrocommander
+
+A keyboard-centric dual-pane file manager for Linux and Windows, in the style
+of [Total Commander](https://www.ghisler.com/). Two directories side by side,
+every operation on a key, and no waiting.
+
+Built from scratch in Rust and GTK4.
+
+## Install on Ubuntu
+
+The latest build of `main` is published as a `.deb`:
+
+```sh
+wget https://github.com/pirx42/ferrocommander/releases/download/main/ferrocommander_amd64.deb
+sudo apt install ./ferrocommander_amd64.deb
+```
+
+The filename carries no version on purpose: the release is rolling, and a URL
+worth putting in a README is one that does not change every commit. The
+version is in the package — `apt show ferrocommander` after installing, or
+`dpkg -I` before.
+
+`apt install ./file.deb` rather than `dpkg -i`, because it pulls in the GTK 4
+runtime; `dpkg` will refuse and leave the package half-configured.
+
+**Ubuntu 24.04 or later.** The pane needs a GTK API that arrived in 4.12, and
+22.04 ships 4.6. Details, and the rest of the packaging:
+[docs/packaging.md](docs/packaging.md).
+
+The release is *rolling* — one tag, `main`, replaced on every commit, always
+holding the newest build that passed the full test suite. There are no
+versioned releases yet.
+
+## What it does
+
+| | |
+|---|---|
+| Two panes | `Tab` between them, `Ctrl+←`/`→` to clone one into the other, `Ctrl+U` to swap |
+| The function keys | `F3` view, `F4` edit, `F5` copy, `F6` move, `F7` new directory, `F8` delete |
+| Marking | `Space`, `Insert`, the `Num` keys, by wildcard, by extension — and `Num /` brings back what the last operation spent |
+| Archives | `Enter` on a `.zip`, `.tar` or `.tar.gz` walks into it like a folder; `Alt+F5` packs |
+| Search | `Alt+F7`, by name or content, results streaming as they are found |
+| `Ctrl+B` | the whole tree below a pane as one flat list |
+| `Ctrl+D` | favourite directories, maintained from inside the list |
+| `Alt+Shift+Enter` | count what the marked folders actually hold |
+| `Ctrl+M` | rename many files by a rule, with the preview *being* the rename |
+
+Every key: [docs/keymap.md](docs/keymap.md). They are configurable, in
+[the settings file](docs/config.md).
+
+## Two things it is serious about
+
+**Speed.** Where a decision trades speed against a prettier surface or a
+tidier abstraction, speed wins. Every performance claim in this repository
+carries a measurement, and the things that are still slow are written down:
+[docs/performance.md](docs/performance.md).
+
+**Not losing your files.** A file manager is trusted with the only copy of
+things, and the failure that matters is not a crash but a job that reports
+success over a file it destroyed. The awkward corner gets a test rather than
+the benefit of the doubt: [docs/reliability.md](docs/reliability.md).
+
+## Build from source
+
+```sh
+sudo apt install build-essential pkg-config libgtk-4-dev xvfb xdotool
+cargo run -p tc-app
+```
+
+`xvfb` and `xdotool` are for the end-to-end tests, which drive the real binary
+with real key presses. They are not optional: without them
+`cargo test --workspace` fails by design, because a UI test that quietly skips
+is worse than no UI test.
+
+Before committing anything, `scripts/green-gate.sh` — format, lint, the
+Windows lint branch, every test, the release build, the documentation links.
+
+## Layout
+
+| | |
+|---|---|
+| `crates/tc-core` | the engine: filesystem, listing model, file operations, archives, search. No GTK, headless-testable |
+| `crates/tc-app` | the GTK4 shell. Never touches the filesystem directly |
+| `docs/` | one file per topic, [indexed here](docs/CLAUDE.md) |
+
+The split is the project's central boundary, and what makes archives
+browsable folders for free: a pane just holds a different filesystem.
+[crates/CLAUDE.md](crates/CLAUDE.md) has the argument.
+
+## Licence
+
+MIT.

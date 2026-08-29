@@ -31,9 +31,23 @@ cargo build --release --locked
 echo "=== packaging"
 # `--no-build` for the reason above; `--no-strip` left off, so the shipped
 # binary is stripped and the package is a tenth of the size.
-cargo deb --package tc-app --no-build --deb-version "$version" --output target/debian
+# Named outright rather than globbed for afterwards. A `ls target/debian/*.deb
+# | head -1` picks whatever sorts first, which after two builds is the *older*
+# package — so the script would happily check and publish a version it had not
+# just built.
+deb="target/debian/ferrocommander_${version}_amd64.deb"
+cargo deb --package tc-app --no-build --deb-version "$version" --output "$deb"
 
-deb=$(ls -1 target/debian/*.deb | head -1)
+# A second name for the same file, without the version in it.
+#
+# The release is *rolling* — one tag, replaced every commit — so its download
+# URL has to be one somebody can put in a README and not revisit. GitHub's
+# URLs end in the asset's own filename, and Debian convention puts the version
+# there, which would make the URL change on every build. A hard link costs
+# nothing and gives both: `dpkg -I` still reports the version, because the
+# version was never in the filename to begin with.
+stable=target/debian/ferrocommander_amd64.deb
+ln -f "$deb" "$stable"
 
 echo "=== checking what was built"
 # Three things worth failing over, each of which has been wrong in somebody's
@@ -71,5 +85,6 @@ fi
 
 echo
 echo "built    $deb"
+echo "         $stable (the same file, for the rolling release URL)"
 echo "version  $version"
 echo "depends  $depends"

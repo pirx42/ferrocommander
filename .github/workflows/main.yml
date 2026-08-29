@@ -79,6 +79,6 @@ jobs:
             --title "Latest build from main" \
             --notes "Built from ${GITHUB_SHA}. Ubuntu 24.04 or later.
 
-          Install with \`sudo apt install ./ferrocommander_*.deb\`, which pulls
-          in the GTK 4 runtime; \`dpkg -i\` will not." \
-            target/debian/*.deb
+          Install with \`sudo apt install ./ferrocommander_amd64.deb\`, which
+          pulls in the GTK 4 runtime; \`dpkg -i\` will not." \
+            target/debian/ferrocommander_amd64.deb
