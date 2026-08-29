@@ -163,9 +163,17 @@ pub fn packed_at(input: &str, into: &VfsPath) -> Packing {
 /// it instead.
 pub fn prefilled_archive(dir: &VfsPath, listing: &Listing, count: usize) -> String {
     let subject = if count == 1 {
-        listing
-            .current()
-            .map(|entry| split_name(&entry.name).0.to_string())
+        listing.current().map(|entry| {
+            // The file's **own** name, which is not the row's name in a branch
+            // view: there a row is called `nested/inner.txt`, and offering
+            // `nested/inner.zip` would name a directory that need not exist in
+            // the pane being written to. Through `VfsPath` rather than by
+            // splitting the string here, so there is one rule for what a
+            // path's last component is.
+            let path = VfsPath::new(&entry.name);
+            let own = path.file_name().unwrap_or(&entry.name);
+            split_name(own).0.to_string()
+        })
     } else {
         listing.dir().file_name().map(str::to_string)
     };
@@ -420,6 +428,22 @@ mod tests {
         let offered = prefilled_archive(&VfsPath::new("/home/pirx/dst"), &listing, 40);
 
         assert_eq!(offered, "/home/pirx/dst/pirx.zip");
+    }
+
+    #[test]
+    fn a_branch_row_offers_the_files_own_name_not_its_path() {
+        // In a branch view the cursor row is called `nested/inner.txt`, and
+        // an archive named after it would carry a directory the pane being
+        // written to need not even have.
+        let mut listing = Listing::new(
+            VfsPath::new("/home/pirx/src"),
+            vec![entry("nested/inner.txt", EntryKind::File)],
+        );
+        listing.focus_entry("nested/inner.txt");
+
+        let offered = prefilled_archive(&VfsPath::new("/home/pirx/dst"), &listing, 1);
+
+        assert_eq!(offered, "/home/pirx/dst/inner.zip");
     }
 
     #[test]

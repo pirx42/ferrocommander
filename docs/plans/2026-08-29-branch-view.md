@@ -78,6 +78,18 @@ assumed harmless. The list, from the code:
 That table is the real content of this plan. The feature is a walk and a key;
 the work is those seven rows.
 
+**Checked, and it held.** Every verdict above survived being built. The five
+"fine" rows needed no change and are covered by the branch tests; the two
+wrong ones were changed in phase 3 and each has a test that bites when the
+change is reverted. Nothing was found that the sweep over `Entry::name` had
+missed — which is the risk § 6 named, so it is worth saying it did not
+happen.
+
+One verdict was refined rather than kept as written. The rename refusal is
+**per row, not per view**: a row at the walk's own root is a plain name and
+renames perfectly well, so refusing the whole branch view would have taken
+away something that works. The check is that the name holds a separator.
+
 ## 3. The awkward corners, each of which gets a test
 
 - **Alt+F5 in a branch view** prefills a name, not a path (§ 2).

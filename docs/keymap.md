@@ -151,6 +151,13 @@ the flat rows go with it.
 tree while its path bar reads like one directory is a pane lying about what is
 in it.
 
+**Two keys mean something narrower here.** `Alt+F5` offers an archive named
+after the file's own name rather than after its row — `inner.zip`, not
+`nested/inner.zip`, which would name a directory the other pane need not
+have. `Shift+F6` refuses a row whose name carries a directory, since an
+inline rename edits a name and that row's name is a path; a row at the walk's
+own root renames as it always did.
+
 **A job done from a branch view leaves a branch view.** The panes re-read
 after every job, and for this one that means walking again rather than
 re-reading the root — otherwise a copy would silently flatten the view back

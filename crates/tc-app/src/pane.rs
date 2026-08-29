@@ -12,6 +12,7 @@ use gtk::subclass::prelude::*;
 use tc_core::branch;
 use tc_core::listing::{split_name, Arrival, Listing, Loading, Sort, SortKey, SortOrder};
 use tc_core::ops::CancelToken;
+use tc_core::vfs::constants::SEPARATOR;
 use tc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
@@ -811,6 +812,20 @@ impl PaneView {
     /// that is a trade worth making even when the case is unreachable.
     pub fn begin_rename(&mut self) {
         if self.shown.listing.is_parent(self.shown.listing.cursor()) {
+            return;
+        }
+        // A branch view's rows are named by their path, and this edits a
+        // name: opening on `nested/inner.txt` would offer the whole path for
+        // editing and then either fail or move the file. Refused per row
+        // rather than per view, because a row at the walk's own root — plain
+        // `notes.txt` — is an ordinary name and renames perfectly well.
+        //
+        // Unlike the `..` guard above, this one is reachable, and the test
+        // that proves it bites when it is removed.
+        if self
+            .current_name()
+            .is_some_and(|name| name.contains(SEPARATOR))
+        {
             return;
         }
         self.renaming = self.current_name();

@@ -1979,6 +1979,77 @@ fn escape_still_clears_a_filter_when_no_walk_is_running() {
 }
 
 #[test]
+fn a_branch_row_cannot_be_renamed_in_the_list() {
+    // A branch row is named by its path, and an inline rename edits a name.
+    // Opening on `nested/inner.txt` would offer the whole path for editing
+    // and then either fail or move the file somewhere nobody asked for.
+    //
+    // Unlike the `..` guard this joins, the case is reachable — removing the
+    // check turns this test red.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+b");
+    app.settle();
+    app.keys(&["Home", "Down", "Down"]);
+
+    app.key("shift+F6");
+    app.type_text("definitely-not-a-command");
+    app.key("Return");
+
+    // Proof by where the typing went: with no editor open it falls to the
+    // command line, and Return runs it — so an output window appears for a
+    // command that does not exist.
+    app.focus_dialog(DIALOG_OUTPUT);
+    app.key("Return");
+    app.settle();
+    assert!(
+        app.path("src/nested/inner.txt").exists(),
+        "the deep file was renamed out from under the tree"
+    );
+}
+
+#[test]
+fn alt_f5_in_a_branch_view_offers_a_name_and_not_a_path() {
+    // The prefill is `inner.zip`, not `nested/inner.zip` — which would name a
+    // directory the pane being written to need not have. Accepting the
+    // prefill unchanged is the whole test: if it carried the directory, the
+    // pack would fail instead of producing an archive.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+b");
+    app.settle();
+    app.keys(&["Home", "Down", "Down"]);
+
+    app.key("alt+F5");
+    app.focus_dialog(DIALOG_PACK);
+    app.key("Return");
+
+    app.await_exists("dst/inner.zip");
+}
+
+#[test]
+fn marks_from_several_directories_copy_in_one_job_and_land_flat() {
+    // What a branch view is for: collecting files from all over a tree and
+    // then acting on them at once. They land flat, because a copy's
+    // destination is built from each source's own file name.
+    let app = in_src_and_dst(arrange);
+    app.key("ctrl+b");
+    app.settle();
+
+    // Everything visible: `..`, data.bin, nested/inner.txt, notes.txt.
+    app.key("ctrl+a");
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/inner.txt", "deep");
+    app.await_contents("dst/notes.txt", SOURCE_TEXT);
+    app.await_exists("dst/data.bin");
+    assert!(
+        !app.path("dst/nested").exists(),
+        "the copy rebuilt the tree instead of landing flat"
+    );
+}
+
+#[test]
 fn navigating_out_of_a_branch_view_leaves_it() {
     // Leaving is not a key of its own: any step lands an ordinary listing of
     // somewhere, and the flat rows go with it. Backspace to the parent, then
