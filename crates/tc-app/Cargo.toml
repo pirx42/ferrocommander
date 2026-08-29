@@ -1,11 +1,19 @@
 [package]
 name = "tc-app"
-description = "GTK4 shell: dual-pane window, dialogs, viewer"
+description = """A keyboard-centric dual-pane file manager in the style of Total Commander. Two directories side by side, every operation on a key, and no waiting."""
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+
+# The crate is `tc-app` — its half of the tc-core/tc-app split — but what
+# gets installed is called `ferrocommander`, because `/usr/bin/tc-app` is a
+# name nobody would have typed on purpose. The crate name stays: it is what
+# `cargo run -p tc-app` and the workspace layout are about.
+[[bin]]
+name = "ferrocommander"
+path = "src/main.rs"
 
 [dependencies]
 gtk.workspace = true

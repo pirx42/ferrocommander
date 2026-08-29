@@ -38,7 +38,7 @@ Details: [docs/reliability.md](docs/reliability.md).
 
 ```bash
 cargo build                # Debug build (workspace)
-cargo run -p tc-app        # Run the app
+cargo run -p tc-app        # Run the app (the binary is `ferrocommander`)
 cargo test --workspace     # All tests, including the end-to-end UI suite
 cargo fmt --all -- --check # Format gate
 cargo clippy --workspace --all-targets -- -D warnings  # Lint gate (CI)

@@ -623,7 +623,7 @@ fn require(binary: &str, package: &str) {
 /// not it.
 fn spawn_app(home: &Path, display: &str) -> Child {
     let log = home.join(APP_LOG);
-    Command::new(env!("CARGO_BIN_EXE_tc-app"))
+    Command::new(env!("CARGO_BIN_EXE_ferrocommander"))
         .env("DISPLAY", display)
         .env("HOME", home)
         // Otherwise this hands off to an already-running instance.
