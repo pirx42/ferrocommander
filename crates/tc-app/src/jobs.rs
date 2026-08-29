@@ -200,6 +200,13 @@ mod tests {
         }
     }
 
+    fn sized(name: &str, size: u64) -> Entry {
+        Entry {
+            size,
+            ..entry(name, EntryKind::File)
+        }
+    }
+
     fn listing_with_cursor_on(name: &str) -> Listing {
         let mut listing = Listing::new(
             VfsPath::new("/home/pirx"),
@@ -457,6 +464,24 @@ mod tests {
             matches!(packed_at(&offered, &into), Packing::Into(..)),
             "the prefilled name {offered} would be refused"
         );
+    }
+
+    #[test]
+    fn the_status_line_reports_the_bytes_as_well_as_the_counts() {
+        // Nothing pinned this before: a probe that reported zero marked bytes
+        // left the whole suite green. It is the line a folder's measured size
+        // will be accumulated into, so it is pinned before that lands.
+        let mut listing = Listing::new(
+            VfsPath::new("/home/pirx"),
+            vec![sized("small.bin", 512), sized("large.bin", 4096)],
+        );
+        listing.focus_entry("large.bin");
+        listing.toggle_selected(listing.cursor());
+
+        let status = selection_status(&listing);
+
+        assert!(status.contains("4.0 KiB"), "the marked bytes: {status}");
+        assert!(status.contains("4.5 KiB"), "the visible bytes: {status}");
     }
 
     #[test]

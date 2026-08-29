@@ -1,8 +1,7 @@
 # Folder sizes — `Alt+Shift+Enter`
 
-**Status:** Draft — awaiting approval, nothing implemented
-**Wants its own topic branch**, per skill
-[10](../skills/10-plan-lifecycle.md).
+**Status:** In Progress — approved 2026-08-29; phase 0 done, phases 1–4 to go
+**Branch:** `claude/next-phase-plan-design-lah4v5`
 
 A directory row says `<DIR>` because nobody has counted it. `Alt+Shift+Enter`
 counts it: the folder under the cursor, or every folder marked, scanned
@@ -124,6 +123,31 @@ is whether that code is pinned:
   every row instead of the changed span?
 
 Whatever does not bite gets a characterization test first, in its own commit.
+
+**Done. Three of five were pinned; one gap was real and is now closed; one
+cannot be pinned by anything this suite can do.**
+
+| Probe | What was broken | Result |
+|---|---|---|
+| `selection_summary` sums bytes | stopped adding them | **Bit.** `selecting_everything_marks_every_visible_row`. |
+| `SortKey::Size` compares sizes | compared names instead | **Bit**, three: the sort-order table, and two end-to-end tests including `ctrl_f6_sorts_by_size_and_ctrl_f6_again_reverses_it`. |
+| A directory row shows `<DIR>` | rendered its byte count | **Bit**, two row tests. |
+| The status line reports the marked **bytes** | reported zero | **Did not bite.** The whole suite stayed green — and this is the line the accumulated total lands on. |
+| `refresh_marks` splices only the changed span | made it cover every row | **Cannot bite.** See below. |
+
+The status-line gap is now closed by a unit test over `selection_status`,
+re-probed so it bites (`f6b3a97`). Worth noting *why* it was missing: the
+existing test asserts `"0 of 2"` and `"1 of 2"` — the counts — and the bytes
+sit in the same rendered string with nothing checking them.
+
+**The splice's narrowness is a performance property with no seam.** Replacing
+every row instead of the changed span is *visually identical* and only
+slower, so no assertion about what is on screen can see it — and the harness
+cannot inspect the store's object identity, which is what actually matters
+(a `ListView` rebinds a cell when its item is a different object). It gets no
+phase 0 test, and the feature is designed not to depend on it: a size that
+arrives splices **its own row directly**, rather than re-deriving which rows
+differ.
 
 ### Phase 1 — the size, and the listing that holds it
 
