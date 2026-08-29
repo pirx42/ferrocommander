@@ -628,6 +628,18 @@ fn spawn_app(home: &Path, display: &str) -> Child {
         .env("HOME", home)
         // Otherwise this hands off to an already-running instance.
         .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nope")
+        // Pinned for the same reason `DISPLAY` is. GTK picks its backend from
+        // the environment, and prefers Wayland whenever `WAYLAND_DISPLAY` is
+        // set — so on any Wayland desktop the app connected to the
+        // developer's real compositor instead of the `Xvfb` this harness just
+        // started. The window appeared, on a display `xdotool` cannot see,
+        // and every test waited out its full thirty seconds: a whole suite
+        // failing for over an hour, and none of it about the program.
+        //
+        // Choosing the display and leaving the backend to the ambient
+        // environment was never coherent. `Xvfb` and `xdotool` are X11-only,
+        // so this suite has no meaning under Wayland at all.
+        .env("GDK_BACKEND", "x11")
         .stdout(Stdio::from(
             std::fs::File::create(&log).expect("a log file"),
         ))

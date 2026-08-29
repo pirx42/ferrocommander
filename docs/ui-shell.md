@@ -373,6 +373,22 @@ copy. None of those were reachable from a unit test.
 message naming the package rather than skipping. A test that quietly does not
 run is worse than no test.
 
+**The GTK backend is pinned to X11, not just the display.** GTK picks its
+backend from the environment and prefers Wayland whenever `WAYLAND_DISPLAY` is
+set — so on any Wayland desktop the app under test connected to the
+developer's *real compositor* instead of the `Xvfb` the harness had just
+started. The window appeared, on a display `xdotool` cannot see, and all 136
+tests waited out their full thirty-second timeout: an hour-long run failing
+for a reason that has nothing to do with the program. Reported from a stock
+Ubuntu 24.04 desktop, where it is 100% reproducible and looks like a hang.
+
+Choosing the display and leaving the backend to the ambient environment was
+never coherent. `Xvfb` and `xdotool` are X11-only, so this suite has no
+meaning under Wayland at all, and `spawn_app` now pins `GDK_BACKEND` beside
+`DISPLAY`. It is checkable on an X11 machine too: run the suite with
+`GDK_BACKEND=wayland` in the environment and, without the pin, every test
+fails the same way.
+
 **One app at a time.** Cargo would run them in parallel, and sixteen X servers
 with sixteen GTK apps between them do not fit comfortably in a container: the
 suite went from all-green to eight failures and back between runs, always with
