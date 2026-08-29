@@ -59,6 +59,34 @@ mounts nest: a file under `/mnt/backup` belongs to the backup drive, not to
 so the rule is tested against a made-up machine rather than whatever the test
 host has mounted.
 
+## `[[favourites]]` — the directories `Ctrl+D` offers
+
+An **array of tables**, not a table like `[drives]` and `[keys]` next door:
+
+```toml
+[[favourites]]
+name = "work"
+path = "/home/pirx/projects"
+
+[[favourites]]
+path = "/srv/build"
+```
+
+A hotlist is a menu, so **the order in the file is the order on screen** —
+which a map could not promise, since a map sorts itself and would quietly
+rearrange a list somebody arranged. It also means two directories may both be
+called `src` without one of them being a key collision needing a rule; the
+path beside the name is what tells them apart.
+
+`name` is optional. Left out, the row is labelled with the path's last
+component — `build` for the second entry above — because a bare `path` line is
+what somebody types when the directory is already called what they call it.
+
+The app **writes this table**, unlike `[keys]`: the list is maintained from
+inside the dialog ([keymap.md](keymap.md)). So a comment written *inside* an
+entry does not survive the next save, the same as for `[drives]`; comments
+elsewhere in the file do.
+
 ## `editor` — what `Shift+F4` opens a new file in
 
 A command line, run the way a typed one is, with the path appended and quoted.

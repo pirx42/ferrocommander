@@ -7,7 +7,7 @@
 use std::io::{Read, Write};
 use std::sync::Mutex;
 
-use tc_core::config::{self, PaneSettings, Settings};
+use tc_core::config::{self, Favourite, PaneSettings, Settings};
 use tc_core::listing::{Sort, SortKey, SortOrder};
 use tc_core::vfs::{Entry, LocalFs, VfsError, VfsPath, VirtualFs};
 
@@ -41,6 +41,18 @@ fn settings() -> Settings {
             ..PaneSettings::default()
         },
     );
+    // Two of them, in an order the alphabet would not produce, so the
+    // round-trip test says the order came back and not merely the entries.
+    settings.favourites = vec![
+        Favourite {
+            name: "work".to_string(),
+            path: "/home/pirx/projects".to_string(),
+        },
+        Favourite {
+            name: "backup".to_string(),
+            path: "/mnt/backup".to_string(),
+        },
+    ];
     settings
 }
 
@@ -95,6 +107,54 @@ fn a_file_from_another_version_does_not_stop_the_program() {
 
     assert_eq!(loaded, Settings::default());
     assert!(complaint.is_some());
+}
+
+#[test]
+fn a_hand_written_favourite_needs_no_name() {
+    // The list is a file people edit, and a bare `path = "…"` line is what
+    // somebody types when the directory is already called what they call it.
+    let (_dir, root) = root();
+    write_config(&root, "[[favourites]]\npath = \"/home/pirx/dev\"\n");
+
+    let (loaded, complaint) = config::load(&LocalFs, &root);
+
+    assert_eq!(complaint, None);
+    assert_eq!(loaded.favourites.len(), 1);
+    assert_eq!(loaded.favourites[0].label(), "dev");
+}
+
+#[test]
+fn a_favourite_with_a_field_from_the_future_does_not_stop_the_program() {
+    // The same rule the rest of the file follows: complain once, start with
+    // the defaults, never refuse to run.
+    let (_dir, root) = root();
+    write_config(
+        &root,
+        "[[favourites]]\npath = \"/home/pirx\"\ncolour = \"red\"\n",
+    );
+
+    let (loaded, complaint) = config::load(&LocalFs, &root);
+
+    assert_eq!(loaded, Settings::default());
+    assert!(complaint.is_some(), "the user has to be told once");
+}
+
+#[test]
+fn favourites_the_app_changed_reach_the_file() {
+    // The failure mode a new *owned* table has: `current_settings` builds
+    // from what was loaded, so a field nobody assigns is carried through
+    // rather than zeroed — which means a list that is added to and never
+    // written looks exactly like one that works, until the next start.
+    let (_dir, root) = root();
+    let mut original = settings();
+    config::save(&LocalFs, &root, &original).unwrap();
+
+    config::remember_favourite(&mut original.favourites, &VfsPath::new("/srv/build"));
+    config::save(&LocalFs, &root, &original).unwrap();
+
+    let (loaded, _) = config::load(&LocalFs, &root);
+    assert_eq!(loaded.favourites, original.favourites);
+    assert_eq!(loaded.favourites.last().unwrap().label(), "build");
 }
 
 #[test]

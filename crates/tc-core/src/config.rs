@@ -86,6 +86,87 @@ pub struct Settings {
     /// **Read but never written.** These are the user's own lines, and
     /// [`save`] leaves them exactly as they were typed.
     pub keys: BTreeMap<String, String>,
+    /// The directories `Ctrl+D` offers, in the order they are shown.
+    ///
+    /// Owned by the app — the list is maintained from inside the dialog — so
+    /// unlike [`keys`](Self::keys) it is written back. Shared by both panes,
+    /// as `[drives]` is: a favourite is a place, not a property of a pane.
+    pub favourites: Vec<Favourite>,
+}
+
+/// One row of the `Ctrl+D` list: a directory, and what to call it.
+///
+/// A list rather than a table keyed by name, unlike `[drives]` and `[keys]`
+/// next door, and for two reasons. A hotlist is a **menu** — the entry you
+/// reach for is the one you put at the top — and a map sorts itself, which
+/// would quietly rearrange a list somebody arranged. And two directories may
+/// perfectly well both be called `src`, which a map would make a collision
+/// needing a rule.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Favourite {
+    /// What the list shows. Empty falls back to the path's last component,
+    /// so a hand-written entry can be a bare `path = "…"` line.
+    pub name: String,
+    pub path: String,
+}
+
+impl Favourite {
+    /// The directory this points at.
+    pub fn path(&self) -> VfsPath {
+        VfsPath::new(&self.path)
+    }
+
+    /// What the list shows for it.
+    ///
+    /// Falls back rather than showing an empty row: a favourite with no name
+    /// is a favourite somebody wrote by hand, and the last component is the
+    /// name they would have typed.
+    ///
+    /// Owned rather than borrowed, so the fallback can go through
+    /// [`VfsPath`] instead of splitting the string a second way — there is
+    /// one rule for what a path's last component is, and it is not here. A
+    /// dialog builds ten of these when it opens, once.
+    pub fn label(&self) -> String {
+        if !self.name.is_empty() {
+            return self.name.clone();
+        }
+        // The path itself at the root, which has no last component and is
+        // still somewhere worth having in the list.
+        match self.path().file_name() {
+            Some(name) => name.to_string(),
+            None => self.path.clone(),
+        }
+    }
+}
+
+/// Adds `path` to the list, named after its last component.
+///
+/// **Already there is nothing to do**, and that is what bounds the list
+/// instead of a cap like [`COMMAND_HISTORY_LIMIT`]: every entry here costs a
+/// deliberate keystroke, so the list grows to the number of directories one
+/// person cares about and stops. Comparing by path rather than by name, since
+/// the name is only what it is called.
+///
+/// Appended rather than inserted at the front, unlike
+/// [`remember_command`]: a history is about what happened last and a hotlist
+/// is about where you decided to put things.
+pub fn remember_favourite(favourites: &mut Vec<Favourite>, path: &VfsPath) {
+    if favourites.iter().any(|entry| entry.path() == *path) {
+        return;
+    }
+    favourites.push(Favourite {
+        name: path.file_name().unwrap_or_default().to_string(),
+        path: path.to_string(),
+    });
+}
+
+/// Removes every entry pointing at `path`.
+///
+/// Every one rather than the first: a file hand-edited into holding the same
+/// path twice should be left tidy by a removal, not half-cleaned.
+pub fn forget_favourite(favourites: &mut Vec<Favourite>, path: &VfsPath) {
+    favourites.retain(|entry| entry.path() != *path);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -394,6 +475,79 @@ mod tests {
         assert_eq!(settings.pane(0), PaneSettings::default());
         assert_eq!(settings.pane(1).directory().unwrap().as_str(), "/home/pirx");
         assert_eq!(settings.pane(9), PaneSettings::default());
+    }
+
+    #[test]
+    fn a_directory_is_added_once_however_often_it_is_offered() {
+        // What bounds the list instead of a cap: pressing "add" on a
+        // directory that is already a favourite is a keystroke that changes
+        // nothing, not a second row.
+        let mut favourites = Vec::new();
+        remember_favourite(&mut favourites, &VfsPath::new("/home/pirx/dev"));
+        remember_favourite(&mut favourites, &VfsPath::new("/home/pirx/dev"));
+
+        assert_eq!(favourites.len(), 1);
+        assert_eq!(favourites[0].label(), "dev");
+    }
+
+    #[test]
+    fn two_directories_may_share_a_name() {
+        // The reason this is a list and not a map keyed by name. Both stay,
+        // and the path column is what tells them apart on screen.
+        let mut favourites = Vec::new();
+        remember_favourite(&mut favourites, &VfsPath::new("/home/pirx/src"));
+        remember_favourite(&mut favourites, &VfsPath::new("/srv/build/src"));
+
+        assert_eq!(favourites.len(), 2);
+        assert_eq!(favourites[0].label(), favourites[1].label());
+    }
+
+    #[test]
+    fn the_order_is_the_one_things_were_added_in() {
+        // A hotlist is a menu: what a map would do here is sort it, which
+        // rearranges a list somebody arranged.
+        let mut favourites = Vec::new();
+        for path in ["/zebra", "/apple", "/mango"] {
+            remember_favourite(&mut favourites, &VfsPath::new(path));
+        }
+
+        let labels: Vec<String> = favourites.iter().map(Favourite::label).collect();
+        assert_eq!(labels, ["zebra", "apple", "mango"]);
+    }
+
+    #[test]
+    fn removing_takes_out_every_row_pointing_there() {
+        // A hand-edited file may hold the same path twice, and a removal that
+        // left one behind would look like it had not worked.
+        let mut favourites = vec![
+            Favourite {
+                name: "one".to_string(),
+                path: "/home/pirx/dev".to_string(),
+            },
+            Favourite {
+                name: "the same place".to_string(),
+                path: "/home/pirx/dev".to_string(),
+            },
+            Favourite {
+                name: "other".to_string(),
+                path: "/srv".to_string(),
+            },
+        ];
+
+        forget_favourite(&mut favourites, &VfsPath::new("/home/pirx/dev"));
+
+        assert_eq!(favourites.len(), 1);
+        assert_eq!(favourites[0].path(), VfsPath::new("/srv"));
+    }
+
+    #[test]
+    fn the_root_is_a_favourite_that_can_still_be_named() {
+        // It has no last component, and a row showing nothing at all is worse
+        // than a row showing the path.
+        let mut favourites = Vec::new();
+        remember_favourite(&mut favourites, &VfsPath::root());
+
+        assert_eq!(favourites[0].label(), VfsPath::root().as_str());
     }
 
     #[test]
