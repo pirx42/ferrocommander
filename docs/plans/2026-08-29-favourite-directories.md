@@ -1,8 +1,7 @@
 # Favourite directories — `Ctrl+D`
 
-**Status:** Draft — awaiting approval, nothing implemented
-**Wants its own topic branch**, per skill
-[10](../skills/10-plan-lifecycle.md).
+**Status:** In Progress — approved 2026-08-29; phase 0 done, phases 1–4 to go
+**Branch:** `claude/next-phase-plan-design-lah4v5`
 
 Total Commander's directory hotlist: one key opens a short list of places you
 go often, an arrow and Enter takes you there, and the list is maintained from
@@ -118,6 +117,31 @@ places at stake:
 
 Whatever does not bite gets a characterization test **first**, in its own
 commit, pinning today's behaviour before any of it moves.
+
+**Done — and it needed no new test.** Two of the three were already pinned,
+and the third cannot be pinned by anything this suite can do:
+
+| Probe | What was broken | Result |
+|---|---|---|
+| `config::render` keeps what it does not own | started the document from empty instead of from the existing file | **Bit.** `saving_leaves_the_users_own_lines_exactly_as_they_wrote_them` and `saving_still_records_what_the_app_owns` both failed, naming the lost comment. |
+| `choose_one` renders two columns | — | **Cannot bite.** The harness sends keys and reads the filesystem; it has no way to read a label. See below. |
+| `leave_for` leaves the archive stack | spawned on the current backend and left `Transition::Stay` | **Bit.** `a_drive_button_takes_a_pane_out_of_an_archive` failed. |
+
+The residual risk in the first row is not the one the plan guessed. `render`'s
+preserve rule is solid; what a *new owned* table risks is the opposite —
+`Shell::current_settings` builds from `..self.saved`, so a field nobody
+assigns is carried through unchanged rather than zeroed, and the failure mode
+for `favourites` is **"the add never reaches the file"**. That is what phase
+3's kill-and-relaunch test is for.
+
+**The two-column row is a deliberate blind spot.** The end-to-end suite can
+press keys and look at the filesystem; it cannot read the text in a label
+(`crates/tc-app/tests/harness/`), which is the same limit the architecture
+review recorded in its § 5. So when the row builder comes out of `choose_one`,
+what stays covered is the part with logic in it — which value each row maps to
+— by the existing drive tests and the new favourites ones. That a row *shows*
+its path is checked by running the program, and by nothing else. Written down
+rather than papered over.
 
 ### Phase 1 — the setting
 
