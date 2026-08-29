@@ -11,9 +11,15 @@ Built from scratch in Rust and GTK4.
 The latest build of `main` is published as a `.deb`:
 
 ```sh
-wget https://github.com/pirx42/ferrocommander/releases/download/main/ferrocommander_amd64.deb
-sudo apt install ./ferrocommander_amd64.deb
+wget -P /tmp https://github.com/pirx42/ferrocommander/releases/download/main/ferrocommander_amd64.deb
+sudo apt install /tmp/ferrocommander_amd64.deb
 ```
+
+`/tmp` rather than the directory you happen to be in, because Ubuntu creates
+home directories as `0750`: `apt` drops its download sandbox for a file the
+unprivileged `_apt` user cannot reach and says so in four lines of
+`pkgAcquire::Run (13: Permission denied)`. The install works either way — the
+note is not a failure — but the quiet path is the one worth writing down.
 
 The filename carries no version on purpose: the release is rolling, and a URL
 worth putting in a README is one that does not change every commit. The

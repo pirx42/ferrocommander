@@ -75,7 +75,9 @@ cross-references instead of duplication.
   | [folder sizes](plans/archive/2026-08-29-folder-sizes.md) | Total Commander's `Alt+Shift+Enter`: the scan, the size that goes where the status total and the sort already look — and the watcher bug that made the feature not work at all |
   | [an Ubuntu package](plans/archive/2026-08-29-ubuntu-package.md) | the first CI this repository has had: a `.deb` built and published on every commit to `main`, why the logic is in a script rather than the workflow, and the two bugs writing the README found |
 
-  No plan is currently active.
+  **Active:**
+  [field report, round one](plans/2026-08-29-field-report-round-one.md) — twelve
+  findings from the first person to use build 132 rather than test it.
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
