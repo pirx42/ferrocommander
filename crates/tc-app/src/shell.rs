@@ -64,6 +64,13 @@ pub(crate) struct Shell {
     /// drive in one pane is what the other finds when it arrives there, which
     /// is how Total Commander behaves.
     pub(crate) drives: std::collections::BTreeMap<String, String>,
+    /// The directories `Ctrl+D` offers, in the order they are shown.
+    ///
+    /// Beside `saved` rather than read out of it, for the reason
+    /// `command_history` is: the live list is what the dialog changes, and
+    /// writing a change straight into the record of what is on disk would
+    /// mark it as already saved and it would never reach the file.
+    pub(crate) favourites: Vec<config::Favourite>,
     /// The default bindings with the user's own laid over them. Read on every
     /// keystroke and never changed again, so it is built once at startup.
     pub(crate) keymap: Keymap,
@@ -90,6 +97,7 @@ impl Shell {
             window: window.downgrade(),
             config_root,
             drives: saved.drives.clone(),
+            favourites: saved.favourites.clone(),
             command_history: saved.command_history.clone(),
             renamed: Vec::new(),
             saved,
@@ -178,6 +186,7 @@ impl Shell {
                 None => self.saved.window,
             },
             drives: self.drives.clone(),
+            favourites: self.favourites.clone(),
             command_history: self.command_history.clone(),
             ..self.saved.clone()
         };

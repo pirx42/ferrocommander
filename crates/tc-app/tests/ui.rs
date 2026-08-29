@@ -41,6 +41,7 @@ const DIALOG_CONFLICT: &str = "Target already exists";
 const DIALOG_FAILURES: &str = "Some items were not processed";
 const DIALOG_PATTERN: &str = "Select by pattern";
 const DIALOG_DRIVES: &str = "Drives";
+const DIALOG_FAVOURITES: &str = "Favourite directories";
 const DIALOG_OUTPUT: &str = "Command output";
 const DIALOG_HISTORY: &str = "Command history";
 const DIALOG_NEW_FILE: &str = "New file";
@@ -137,6 +138,33 @@ fn await_panes_at(app: &App, left: &str, right: &str) {
         );
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
+}
+
+/// `with_an_archive`, plus two favourite directories in the settings file.
+///
+/// Written rather than added through the dialog, because until the list can
+/// be maintained from inside itself there is no other way to have one — and
+/// because a hand-written `[[favourites]]` table is a thing people are meant
+/// to be able to write.
+///
+/// On the archive fixture so that "a favourite takes a pane out of an
+/// archive" has an archive to be in. It costs the other tests nothing: the
+/// zip is inside `src`, and every index they walk is in the home directory.
+fn with_favourites(home: &Path) {
+    with_an_archive(home);
+
+    let settings = home.join(SETTINGS_FILE);
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(
+        settings,
+        format!(
+            "[[favourites]]\nname = \"deep\"\npath = \"{nested}\"\n\n\
+             [[favourites]]\npath = \"{dst}\"\n",
+            nested = home.join("src/nested").display(),
+            dst = home.join("dst").display(),
+        ),
+    )
+    .unwrap();
 }
 
 /// Puts the cursor on `notes.txt`.
@@ -1784,6 +1812,84 @@ fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
         "the left pane moved too: {}",
         recorded[0]
     );
+}
+
+#[test]
+fn ctrl_d_sends_the_pane_that_has_the_keyboard() {
+    // A key with no direction and no number in it acts on the active pane —
+    // the ordinary rule, and the opposite of Alt+F1/Alt+F2 where the F-key
+    // number *is* the pane number. The other pane not moving is half the
+    // claim, and the half a bug would break.
+    let app = in_src_and_dst(with_favourites);
+
+    app.key("ctrl+d");
+    app.focus_dialog(DIALOG_FAVOURITES);
+    app.key("Return");
+
+    await_panes_at(&app, "/src/nested", "/dst");
+}
+
+#[test]
+fn ctrl_d_in_the_right_pane_sends_the_right_pane() {
+    // The same key from the other side. Without this, an implementation that
+    // always acts on pane 0 passes the test above.
+    let app = in_src_and_dst(with_favourites);
+    app.key("Tab");
+
+    app.key("ctrl+d");
+    app.focus_dialog(DIALOG_FAVOURITES);
+    app.key("Return");
+
+    await_panes_at(&app, "/src", "/src/nested");
+}
+
+#[test]
+fn a_favourite_takes_a_pane_out_of_an_archive() {
+    // A favourite is a path on the real filesystem, which the archive backend
+    // has never heard of. Navigating on the current backend would send the
+    // *archive* there, so the pane would show an error and still be inside,
+    // with Backspace the only way out.
+    let app = in_src_and_dst(with_favourites);
+    // `..`, nested, bundle.zip, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    app.key("ctrl+d");
+    app.focus_dialog(DIALOG_FAVOURITES);
+    // The second favourite, so arriving somewhere is visible rather than a
+    // return to a directory this pane was already showing.
+    app.key("Down");
+    app.key("Return");
+
+    await_panes_at(&app, "/dst", "/dst");
+    // And it really left: F7 creates in the real directory, not in a zip.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("out-of-the-archive");
+    app.key("Return");
+    app.await_exists("dst/out-of-the-archive");
+}
+
+#[test]
+fn a_favourite_whose_directory_is_gone_leaves_the_pane_where_it_was() {
+    // Unlike a drive, a favourite has no mount to fall back to — so the right
+    // answer is the ordinary one for a directory that cannot be read: stay,
+    // and say why. Sending the pane somewhere nobody named would be worse.
+    let app = in_src_and_dst(with_favourites);
+    std::fs::remove_dir_all(app.path("src/nested")).unwrap();
+
+    app.key("ctrl+d");
+    app.focus_dialog(DIALOG_FAVOURITES);
+    app.key("Return");
+    app.settle();
+
+    // Still in src, and still working: F7 lands where the pane says it is.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("still-here");
+    app.key("Return");
+    app.await_exists("src/still-here");
 }
 
 #[test]

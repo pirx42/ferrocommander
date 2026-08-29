@@ -39,6 +39,7 @@
 | `Alt+F5` | Pack what is marked into a new archive, beside the other pane — see [archives.md](archives.md) |
 | `Ctrl+M` | Rename what is marked by a rule — see [multi-rename.md](multi-rename.md) |
 | `Ctrl+Z` | Put the last multi-rename back |
+| `Ctrl+D` | The favourite directories, to pick one and go there |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
 | `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
 | `Ctrl+U` | Exchange the two panes |
@@ -125,6 +126,30 @@ entry, and copying or deleting "the parent directory" from inside it is never
 what the user means. It cannot be marked, and with nothing else marked, F5–F8
 on it do nothing. A mark elsewhere in the pane still counts — the `..` rule is
 about the fallback, not about the marks.
+
+## The favourite directories
+
+`Ctrl+D` opens the list of directories worth keeping and sends a pane to the
+one chosen — Total Commander's directory hotlist. The list, and the order it
+is in, live in `[[favourites]]` in the settings file
+([config.md](config.md)); it is a menu, so the order is the one somebody put
+things in rather than the alphabet's.
+
+**The pane it moves is the one with the keyboard.** A key with no direction
+and no number in it acts on the active pane, which is the ordinary rule here
+and the opposite of `Alt+F1`/`Alt+F2` below. Both halves are pressed for real:
+a test from the left pane and a test from the right, because an
+implementation that always moved pane 0 would pass the first on its own.
+
+**A favourite is always a path on the real filesystem**, so choosing one from
+inside an archive comes *out* of it — the archive backend has never heard of
+`/home/…`, and navigating on it would leave the pane inside showing an error.
+That is `leave_for`, the same route `Alt+F1` takes out of an archive.
+
+**A favourite whose directory is gone leaves the pane where it was**, with the
+reason next to the path. Unlike a drive, a favourite has no mount to fall back
+to, and sending the pane somewhere nobody named would be a worse answer than
+staying.
 
 ## The drive selector
 

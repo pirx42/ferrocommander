@@ -14,6 +14,7 @@
 //! rename redrawing a preview — are each a file, because each is a thing with
 //! a lifetime rather than a function that opens a window.
 
+mod favourites;
 mod multi_rename;
 mod progress_view;
 mod search;
@@ -35,6 +36,7 @@ use crate::constants::{
 };
 use crate::format::failure_lines;
 
+pub use favourites::open as open_favourites;
 pub use multi_rename::MultiRename;
 pub use progress_view::ProgressView;
 pub use search::Search;
@@ -178,36 +180,9 @@ pub fn choose_one(
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
     for (label, detail) in rows {
-        let row = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(DIALOG_SPACING)
-            .build();
-        row.append(
-            &gtk::Label::builder()
-                .label(label)
-                .xalign(XALIGN_LEFT)
-                .build(),
-        );
-        // The path beside the label, dimmed: two mounts can share a last
-        // component, and then the label alone does not say which is which.
-        let path = gtk::Label::builder()
-            .label(detail)
-            .xalign(XALIGN_LEFT)
-            .hexpand(true)
-            .ellipsize(gtk::pango::EllipsizeMode::Start)
-            .build();
-        path.add_css_class(CLASS_DIM);
-        row.append(&path);
-        list.append(&row);
+        list.append(&labelled_row(label, detail));
     }
-
-    let scroller = gtk::ScrolledWindow::builder()
-        .child(&list)
-        .propagate_natural_height(true)
-        .max_content_height(DRIVE_LIST_HEIGHT)
-        .hscrollbar_policy(gtk::PolicyType::Never)
-        .build();
-    content.append(&scroller);
+    content.append(&list_scroller(&list));
 
     // By index rather than by widget: two rows may carry the same label, and
     // the index is what actually identifies the choice.
@@ -229,6 +204,48 @@ pub fn choose_one(
     // tests could not tell the difference. A UI test presses Down and Enter
     // and has to reach the *second* place, so if a GTK release ever stops
     // doing it, that fails rather than the first Enter quietly dying.
+}
+
+/// One row of a chooser: a name, and the path it stands for beside it.
+///
+/// Dimmed and ellipsised from the *start*, because what tells two rows apart
+/// is the end of the path and not the beginning — two mounts can share a last
+/// component, and two favourites can share a name, and in both cases the
+/// label alone does not say which is which.
+///
+/// Shared by the drive list and the favourites list rather than written twice:
+/// two lists that are meant to look the same and are built separately are two
+/// lists that drift.
+pub(super) fn labelled_row(label: &str, detail: &str) -> gtk::Box {
+    let row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(DIALOG_SPACING)
+        .build();
+    row.append(
+        &gtk::Label::builder()
+            .label(label)
+            .xalign(XALIGN_LEFT)
+            .build(),
+    );
+    let path = gtk::Label::builder()
+        .label(detail)
+        .xalign(XALIGN_LEFT)
+        .hexpand(true)
+        .ellipsize(gtk::pango::EllipsizeMode::Start)
+        .build();
+    path.add_css_class(CLASS_DIM);
+    row.append(&path);
+    row
+}
+
+/// A chooser's list, scrolling only once it is taller than a screenful.
+pub(super) fn list_scroller(list: &gtk::ListBox) -> gtk::ScrolledWindow {
+    gtk::ScrolledWindow::builder()
+        .child(list)
+        .propagate_natural_height(true)
+        .max_content_height(DRIVE_LIST_HEIGHT)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .build()
 }
 
 /// Shows what a command printed, in a window that can be scrolled and copied.

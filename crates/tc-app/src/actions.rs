@@ -104,6 +104,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
                 state.command_line.append_word(&name);
             }
         }
+        Action::Favourites => start_favourites(shell),
         Action::SelectDriveLeft => start_drive_selection(shell, LEFT_PANE),
         Action::SelectDriveRight => start_drive_selection(shell, RIGHT_PANE),
         Action::CloneToRight => clone_pane(shell, RIGHT_PANE),
@@ -292,6 +293,33 @@ pub(crate) fn go_to_drive(shell: &Rc<RefCell<Shell>>, target: usize, mount: &Vfs
     let loading = state.panes[target].leave_for(arriving);
     drop(state);
     await_listing_or(shell, target, Some(loading), Some(mount.clone()));
+}
+
+/// Ctrl+D: offer the favourite directories, and go to the chosen one.
+///
+/// The **active** pane, which is the ordinary rule here — a key with no
+/// direction and no number in it acts on whichever pane has the keyboard.
+/// That is the opposite of `Alt+F1`/`Alt+F2`, where the F-key number *is* the
+/// pane number, and deliberately so.
+///
+/// It `leave_for`s rather than navigating, so pressing a favourite while
+/// inside an archive comes out of it: a favourite is always a path on the
+/// real filesystem, which the archive backend has never heard of.
+pub(crate) fn start_favourites(shell: &Rc<RefCell<Shell>>) {
+    let (window, favourites) = {
+        let state = shell.borrow();
+        let Some(window) = state.window() else {
+            return;
+        };
+        (window, state.favourites.clone())
+    };
+
+    let going = shell.clone();
+    dialogs::open_favourites(&window, &favourites, move |target| {
+        let index = going.borrow().active;
+        let loading = going.borrow_mut().panes[index].leave_for(target);
+        await_listing(&going, index, Some(loading));
+    });
 }
 
 /// Alt+F1 / Alt+F2: offer `target` a list of places to go.

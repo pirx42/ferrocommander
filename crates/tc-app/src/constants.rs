@@ -395,6 +395,10 @@ pub const COMMAND_PROMPT_SUFFIX: &str = "$";
 /// Title of the drive selector Alt+F1 / Alt+F2 open.
 pub const TITLE_DRIVES: &str = "Drives";
 
+/// The `Ctrl+D` window, and what it says before anything is in it.
+pub const TITLE_FAVOURITES: &str = "Favourite directories";
+pub const FAVOURITES_EMPTY: &str = "No favourite directories yet";
+
 pub const BUTTON_CLOSE: &str = "Close";
 
 /// Shown while a job is still scanning and no total exists yet.
