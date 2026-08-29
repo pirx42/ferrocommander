@@ -1808,21 +1808,77 @@ fn drive_at(index: usize) -> String {
         .to_string()
 }
 
+/// Which row of the drive list is the mount this app's files are on.
+///
+/// **Asked, not assumed.** These tests used to index the list positionally —
+/// slot 0 for "the drive the pane is already on", slot 1 for "somewhere
+/// else" — with comments saying the pane starts on the root mount. That is
+/// true of the machine they were written on and of nothing else: the list is
+/// `/proc/self/mounts` order, and a test report from a stock Ubuntu desktop
+/// had `/run` at slot 0 and `/` at slot 1. Five tests then went to the mount
+/// the pane was already on, which a drive that remembers where it was left
+/// makes invisible — the exact trap one of their comments says slot 1 was
+/// chosen to avoid.
+fn home_drive_index(app: &App) -> usize {
+    let mounts = tc_core::vfs::mount_points();
+    let home = tc_core::vfs::LocalFs::vfs_path(app.home());
+    let on = tc_core::vfs::mount_for(&home, &mounts)
+        .unwrap_or_else(|| panic!("nothing in {mounts:?} holds {home}"));
+    mounts
+        .iter()
+        .position(|mount| mount.path == on)
+        .expect("the mount it named is in the list it came from")
+}
+
+/// A row that is some *other* drive, so going there is a move.
+///
+/// Panics rather than skips when the machine offers only one: a drive test
+/// with nowhere to switch to proves nothing, and a test that quietly does not
+/// run is worse than no test — the same rule the harness applies to a missing
+/// `xdotool`.
+fn other_drive_index(app: &App) -> usize {
+    other_drive_index_from(app, 0)
+}
+
+/// The same, but never the first row — so reaching it takes an arrow press.
+///
+/// What the "the list opens focused" test needs, and it needs *both* halves:
+/// a row an arrow has to reach, and one the pane is not already on, since a
+/// drive that remembers where it was left makes returning to it look exactly
+/// like never having moved.
+fn arrowed_drive_index(app: &App) -> usize {
+    other_drive_index_from(app, 1)
+}
+
+fn other_drive_index_from(app: &App, first: usize) -> usize {
+    let home = home_drive_index(app);
+    (first..tc_core::vfs::mount_points().len())
+        .find(|&index| index != home)
+        .unwrap_or_else(|| {
+            panic!(
+                "no drive at row {first} or later that the pane is not already on, \
+                 so there is nowhere for this test to switch to: {:?}",
+                tc_core::vfs::mount_points()
+            )
+        })
+}
+
 #[test]
 fn alt_f1_sends_the_left_pane_to_a_drive() {
     let app = in_src_and_dst(arrange);
 
-    // The second mount rather than the first: the pane is already on the
-    // first one, and a drive now remembers where it was left, so picking it
-    // would land the pane back where it started and prove nothing.
-    pick_drive(&app, 1);
+    // Some *other* mount than the one the pane is already on: a drive
+    // remembers where it was left, so picking the one it is on would land it
+    // back where it started and prove nothing.
+    let elsewhere = other_drive_index(&app);
+    pick_drive(&app, elsewhere);
 
     // Closed rather than killed: the settings write is debounced, and
     // `await_mentions` cannot wait for it here — the file already says
     // "directory" from an earlier save, so there is no new text to watch for.
     // The close handler flushes, which makes this exact rather than lucky.
     let home = app.close();
-    assert_eq!(recorded_directories(home.path())[0], drive_at(1));
+    assert_eq!(recorded_directories(home.path())[0], drive_at(elsewhere));
 }
 
 #[test]
@@ -1833,13 +1889,8 @@ fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
     // tell the two apart.
     let app = in_src_and_dst(arrange);
     // The left pane has the keyboard after `in_src_and_dst`.
-    app.key("alt+F2");
-    app.focus_dialog(DIALOG_DRIVES);
-    // Down to the second mount, which no pane has been on, so arriving there
-    // is visible rather than a return to where this pane already was.
-    app.key("Down");
-    app.key("Return");
-    app.await_dialog_closed(DIALOG_DRIVES);
+    let elsewhere = other_drive_index(&app);
+    pick_drive_with(&app, "alt+F2", elsewhere);
 
     // Closed rather than killed: the settings write is debounced, and
     // `await_mentions` cannot wait for it here — the file already says
@@ -1847,7 +1898,11 @@ fn the_f_key_number_is_the_pane_number_whatever_has_the_keyboard() {
     // The close handler flushes, which makes this exact rather than lucky.
     let home = app.close();
     let recorded = recorded_directories(home.path());
-    assert_eq!(recorded[1], drive_at(1), "the right pane did not move");
+    assert_eq!(
+        recorded[1],
+        drive_at(elsewhere),
+        "the right pane did not move"
+    );
     assert!(
         recorded[0].ends_with("/src"),
         "the left pane moved too: {}",
@@ -2358,24 +2413,27 @@ fn the_drive_list_opens_focused_so_the_arrows_work_without_a_click() {
     // says whether the list has the keyboard.
     let app = in_src_and_dst(arrange);
 
-    app.key("alt+F1");
-    app.focus_dialog(DIALOG_DRIVES);
-    app.key("Down");
-    app.key("Return");
-    app.await_dialog_closed(DIALOG_DRIVES);
+    // A row an arrow has to reach, and one the pane is not already on.
+    let elsewhere = arrowed_drive_index(&app);
+    pick_drive(&app, elsewhere);
 
     // Closed rather than killed: the settings write is debounced, and
     // `await_mentions` cannot wait for it here — the file already says
     // "directory" from an earlier save, so there is no new text to watch for.
     // The close handler flushes, which makes this exact rather than lucky.
     let home = app.close();
-    assert_eq!(recorded_directories(home.path())[0], drive_at(1));
+    assert_eq!(recorded_directories(home.path())[0], drive_at(elsewhere));
 }
 
 /// Opens the drive list on the left pane and takes the `index`-th place.
 fn pick_drive(app: &App, index: usize) {
+    pick_drive_with(app, "alt+F1", index);
+}
+
+/// The same, for whichever pane the key names.
+fn pick_drive_with(app: &App, key: &str, index: usize) {
     app.focus_main();
-    app.key("alt+F1");
+    app.key(key);
     app.focus_dialog(DIALOG_DRIVES);
     for _ in 0..index {
         app.key("Down");
@@ -2388,12 +2446,12 @@ fn pick_drive(app: &App, index: usize) {
 fn a_drive_remembers_the_directory_it_was_left_in() {
     // Total Commander's behaviour with its default AlwaysToRoot=0: switching
     // away from a drive and back is not a trip to the root and a walk down
-    // again. The pane starts in `src`, which is on the root mount.
+    // again. The pane starts in `src`, wherever that is mounted.
     let app = in_src_and_dst(arrange);
 
-    // Away to another mount, then back to the root one.
-    pick_drive(&app, 1);
-    pick_drive(&app, 0);
+    // Away to another mount, then back to the one the pane's files are on.
+    pick_drive(&app, other_drive_index(&app));
+    pick_drive(&app, home_drive_index(&app));
 
     // Closed rather than killed: the settings write is debounced, and
     // `await_mentions` cannot wait for it here — the file already says
@@ -2413,20 +2471,16 @@ fn the_two_panes_share_what_a_drive_remembers() {
     // other finds when it arrives there.
     let app = in_src_and_dst(arrange);
 
-    // Both panes start on the first mount — the left in src, the right in
-    // dst. Send them both to the second mount. The right pane leaves last, so
-    // the first mount's memory ends up saying `dst`.
-    pick_drive(&app, 1);
-    app.focus_main();
-    app.key("alt+F2");
-    app.focus_dialog(DIALOG_DRIVES);
-    app.key("Down");
-    app.key("Return");
-    app.await_dialog_closed(DIALOG_DRIVES);
+    // Both panes start on the mount their files are on — the left in src, the
+    // right in dst. Send them both somewhere else. The right pane leaves
+    // last, so that mount's memory ends up saying `dst`.
+    let (here, elsewhere) = (home_drive_index(&app), other_drive_index(&app));
+    pick_drive(&app, elsewhere);
+    pick_drive_with(&app, "alt+F2", elsewhere);
 
-    // Now bring the *left* pane back to the first mount. It lands in dst,
-    // which only the other pane has ever been in.
-    pick_drive(&app, 0);
+    // Now bring the *left* pane back. It lands in dst, which only the other
+    // pane has ever been in.
+    pick_drive(&app, here);
 
     // Closed rather than killed: the settings write is debounced, and
     // `await_mentions` cannot wait for it here — the file already says
@@ -2452,9 +2506,10 @@ fn a_remembered_directory_that_has_gone_falls_back_to_the_drive_itself() {
     // not here — the home directory holds dst, src, temporary.
     app.keys(&["Home", "Down", "Down", "Down", "Return"]);
 
-    pick_drive(&app, 1);
+    let here = home_drive_index(&app);
+    pick_drive(&app, other_drive_index(&app));
     std::fs::remove_dir(app.path("temporary")).unwrap();
-    pick_drive(&app, 0);
+    pick_drive(&app, here);
 
     // Closed rather than killed: the settings write is debounced, and
     // `await_mentions` cannot wait for it here — the file already says
@@ -2463,7 +2518,7 @@ fn a_remembered_directory_that_has_gone_falls_back_to_the_drive_itself() {
     let home = app.close();
     assert_eq!(
         recorded_directories(home.path())[0],
-        drive_at(0),
+        drive_at(here),
         "a directory that had gone was not replaced by the drive itself"
     );
 }

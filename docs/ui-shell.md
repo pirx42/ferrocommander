@@ -389,6 +389,16 @@ meaning under Wayland at all, and `spawn_app` now pins `GDK_BACKEND` beside
 `GDK_BACKEND=wayland` in the environment and, without the pin, every test
 fails the same way.
 
+**The drive tests ask which row they want; they never count on one.** They
+used to index the list positionally — slot 0 for "the drive the pane is
+already on", slot 1 for "somewhere else" — which is true of one machine and
+of nothing else: the list is `/proc/self/mounts` order. A report from a stock
+Ubuntu desktop had a different mount first, and five tests went to the drive
+the pane was already on, which a drive that remembers where it was left makes
+invisible. They now find the mount the temp home actually sits on
+(`mount_for`) and pick a different one. Checkable anywhere, by reversing what
+`mount_points` returns and re-running them.
+
 **One app at a time.** Cargo would run them in parallel, and sixteen X servers
 with sixteen GTK apps between them do not fit comfortably in a container: the
 suite went from all-green to eight failures and back between runs, always with
