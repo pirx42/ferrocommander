@@ -50,6 +50,7 @@ while one is open.
 | delete confirmation | F8, Shift+F8 | yes / no |
 | conflict | a job that hit an existing target | overwrite / skip / keep both / abort, each with *apply to all* |
 | a list to pick from | Alt+F1/F2, Ctrl+↓, Num +/− | one row |
+| favourites | Ctrl+D | one row — and it is edited in place, see [keymap.md](keymap.md) |
 | failures | a job that could not finish everything | nothing; it reports |
 | output | a command that printed something, and the refusals inside an archive | nothing; it reports |
 | progress | a job that outlives `PROGRESS_DELAY` | cancel |
@@ -57,10 +58,18 @@ while one is open.
 | search | Alt+F7 | a result to go to — see [search.md](search.md) |
 | multi-rename | Ctrl+M | rules, and a preview of them — see [multi-rename.md](multi-rename.md) |
 
-The last four have a lifetime of their own — a bar being driven, an offset
-being paged, a list filling as results arrive, a preview redrawn on every
-keystroke — so each is a file under `dialogs/` rather than a function that
-opens a window.
+The last four, and the favourites, have a lifetime of their own — a bar being
+driven, an offset being paged, a list filling as results arrive, a preview
+redrawn on every keystroke, a list whose rows change under it — so each is a
+file under `dialogs/` rather than a function that opens a window.
+
+**The favourites list is the one that outlives its own choice.** Adding and
+removing happen inside it, so it needs the window to stay and the rows to be
+redrawn; that is what separates it from `choose_one`, which hands back one
+value and closes. What the two share — the row with a dimmed path beside the
+name, and the scroller that only scrolls past a screenful — they share as
+code, because two lists meant to look alike and built separately are two
+lists that drift.
 
 **Escape closes all of them.** A modal `gtk::Window` does not do this on its
 own, and a dialog with no way out but the mouse is a trap in a keyboard-first
@@ -138,7 +147,7 @@ which:
 | `main.rs` | the window: what is built at startup, and how a keystroke reaches an action |
 | `shell.rs` | what the program knows while it runs — the settings, the queue, the listings in flight, the watches — and the machinery every action shares |
 | `actions.rs` | what each key *does*, and the one table mapping an `Action` onto it |
-| `dialogs/` | the shell every window is built from, plus a file each for the four with state of their own: the progress bar, the viewer, the search, the multi-rename |
+| `dialogs/` | the shell every window is built from, plus a file each for the five with state of their own: the progress bar, the viewer, the search, the multi-rename, the favourites |
 
 `Shell`'s fields are `pub(crate)` rather than private, which is the honest
 shape: two panes, a queue, a keymap and the settings are one object the crate

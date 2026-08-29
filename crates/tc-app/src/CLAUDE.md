@@ -13,7 +13,7 @@ for every answer. **Nothing here touches the filesystem directly.**
 | `actions.rs` | what each key *does*: one function per action, and the table that maps one to the other |
 | `keymap.rs` | which key is which action, the defaults, and the `[keys]` overrides |
 | `pane.rs` | one pane: the widget, its listing, its backend, and the archives it walked into |
-| [dialogs/](dialogs/) | the modal windows — one shell, four windows with state of their own |
+| [dialogs/](dialogs/) | the modal windows — one shell, five windows with state of their own |
 | `navigation.rs` | where a navigation keystroke leads — pure, over a `Listing` |
 | `jobs.rs` | what a file-operation keystroke asks for — pure, over a `Listing` and the typed text |
 | `command_line.rs` | the entry at the bottom, and what a typed line means |

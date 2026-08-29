@@ -1,14 +1,13 @@
 //! The `Ctrl+D` window: the directories worth keeping, and getting to one.
 //!
 //! A modal window rather than the dropdown Total Commander uses, for the
-//! reason the drive list is one: a GTK popover is not a window the end-to-end
-//! suite can find or send keys to, and a chooser that cannot be tested through
-//! a real key press is exactly the kind of thing that ships broken
-//! ([`docs/ui-shell.md`]).
+//! reason [`super::choose_one`] gives.
 //!
 //! **The list is maintained from inside itself**, which is why this is a
-//! module and not another `choose_one`: the window outlives the choice, and
-//! the rows change under it.
+//! module and not another `choose_one`: that one hands back a value and
+//! closes, and this window outlives its own choice — the rows change under
+//! it. What the two share, they share as code: [`super::labelled_row`] and
+//! [`super::list_scroller`].
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -73,8 +72,11 @@ pub fn open(parent: &impl IsA<gtk::Window>, favourites: Vec<Favourite>, hooks: H
         let index = row.index() as usize;
         // By index rather than by widget: two favourites may carry the same
         // name, and the index is what actually identifies the choice.
-        if let Some(favourite) = activated.borrow().get(index) {
-            let target = favourite.path();
+        //
+        // Read out and the borrow dropped before the hook runs, which is the
+        // rule this crate keeps everywhere a callback can reach back in.
+        let chosen = activated.borrow().get(index).map(Favourite::path);
+        if let Some(target) = chosen {
             closing.close();
             (acting.go)(target);
             return;
@@ -82,6 +84,10 @@ pub fn open(parent: &impl IsA<gtk::Window>, favourites: Vec<Favourite>, hooks: H
         // Past the end is the one command row.
         match (acting.add)() {
             Ok(list) => {
+                // The last row, which is the one just added — or, when the
+                // directory was already there and adding did nothing, the
+                // last existing one. Landing on it either way is right: it
+                // says "this is the row you meant".
                 let added = list.len().saturating_sub(1);
                 *activated.borrow_mut() = list;
                 saying.set_visible(false);
@@ -108,10 +114,15 @@ pub fn open(parent: &impl IsA<gtk::Window>, favourites: Vec<Favourite>, hooks: H
         };
         // Delete on the command row is not a row to remove, and pressing it
         // there should do nothing rather than take the row above.
-        let Some(target) = removing.borrow().get(index).map(Favourite::path) else {
+        let chosen = removing.borrow().get(index).map(Favourite::path);
+        let Some(target) = chosen else {
             return glib::Propagation::Proceed;
         };
-        *removing.borrow_mut() = (acting.remove)(target);
+        // Into a local first: assigning through `borrow_mut()` would hold the
+        // borrow while the hook runs, which is the shape this crate does not
+        // write even where it happens to be safe today.
+        let left = (acting.remove)(target);
+        *removing.borrow_mut() = left;
         saying.set_visible(false);
         // The row that moved up into the gap, so holding Delete clears the
         // list from wherever it started rather than jumping to the top.

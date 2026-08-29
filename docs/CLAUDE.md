@@ -67,10 +67,9 @@ cross-references instead of duplication.
   | [phase 6 — archives](plans/archive/2026-08-28-phase6-archives.md) | archives as directories, unpacking through the copy engine, `Alt+F5` to pack |
   | [phase 7 — the audit](plans/archive/2026-08-29-phase7-refactoring-audit.md) | the closing sweep: rules that drifted, files whose names stopped describing them, the documentation pass |
   | [architecture and redundancy review](plans/archive/2026-08-29-architecture-and-redundancy-review.md) | what a whole-codebase read found after phase 7: nine findings, all implemented, plus what it checked and found sound, the one candidate finding that did not survive checking, and a § 7 report card on where the work deviated from the proposal |
+  | [favourite directories](plans/archive/2026-08-29-favourite-directories.md) | Total Commander's `Ctrl+D` hotlist: the `[[favourites]]` setting, the window that edits its own list, and what the probes were worth |
 
-  One plan is **active**:
-  [favourite directories](plans/2026-08-29-favourite-directories.md) —
-  Total Commander's `Ctrl+D` hotlist.
+  No plan is currently active.
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
