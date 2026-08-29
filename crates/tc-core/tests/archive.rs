@@ -8,13 +8,18 @@
 
 mod common;
 
+use common::delegate_vfs;
+
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use tc_core::archive::{format_for, ArchiveFs, Format};
-use tc_core::vfs::{Attributes, Entry, EntryKind, LocalFs, VfsError, VfsPath, VirtualFs};
+use tc_core::ops::{
+    self, Answer, CancelToken, Conflict, ConflictResolver, Destination, Job, Report, Silent,
+};
+use tc_core::vfs::{Attributes, Entry, EntryKind, LocalFs, Store, VfsError, VfsPath, VirtualFs};
 use tempfile::TempDir;
 
 /// One entry to put in a test archive.
@@ -114,6 +119,10 @@ impl Counting {
 }
 
 impl VirtualFs for Counting {
+    fn store(&self) -> Store {
+        Store::LOCAL
+    }
+
     fn read_at(&self, _path: &VfsPath, offset: u64, len: usize) -> Result<Vec<u8>, VfsError> {
         self.reads.fetch_add(1, Ordering::Relaxed);
         let from = (offset as usize).min(self.bytes.len());
@@ -660,6 +669,286 @@ fn a_window_of_a_stored_entry_does_not_read_everything_before_it() {
         1,
         "a window near the end of a stored entry read the whole entry"
     );
+}
+
+#[test]
+fn unpacking_an_archive_conserves_every_file_byte_and_name() {
+    // The pack-and-unpack roundtrip, with the copy engine doing the unpacking
+    // and no idea that it is: `ops::run` reads one backend and writes another,
+    // which is the whole reason it takes two.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    let into = dir.path().join("into");
+    std::fs::create_dir(&into).unwrap();
+    std::fs::write(dir.path().join("t.zip"), zip_of_tree(&tree)).unwrap();
+
+    let archive = open_container(dir.path(), "t.zip");
+    unpack(&archive, &LocalFs::vfs_path(&into));
+
+    assert_eq!(
+        common::snapshot(&LocalFs, &LocalFs::vfs_path(&into)),
+        common::snapshot(&LocalFs, &LocalFs::vfs_path(&tree)),
+        "what came out is not what went in"
+    );
+}
+
+#[test]
+fn moving_out_of_an_archive_takes_nothing_out_of_it() {
+    // A move is a copy and then a delete, and an archive cannot be deleted
+    // from. What must not happen is the copy succeeding and the entry
+    // vanishing anyway, or the failure being swallowed so the user believes
+    // the archive was emptied.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    let into = dir.path().join("into");
+    std::fs::create_dir(&into).unwrap();
+    std::fs::write(dir.path().join("t.zip"), zip_of_tree(&tree)).unwrap();
+
+    let archive = open_container(dir.path(), "t.zip");
+    let before = common::snapshot(&archive, &VfsPath::root());
+    let report = transfer(&archive, &LocalFs::vfs_path(&into), true);
+
+    assert_eq!(
+        common::snapshot(&archive, &VfsPath::root()),
+        before,
+        "the archive lost something"
+    );
+    assert_eq!(
+        common::snapshot(&LocalFs, &LocalFs::vfs_path(&into)),
+        common::snapshot(&LocalFs, &LocalFs::vfs_path(&tree)),
+        "the copy half of the move did not happen"
+    );
+    assert!(
+        report
+            .failures
+            .iter()
+            .any(|(_, error)| *error == VfsError::ReadOnly),
+        "the archive silently accepted a delete: {report:?}"
+    );
+}
+
+#[test]
+fn a_move_between_two_stores_never_renames() {
+    // The failure this guards against is not slowness. A move's fast path is
+    // one `rename`, and running it across two backends hands the *source's*
+    // path to the *target* — `/a.txt` inside an archive naming a file at the
+    // root of the disk. The paths look alike and address different files, so
+    // the shortcut has to be skipped rather than merely fail.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    common::build_tree(&tree);
+    let into = dir.path().join("into");
+    std::fs::create_dir(&into).unwrap();
+    std::fs::write(dir.path().join("t.zip"), zip_of_tree(&tree)).unwrap();
+
+    let archive = open_container(dir.path(), "t.zip");
+    let watched = Renames::over(LocalFs);
+    let sources = top_level(&archive);
+    ops::run(
+        &Job::Move {
+            sources,
+            destination: Destination::Into(LocalFs::vfs_path(&into)),
+        },
+        &archive,
+        &watched,
+        &mut Refuse,
+        &mut Silent,
+        &CancelToken::new(),
+    );
+
+    assert_eq!(
+        watched.attempts(),
+        0,
+        "a path from the archive was handed to the local filesystem"
+    );
+}
+
+#[test]
+fn a_move_within_one_store_still_takes_the_shortcut() {
+    // The control for the test above: the guard must not have turned the fast
+    // path off for the case it exists for.
+    let dir = TempDir::new().unwrap();
+    common::build_tree(&dir.path().join("tree"));
+    let into = dir.path().join("into");
+    std::fs::create_dir(&into).unwrap();
+    let watched = Renames::over(LocalFs);
+
+    ops::run(
+        &Job::Move {
+            sources: vec![LocalFs::vfs_path(&dir.path().join("tree"))],
+            destination: Destination::Into(LocalFs::vfs_path(&into)),
+        },
+        &watched,
+        &watched,
+        &mut Refuse,
+        &mut Silent,
+        &CancelToken::new(),
+    );
+
+    assert_eq!(watched.attempts(), 1, "the whole tree was copied instead");
+}
+
+#[test]
+fn unpacking_into_a_root_is_not_mistaken_for_a_copy_onto_itself() {
+    // The engine refuses a copy whose target is its own source. Between two
+    // stores that rule has nothing to decide: `/notes.txt` in an archive and
+    // `/notes.txt` on the destination are two different files that happen to
+    // be spelled the same, and applying the rule anyway would refuse an
+    // ordinary unpack into the root of somewhere.
+    let dir = TempDir::new().unwrap();
+    let tree = dir.path().join("tree");
+    std::fs::create_dir(&tree).unwrap();
+    std::fs::write(tree.join("notes.txt"), "packed").unwrap();
+    let into = dir.path().join("into");
+    std::fs::create_dir(&into).unwrap();
+    std::fs::write(dir.path().join("t.zip"), zip_of_tree(&tree)).unwrap();
+
+    let archive = open_container(dir.path(), "t.zip");
+    let target = common::Rooted::over(LocalFs::vfs_path(&into));
+    let report = ops::run(
+        &Job::Copy {
+            sources: top_level(&archive),
+            // The destination *is* the source's own path, spelled the same.
+            destination: Destination::Into(VfsPath::root()),
+        },
+        &archive,
+        &target,
+        &mut Refuse,
+        &mut Silent,
+        &CancelToken::new(),
+    );
+
+    assert!(report.is_clean(), "the unpack was refused: {report:?}");
+    assert_eq!(
+        std::fs::read_to_string(into.join("notes.txt")).unwrap(),
+        "packed"
+    );
+}
+
+/// The top-level entries of an archive, as the paths a job takes.
+fn top_level(archive: &ArchiveFs) -> Vec<VfsPath> {
+    archive
+        .read_dir(&VfsPath::root())
+        .unwrap()
+        .into_iter()
+        .map(|entry| VfsPath::root().child(&entry.name))
+        .collect()
+}
+
+/// Copies everything in `archive` into `into`, and insists it went cleanly.
+fn unpack(archive: &ArchiveFs, into: &VfsPath) {
+    let report = transfer(archive, into, false);
+    assert!(
+        report.is_clean(),
+        "the unpack did not run cleanly: {report:?}"
+    );
+}
+
+fn transfer(archive: &ArchiveFs, into: &VfsPath, moving: bool) -> Report {
+    let sources = top_level(archive);
+    let destination = Destination::Into(into.clone());
+    let job = if moving {
+        Job::Move {
+            sources,
+            destination,
+        }
+    } else {
+        Job::Copy {
+            sources,
+            destination,
+        }
+    };
+    ops::run(
+        &job,
+        archive,
+        &LocalFs,
+        &mut Refuse,
+        &mut Silent,
+        &CancelToken::new(),
+    )
+}
+
+/// A resolver for jobs that must not meet a conflict at all.
+struct Refuse;
+
+impl ConflictResolver for Refuse {
+    fn resolve(&mut self, conflict: &Conflict) -> Answer {
+        panic!("unexpected conflict: {conflict:?}");
+    }
+}
+
+/// A `LocalFs` that counts the renames attempted through it.
+struct Renames {
+    inner: LocalFs,
+    attempts: AtomicUsize,
+}
+
+impl Renames {
+    fn over(inner: LocalFs) -> Renames {
+        Renames {
+            inner,
+            attempts: AtomicUsize::new(0),
+        }
+    }
+
+    fn attempts(&self) -> usize {
+        self.attempts.load(Ordering::Relaxed)
+    }
+
+    fn rename_impl(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
+        self.attempts.fetch_add(1, Ordering::Relaxed);
+        self.inner.rename(from, to)
+    }
+
+    fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
+        self.inner.read_dir(path)
+    }
+
+    fn open_read_impl(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
+        self.inner.open_read(path)
+    }
+
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
+
+    fn trash_impl(&self, path: &VfsPath) -> Result<(), VfsError> {
+        self.inner.trash(path)
+    }
+}
+
+delegate_vfs!(Renames);
+
+/// A zip of everything below `root`, written by the `zip` crate rather than by
+/// this project — which has no packer yet, and which is the point: the tree
+/// that comes out has to be the tree that went in whoever put it there.
+fn zip_of_tree(root: &std::path::Path) -> Vec<u8> {
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+    let mut queue = vec![(root.to_path_buf(), String::new())];
+    while let Some((directory, prefix)) = queue.pop() {
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let entry = entry.unwrap();
+            let name = format!("{prefix}{}", entry.file_name().to_string_lossy());
+            if entry.file_type().unwrap().is_dir() {
+                writer.add_directory(&name, options).unwrap();
+                queue.push((entry.path(), format!("{name}/")));
+            } else {
+                writer.start_file(&name, options).unwrap();
+                writer
+                    .write_all(&std::fs::read(entry.path()).unwrap())
+                    .unwrap();
+            }
+        }
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+/// Opens `name` in `directory` as an archive.
+fn open_container(directory: &std::path::Path, name: &str) -> ArchiveFs {
+    ArchiveFs::open(Arc::new(LocalFs), &LocalFs::vfs_path(directory).child(name)).unwrap()
 }
 
 /// The error from opening something that will not open.

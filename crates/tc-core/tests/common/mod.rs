@@ -112,6 +112,12 @@ pub fn exists(fs: &dyn VirtualFs, path: &VfsPath) -> bool {
 macro_rules! delegate_vfs {
     ($target:ty) => {
         impl tc_core::vfs::VirtualFs for $target {
+            // A decorator is the backend it wraps, so it addresses the same
+            // store. Saying otherwise would make every test that wraps one
+            // side of a transfer look like a cross-store job.
+            fn store(&self) -> tc_core::vfs::Store {
+                self.inner.store()
+            }
             fn read_dir(
                 &self,
                 path: &tc_core::vfs::VfsPath,
@@ -191,3 +197,97 @@ macro_rules! delegate_vfs {
 }
 
 pub(crate) use delegate_vfs;
+
+/// A writable backend whose root is a directory somewhere else.
+///
+/// What lets a test say "unpack into `/`" without meaning the machine's own
+/// root. Some engine rules compare a source path with a target path, and those
+/// rules only have anything to decide when the two paths *look* alike — which,
+/// between an archive and a real filesystem, needs one of them to be rooted
+/// where the other is. Every path is rebased and everything else is
+/// `LocalFs`.
+///
+/// Its own [`Store`], because that is what it is: different storage, reached
+/// by different paths, which is exactly the situation the rules are about.
+pub struct Rooted {
+    base: VfsPath,
+    store: tc_core::vfs::Store,
+}
+
+impl Rooted {
+    pub fn over(base: VfsPath) -> Rooted {
+        Rooted {
+            base,
+            store: tc_core::vfs::Store::fresh(),
+        }
+    }
+
+    fn at(&self, path: &VfsPath) -> VfsPath {
+        let mut rebased = self.base.clone();
+        for component in path.components() {
+            rebased = rebased.child(component);
+        }
+        rebased
+    }
+}
+
+impl VirtualFs for Rooted {
+    fn store(&self) -> tc_core::vfs::Store {
+        self.store
+    }
+    fn read_dir(&self, path: &VfsPath) -> Result<Vec<tc_core::vfs::Entry>, tc_core::vfs::VfsError> {
+        LocalFs.read_dir(&self.at(path))
+    }
+    fn stat(&self, path: &VfsPath) -> Result<tc_core::vfs::Entry, tc_core::vfs::VfsError> {
+        LocalFs.stat(&self.at(path))
+    }
+    fn create_dir(&self, path: &VfsPath) -> Result<(), tc_core::vfs::VfsError> {
+        LocalFs.create_dir(&self.at(path))
+    }
+    fn remove_dir(&self, path: &VfsPath) -> Result<(), tc_core::vfs::VfsError> {
+        LocalFs.remove_dir(&self.at(path))
+    }
+    fn remove_file(&self, path: &VfsPath) -> Result<(), tc_core::vfs::VfsError> {
+        LocalFs.remove_file(&self.at(path))
+    }
+    fn rename(&self, from: &VfsPath, to: &VfsPath) -> Result<(), tc_core::vfs::VfsError> {
+        LocalFs.rename(&self.at(from), &self.at(to))
+    }
+    fn open_read(
+        &self,
+        path: &VfsPath,
+    ) -> Result<Box<dyn std::io::Read + Send>, tc_core::vfs::VfsError> {
+        LocalFs.open_read(&self.at(path))
+    }
+    fn read_at(
+        &self,
+        path: &VfsPath,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, tc_core::vfs::VfsError> {
+        LocalFs.read_at(&self.at(path), offset, len)
+    }
+    fn create_file(
+        &self,
+        path: &VfsPath,
+    ) -> Result<Box<dyn std::io::Write + Send>, tc_core::vfs::VfsError> {
+        LocalFs.create_file(&self.at(path))
+    }
+    fn set_modified(
+        &self,
+        path: &VfsPath,
+        time: std::time::SystemTime,
+    ) -> Result<(), tc_core::vfs::VfsError> {
+        LocalFs.set_modified(&self.at(path), time)
+    }
+    fn set_attributes(
+        &self,
+        path: &VfsPath,
+        attributes: tc_core::vfs::Attributes,
+    ) -> Result<(), tc_core::vfs::VfsError> {
+        LocalFs.set_attributes(&self.at(path), attributes)
+    }
+    fn trash(&self, path: &VfsPath) -> Result<(), tc_core::vfs::VfsError> {
+        LocalFs.trash(&self.at(path))
+    }
+}

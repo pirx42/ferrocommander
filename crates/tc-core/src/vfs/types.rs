@@ -83,6 +83,38 @@ impl Entry {
     }
 }
 
+/// Which storage a backend addresses.
+///
+/// Two backends reporting the same store speak the same paths: a `rename` from
+/// one to the other means something, and a path in one can be compared with a
+/// path in the other. Two reporting different stores share nothing but the
+/// shape of a path, and handing one's path to the other addresses a completely
+/// different file that happens to be spelled the same.
+///
+/// That is not hypothetical. A move's fast path is a single `rename`, and
+/// running it across two stores would hand `/packed.txt` — a name inside an
+/// archive — to the local filesystem, where it means a file at the root of the
+/// disk. Comparable identity is what stops that, and it is a property of the
+/// backend, so the backend is what reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Store(u64);
+
+impl Store {
+    /// The one local filesystem. A constant, because every `LocalFs` addresses
+    /// the same files.
+    pub const LOCAL: Store = Store(0);
+
+    /// A store of its own, different from every other that has been made.
+    ///
+    /// What each opened archive gets: two archives are two stores, and so are
+    /// the same archive opened twice — which is right, because a path moved
+    /// between them would have to go through the container either way.
+    pub fn fresh() -> Store {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        Store(NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
 /// A place the drive bar can send a pane.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {

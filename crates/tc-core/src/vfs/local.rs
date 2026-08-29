@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use super::constants::ROOT;
 use super::path::VfsPath;
 use super::platform;
-use super::types::{Attributes, Entry, EntryKind, SymlinkTarget, VfsError};
+use super::types::{Attributes, Entry, EntryKind, Store, SymlinkTarget, VfsError};
 use super::VirtualFs;
 
 /// Size reported for directories.
@@ -43,6 +43,11 @@ impl LocalFs {
 }
 
 impl VirtualFs for LocalFs {
+    /// Every `LocalFs` addresses the same files, so they are one store.
+    fn store(&self) -> Store {
+        Store::LOCAL
+    }
+
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         if path.is_root() {
             if let Some(entries) = platform::root_entries() {

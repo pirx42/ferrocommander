@@ -23,7 +23,7 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use crate::vfs::{Attributes, Entry, VfsError, VfsPath, VirtualFs};
+use crate::vfs::{Attributes, Entry, Store, VfsError, VfsPath, VirtualFs};
 
 use constants::{TAR_EXTENSION, TAR_GZ_SUFFIX, TGZ_EXTENSION, ZIP_EXTENSION};
 use index::Index;
@@ -74,6 +74,10 @@ pub struct ArchiveFs {
     container: Container,
     wrapper: Wrapper,
     index: Index,
+    /// A store of its own, so nothing hands a path of this archive's to
+    /// another backend — where the same spelling means a completely different
+    /// file (see [`Store`]).
+    store: Store,
 }
 
 impl ArchiveFs {
@@ -95,6 +99,7 @@ impl ArchiveFs {
             container,
             wrapper,
             index,
+            store: Store::fresh(),
         })
     }
 
@@ -104,6 +109,10 @@ impl ArchiveFs {
 }
 
 impl VirtualFs for ArchiveFs {
+    fn store(&self) -> Store {
+        self.store
+    }
+
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
         // Missing and not-a-directory are told apart, because the listing
         // layer shows them differently and "not found" for a file that is

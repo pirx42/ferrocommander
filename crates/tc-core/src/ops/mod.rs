@@ -184,10 +184,21 @@ impl Run<'_> {
                 // the entire cost of an operation that is otherwise instant —
                 // and on a large tree the walk is what the user would feel.
                 let sources = self.refuse_self_targets(sources, destination);
-                let remaining = self.rename_what_it_can(&sources, destination);
-                if remaining.is_empty() {
-                    return;
-                }
+                // The shortcut is a single `rename`, which only means anything
+                // within one store. Across two, the source path handed to the
+                // target backend addresses a different file that happens to be
+                // spelled the same — `/packed.txt` inside an archive naming a
+                // file at the root of the disk — so it is skipped entirely and
+                // the move is a copy followed by a delete.
+                let remaining = if self.one_store() {
+                    let remaining = self.rename_what_it_can(&sources, destination);
+                    if remaining.is_empty() {
+                        return;
+                    }
+                    remaining
+                } else {
+                    sources
+                };
                 let plan = plan::plan_transfer(self.source_fs, &remaining, |source| {
                     destination.of(source)
                 });
@@ -282,6 +293,13 @@ impl Run<'_> {
         sources: &[VfsPath],
         destination: &Destination,
     ) -> Vec<VfsPath> {
+        // Between two stores the question does not arise: the paths look
+        // alike and address different files, so `/a` in an archive copied to
+        // `/a` on the disk is not a copy onto itself and refusing it would
+        // refuse a perfectly ordinary unpack.
+        if !self.one_store() {
+            return sources.to_vec();
+        }
         let mut allowed = Vec::new();
         for source in sources {
             let target = destination.of(source);
@@ -298,6 +316,11 @@ impl Run<'_> {
             }
         }
         allowed
+    }
+
+    /// Whether both sides of this job address the same storage.
+    fn one_store(&self) -> bool {
+        self.source_fs.store() == self.target_fs.store()
     }
 
     /// Moves what a single `rename` can move, and reports what is left.

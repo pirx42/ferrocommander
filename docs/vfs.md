@@ -70,6 +70,20 @@ consulting the filesystem. Going up from `/link/sub` therefore returns to
 target's parent. `..` cannot escape the root, and no input is invalid, so the
 type has no error case and needs no `Result`.
 
+## `Store` — which storage a backend addresses
+
+Every backend reports one. Two backends reporting the same `Store` speak the
+same paths: a `rename` from one to the other means something, and comparing a
+path in one with a path in the other is a real comparison. Two reporting
+different stores share nothing but the shape of a path.
+
+`LocalFs` is one store, always. Each opened archive is a store of its own.
+
+This is not bookkeeping. A move's fast path is a single `rename`, and running
+it across two stores hands the source's path to the target backend — where
+`/packed.txt` from inside an archive names a file at the root of the disk. See
+[archives.md](archives.md) and [ops.md](ops.md).
+
 ## `Entry`
 
 `name`, `kind`, `size`, `modified`, `attributes`, `hidden`.

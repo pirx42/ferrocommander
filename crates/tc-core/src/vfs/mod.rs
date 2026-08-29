@@ -16,7 +16,7 @@ use std::time::SystemTime;
 
 pub use local::LocalFs;
 pub use path::VfsPath;
-pub use types::{Attributes, Entry, EntryKind, Mount, SymlinkTarget, VfsError};
+pub use types::{Attributes, Entry, EntryKind, Mount, Store, SymlinkTarget, VfsError};
 
 /// A [`VfsPath`] as the operating system spells it.
 ///
@@ -81,6 +81,12 @@ pub fn render_attributes(attributes: Attributes) -> String {
 /// front that it needs interior mutability instead of discovering it half
 /// written.
 pub trait VirtualFs: Send + Sync {
+    /// Which storage this backend addresses — see [`Store`].
+    ///
+    /// Asked before anything hands one backend's path to another: the answer
+    /// decides whether the two are talking about the same files at all.
+    fn store(&self) -> Store;
+
     /// Lists a directory. The order is unspecified — sorting belongs to the
     /// listing layer.
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError>;

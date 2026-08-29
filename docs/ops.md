@@ -144,6 +144,12 @@ destroy data rather than merely failing:
 "Inside" compares whole path components, so `/x/treeish` is not inside
 `/x/tree` however alike the strings look.
 
+**Neither question arises between two stores.** `/notes.txt` in an archive and
+`/notes.txt` at the destination are two different files that happen to be
+spelled the same, and refusing on that resemblance would refuse an ordinary
+unpack into the root of somewhere. Both refusals are skipped when the two
+backends report different [`Store`](vfs.md)s.
+
 ## Symlinks
 
 Deleting and copying treat them differently, and both are deliberate:
@@ -231,12 +237,22 @@ was ever truncated and the rollback could have been deleted outright with all
 whole buffer, which is the only moment a destination is genuinely half
 written.
 
-## Known gap
+## A move across two stores
 
-**Move assumes one store.** The rename fast path and the `CrossDevice`
-fallback both address a single backend. Phase 2's UI has exactly one, so it
-holds; phase 6 introduces a second and is where a cross-store move has to be
-told apart from a same-store one.
+The fast path is a single `rename`, which only means anything within one
+store: across two, the source's path handed to the target backend addresses a
+different file that is spelled the same — `/packed.txt` inside an archive
+naming a file at the root of the disk. So it is skipped, by comparing the two
+backends' [`Store`](vfs.md), and the move is a copy followed by a delete.
+
+Where the source cannot be deleted from — an [archive](archives.md) — the copy
+half succeeds and the delete half reports `ReadOnly` per entry. Everything
+comes out, nothing is lost, and the failure list says which half did not
+happen. That is the honest outcome for an operation half of which is
+impossible on that backend.
+
+Pinned by a test that counts renames rather than by one that checks a result:
+zero across stores, one within.
 
 ## The progress window says how fast and how much longer
 

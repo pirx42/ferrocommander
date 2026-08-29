@@ -84,6 +84,35 @@ nearest ancestor that reads — which is the directory holding the archive. So a
 restart lands beside the archive rather than inside it, and the settings are
 rewritten to say so.
 
+## Unpacking is the copy engine, and nothing else
+
+F5 out of an archive is `ops::run` reading one backend and writing another,
+which is what it has taken two backends for since phase 2. The progress bar,
+the conflict question, the failure list and the cancel are the ones they always
+were, and the totals come from the archive's own recorded sizes — the
+uncompressed ones — so the bar means what it always meant.
+
+**Two backends are not one filesystem, and the engine now knows it.** Every
+backend reports a `Store`, and two backends reporting different stores share
+nothing but the shape of a path. That settles two rules that were quietly
+wrong the moment a second backend existed:
+
+- **A move's fast path is a single `rename`, and it is skipped across stores.**
+  Running it would hand the *source's* path to the *target* backend —
+  `/packed.txt` inside an archive naming a file at the root of the disk. The
+  paths look alike and address different files, so the shortcut has to be
+  skipped rather than merely allowed to fail. Pinned by a test that counts
+  renames: zero across stores, one within.
+- **"Copying onto itself" is a question that does not arise across stores.**
+  `/notes.txt` in an archive and `/notes.txt` at the destination are two
+  different files, and applying the rule anyway would refuse an ordinary
+  unpack into the root of somewhere.
+
+A **move** out of an archive therefore copies and then cannot delete: every
+entry comes out, and the archive reports `ReadOnly` for the half it will not
+do. Nothing is lost and the reason is on screen, which is the honest outcome
+for an operation half of which is impossible.
+
 ## What does not work inside an archive, and says so
 
 - **The directory watcher is off.** There is no operating-system path to watch,
