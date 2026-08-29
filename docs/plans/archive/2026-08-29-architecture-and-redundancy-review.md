@@ -5,10 +5,10 @@
 `git log --grep "architecture-and-redundancy-review"`)
 **Scope:** the whole of `crates/`, 14 139 lines of code and 9 730 of tests
 **Follows:** the phase 7 audit
-([archive/2026-08-29-phase7-refactoring-audit.md](archive/2026-08-29-phase7-refactoring-audit.md)),
+([archive/2026-08-29-phase7-refactoring-audit.md](2026-08-29-phase7-refactoring-audit.md)),
 and looks for what it did not catch.
 
-> Skill [47](../skills/47-architecture-audit-with-subagents.md) asks for
+> Skill [47](../../skills/47-architecture-audit-with-subagents.md) asks for
 > parallel subagents on a codebase this size. This session is configured
 > without them, so the review was done serially — which means the code was
 > read rather than sampled, and every finding below was checked against it.
@@ -25,7 +25,7 @@ Listed first, and specifically, so that nobody "fixes" it:
 - **No panic paths in shipped code**, with one deliberate exception: seven
   `expect`s in `pane.rs`, all GTK downcasts of widgets the same file just
   built, each carrying the invariant it asserts. That is skill
-  [19](../skills/19-no-defensive-programming.md) applied correctly, not an
+  [19](../../skills/19-no-defensive-programming.md) applied correctly, not an
   oversight.
 - **No duplicated helper functions** between the crates, and exactly one
   unused constant in 149 + tc-core's own (§ 3.7).
@@ -69,13 +69,13 @@ pub fn spawn_from(
 `spawn_enter` moves to `archive` (or to `tc-app`'s `navigation`, which already
 decides that a file *is* an archive). `listing` then imports nothing but `vfs`
 and `glob`, and the claim in
-[crates/CLAUDE.md](../../crates/CLAUDE.md) is true without a footnote.
+[crates/CLAUDE.md](../../../crates/CLAUDE.md) is true without a footnote.
 
 *Cost:* ~1 h. No behaviour change; the three existing `spawn_*` tests cover it.
 
 ### 2.2 `ops` knows more about archives than its own docs admit
 
-[ops.md](../ops.md) says *"Nothing about an archive format reaches this
+[ops.md](../../ops.md) says *"Nothing about an archive format reaches this
 module."* `ops/mod.rs` imports `archive::{self, Packer}` and
 `archive::constants::PACKING_SUFFIX`, and `Run::pack` calls
 `archive::format_for` to turn a file name into a `Format`. The dependency is
@@ -92,7 +92,7 @@ one-directional and small, but the sentence is stronger than the code.
   where the naming rule lives; it does not know what any of them are.* ~5 min.
 
 (a) is the more correct variant (skill
-[41](../skills/41-more-correct-variant.md)); (b) is honest and free. What must
+[41](../../skills/41-more-correct-variant.md)); (b) is honest and free. What must
 not survive is a doc that overstates a boundary — that is how the next person
 puts something else behind it.
 
@@ -170,7 +170,7 @@ field list say which state is shared and which is the shell's own business.
   the token.
 
 Same three responsibilities, two shapes, **two cancel conventions**. This is
-the clearest skill [44](../skills/44-no-redundancy.md) finding in the codebase,
+the clearest skill [44](../../skills/44-no-redundancy.md) finding in the codebase,
 and it is not cosmetic: a change to how progress is counted — coalescing events
 to cut channel traffic is the obvious one, and the prime directive makes it
 likely — has to be made twice, and the second one can be missed.
@@ -279,7 +279,7 @@ two keys a user could see working and could not rebind.
 
 **It was wrong.** Both are present; `rustfmt` had wrapped their tuples across
 lines and the single-line grep did not see them. This is exactly what skill
-[58](../skills/58-block-extraction-over-single-line-grep.md) is for, and it is
+[58](../../skills/58-block-extraction-over-single-line-grep.md) is for, and it is
 recorded here rather than deleted because a review that only lists its hits is
 not a review anybody can calibrate.
 
@@ -296,10 +296,10 @@ enum.
 ## 5. What this review did not cover
 
 - **Performance.** Nothing here was re-measured; the figures in
-  [performance.md](../performance.md) stand from phase 6. § 3.1's merge touches
+  [performance.md](../../performance.md) stand from phase 6. § 3.1's merge touches
   the copy loop, so it wants the copy benchmark re-run, not assumed.
 - **Windows and macOS.** Both are in
-  [future-improvements.md](../future-improvements.md); nothing here changes
+  [future-improvements.md](../../future-improvements.md); nothing here changes
   either.
 - **The GTK layer's own correctness.** Verified by the end-to-end suite and by
   running the program, not by reading — and the text a person reads is still
@@ -307,7 +307,7 @@ enum.
 
 ## 6. Order, and effort
 
-Factor 0.25 per skill [45](../skills/45-calibrate-effort-estimates.md).
+Factor 0.25 per skill [45](../../skills/45-calibrate-effort-estimates.md).
 
 | | Finding | Why this order | Corrected |
 |---|---|---|---|
@@ -335,14 +335,14 @@ changing one of these files knows what was already noticed.
 One commit per item, coverage checked before each one: for every finding the
 test that pinned the current behaviour was found first and **probed** — the
 effect disabled, the suite re-run — and only a probe that bit counted as
-coverage (skill [59](../skills/59-mutation-probe-over-coverage-percent.md)).
+coverage (skill [59](../../skills/59-mutation-probe-over-coverage-percent.md)).
 Where nothing bit, the test came first, in its own commit (`5c601ef`).
 
 | | Finding | Commit | Deviation from the proposal |
 |---|---|---|---|
 | 0 | coverage pre-check | `5c601ef` | three end-to-end tests and one core test added where a probe found nothing biting |
 | 1 | § 4 `Action::ALL` | `c02e3b0`, `ca604af` | `ALL` is `#[cfg(test)]`, not `pub` — see below |
-| 2 | § 3.1 one copy loop | `ad25acc` | none; the benchmark was re-run and found **no measurable change** ([performance.md](../performance.md)) |
+| 2 | § 3.1 one copy loop | `ad25acc` | none; the benchmark was re-run and found **no measurable change** ([performance.md](../../performance.md)) |
 | 3 | § 2.3 `Contents` | `1c13d3b` | none |
 | 4 | § 2.1 `listing` | `0da7b3d` | none |
 | 5 | §§ 3.2, 3.3 | `72d04fb` | **nine** deletions, not ten: `exchange_with`'s `other.adopt_selection()` is not the same call, and `marking` does not adopt |
@@ -353,7 +353,7 @@ Where nothing bit, the test came first, in its own commit (`5c601ef`).
 
 **§ 2.4 was declined, as proposed**, and the threshold that would change that
 answer is now written where somebody will meet it:
-[listing.md](../listing.md) § "When the selection should become its own type".
+[listing.md](../../listing.md) § "When the selection should become its own type".
 
 ### The one mistake worth recording
 
@@ -363,7 +363,7 @@ green test run. Fixed in `ca604af`, and the cause fixed with it:
 `scripts/green-gate.sh` now runs all six steps, reports each by name, and
 fails loudly. Every commit after it went through that script.
 
-### Audit phase (skill [49](../skills/49-final-phase-refactoring-audit.md))
+### Audit phase (skill [49](../../skills/49-final-phase-refactoring-audit.md))
 
 Re-reading the nine commits as one diff found one thing: item 9 created
 `format.rs` for "how a number is written for a person" while leaving
