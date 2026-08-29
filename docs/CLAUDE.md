@@ -70,7 +70,9 @@ cross-references instead of duplication.
   | [favourite directories](plans/archive/2026-08-29-favourite-directories.md) | Total Commander's `Ctrl+D` hotlist: the `[[favourites]]` setting, the window that edits its own list, and what the probes were worth |
   | [branch view](plans/archive/2026-08-29-branch-view.md) | Total Commander's `Ctrl+B`: the walk, the listing that is not a mode, the two keys that read a row's name as something to write, and three tests that were wrong before they were right |
 
-  No plan is currently active.
+  One plan is **active**:
+  [folder sizes](plans/2026-08-29-folder-sizes.md) — `Alt+Shift+Enter`,
+  what a directory row says instead of `<DIR>`.
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
