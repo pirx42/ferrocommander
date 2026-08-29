@@ -41,6 +41,11 @@ pub type Results = async_channel::Receiver<VfsPath>;
 
 /// Walks `root` and sends every match, until it runs out or is cancelled.
 ///
+/// [`crate::branch`] has a walk of the same shape and they are deliberately
+/// two: that one carries a relative prefix and an inherited hidden flag down
+/// the queue and collects whole entries, where this one carries neither and
+/// sends paths. The comment there records the comparison.
+///
 /// The walk is breadth-first through a queue rather than recursive: a
 /// directory tree is user input, and a deep enough one turns recursion into a
 /// stack overflow — which is a crash in a file manager, over somebody else's

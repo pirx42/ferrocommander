@@ -1,6 +1,7 @@
 # Branch view — `Ctrl+B`
 
-**Status:** In Progress — approved 2026-08-29; phase 0 done, phases 1–4 to go
+**Status:** Implemented — all five phases
+(`git log --grep "branch-view"`)
 **Branch:** `claude/next-phase-plan-design-lah4v5`
 
 Total Commander's branch view: one key flattens the whole tree below the pane
@@ -48,7 +49,7 @@ Six more decisions had no reason to bother the owner with:
 ## 2. What this costs the existing code
 
 Checked against the code rather than guessed
-(skill [65](../skills/65-verify-or-ask-never-assume.md)):
+(skill [65](../../skills/65-verify-or-ask-never-assume.md)):
 
 | | State |
 |---|---|
@@ -109,13 +110,13 @@ away something that works. The check is that the name holds a separator.
 ## 4. Phases — one phase, one commit
 
 Docs ride in the commit that changes the behaviour
-(skill [28](../skills/28-docs-in-same-commit.md)).
+(skill [28](../../skills/28-docs-in-same-commit.md)).
 
 ### Phase 0 — coverage pre-check
 
-Skill [43](../skills/43-coverage-before-implementation.md), and probes rather
+Skill [43](../../skills/43-coverage-before-implementation.md), and probes rather
 than reading (skill
-[59](../skills/59-mutation-probe-over-coverage-percent.md)). What is at stake
+[59](../../skills/59-mutation-probe-over-coverage-percent.md)). What is at stake
 is not the new code — it is the seven readers of `name` in § 2, all of which
 this change walks past. So:
 
@@ -155,12 +156,12 @@ invariant re-documented.
 **The walk and `search::spawn`'s walk are the same loop** — a queue, a
 `read_dir`, unreadable skipped, cancel checked twice. If after writing it the
 two really are the same, they become one (skill
-[44](../skills/44-no-redundancy.md)); if the bodies have diverged, they stay
+[44](../../skills/44-no-redundancy.md)); if the bodies have diverged, they stay
 two and the plan says why. That is a judgement to make with both in front of
 you, not now.
 
 **This phase carries a measurement**, because the prime directive says a
-performance claim does ([performance.md](../performance.md)): the branch view
+performance claim does ([performance.md](../../performance.md)): the branch view
 of the 20 000-file tree the benchmark already uses, against the 80 ms it costs
 to list one directory of 50 000.
 
@@ -179,9 +180,9 @@ the easy half.
 
 ### Phase 4 — refactoring audit
 
-Skill [49](../skills/49-final-phase-refactoring-audit.md): the whole change
+Skill [49](../../skills/49-final-phase-refactoring-audit.md): the whole change
 re-read as one diff. Plus the cookbook row in `CLAUDE.md`,
-[listing.md](../listing.md), and `scripts/check-links.py`.
+[listing.md](../../listing.md), and `scripts/check-links.py`.
 
 ## 5. What is deliberately not in this
 
@@ -191,7 +192,7 @@ re-read as one diff. Plus the cookbook row in `CLAUDE.md`,
 - **`Ctrl+Shift+B`, the branch view of the marked entries only.** The same
   machinery over a different root set, once the machinery exists.
 - **Streaming rows in as they are found.** The bigger project that
-  [performance.md](../performance.md) already names; sorting and marking over
+  [performance.md](../../performance.md) already names; sorting and marking over
   a list that is still filling is the hard part, and it is not this feature's
   to solve.
 - **Watching the whole tree.** One inotify watch per directory is a different
@@ -199,7 +200,7 @@ re-read as one diff. Plus the cookbook row in `CLAUDE.md`,
 
 ## 6. Effort
 
-Factor 0.25 per skill [45](../skills/45-calibrate-effort-estimates.md).
+Factor 0.25 per skill [45](../../skills/45-calibrate-effort-estimates.md).
 
 | Phase | Raw | Corrected |
 |---|---|---|
@@ -214,3 +215,79 @@ Phase 3 is the one to watch. The estimate assumes the § 2 table is complete —
 it was built by reading every use of `Entry::name`, but a reader that reaches
 it through a `Listing` method rather than the field would not have shown up in
 that sweep, and the phase 0 probes are partly there to flush one out.
+
+## 7. What was actually done
+
+One commit per phase, and every behavioural claim probed — the effect broken
+on purpose, the suite re-run, and only a probe that bit counted as coverage.
+
+| Phase | Commit | Deviation |
+|---|---|---|
+| 0 — coverage | `2a094a0` | one gap found and closed, four already pinned |
+| 1 — the walk and the listing | `5e67b25` | the two walks stayed two, as § 4 allowed |
+| 2 — the key and the pane | `7f9a7de` | the re-read paths cost more than the plan said — see below |
+| 3 — the seven readers | `14568c7` | the rename refusal is per row, not per view |
+| 4 — audit | this one | three findings |
+
+### What the plan did not see
+
+**Two re-read paths, not none.** § 2 listed what the feature would cost the
+existing code and missed that `reread` (`Ctrl+R` and the watcher) and
+`reload_after_job` both go through `Listing::reload` or `load_nearest`, either
+of which turns a branch listing back into a plain one without saying so. Both
+now walk again. The re-walk is synchronous, which is a real cost and is
+recorded in [performance.md](../../performance.md) rather than hidden: it
+replaces a synchronous re-read of a list the same size, so the two move to a
+worker together or not at all.
+
+**The § 2 table itself held.** Every one of its seven verdicts survived being
+built, and nothing turned up that the sweep over `Entry::name` had missed —
+which was the risk § 6 named, so it is worth recording that it did not
+happen.
+
+### What the probes were worth
+
+- Removing the rename guard turned its test red, which is the point: the `..`
+  guard it joins is *unreachable* and its test stays green without it, and
+  phase 0 re-ran that probe rather than trusting the note in `pane.rs`.
+- Building a copy's destination from the whole path rebuilt the tree under
+  `dst`. That is the mechanism that makes a branch view's copies land flat,
+  and it is one line in `ops` that nothing in this feature touches.
+- Making the walk not descend, and making the post-job reload plain again,
+  each turned exactly the test aimed at them red.
+
+### Three tests that were wrong before they were right
+
+Worth recording, because each was the kind that passes for the wrong reason:
+
+- **The unreadable-directory test** passed with the skip turned into an
+  abort — the closed directory happened to be the last one with anything to
+  lose. It now asks the backend which directory the walk reaches first,
+  closes *that*, and asserts the exact surviving set. It also used
+  `chmod 000`, which stops nothing when the suite runs as root; a decorator
+  does the refusing now.
+- **A path-bar test** was written with a placeholder assertion and deleted
+  rather than kept. The harness cannot read a label — the blind spot phase 0
+  had already recorded.
+- **Two Escape tests** never reached the keymap at all, because the quick
+  filter's field handles Escape itself. They press Return first now, and the
+  probe bites.
+
+A cancel test was also dropped: on a fixture this suite can afford, the walk
+lands before the second keystroke arrives, so pressing Escape into it is a
+race dressed as an assertion. The walk's half of the cancel is pinned
+headlessly; the pane's half — that a landed arrival clears the token, so
+Escape goes back to clearing filters — is pinned end to end.
+
+### Audit phase
+
+- **`branch::spawn` and the pane's re-walk built a listing the same two
+  ways.** Now one `branch::listing`, which the worker and the main thread
+  both call.
+- **The cancel granularity differs from `search`'s walk** — per directory
+  here, per entry there — and that is now written down with its reason
+  rather than left to look like an oversight: search may open and read each
+  file, and this does a string join.
+- **The two walks were compared again**, with both on screen, and stayed two.
+  The comparison is recorded in both modules so the next person does not have
+  to redo it.

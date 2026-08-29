@@ -25,10 +25,19 @@ use crate::vfs::{Entry, VfsPath, VirtualFs};
 /// a trap.
 pub fn spawn(fs: Arc<dyn VirtualFs>, root: VfsPath, cancel: CancelToken) -> Loading {
     listing::spawn(move || {
-        let entries = walk(fs.as_ref(), &root, &cancel);
-        let listing = Listing::branch(root, entries);
-        Ok((fs, listing))
+        let found = listing(fs.as_ref(), root, &cancel);
+        Ok((fs, found))
     })
+}
+
+/// The same, on this thread.
+///
+/// What a re-read needs: after a job, and on `Ctrl+R`, a branch view has to
+/// walk again rather than re-read its root, and there is no keystroke in
+/// flight to cancel it with.
+pub fn listing(fs: &dyn VirtualFs, root: VfsPath, cancel: &CancelToken) -> Listing {
+    let found = walk(fs, &root, cancel);
+    Listing::branch(root, found)
 }
 
 /// Every file below `root`, named by its path relative to it.
@@ -41,6 +50,20 @@ pub fn spawn(fs: Arc<dyn VirtualFs>, root: VfsPath, cancel: CancelToken) -> Load
 /// **Unreadable is skipped, not fatal.** One subdirectory nobody may enter
 /// must not cost the view, which is the rule the copy engine keeps about a
 /// tree it cannot fully read.
+///
+/// **The cancel is checked per directory, not per entry** — the one place
+/// this deliberately differs from [`crate::search`]'s walk, which checks both.
+/// There the per-entry work may open and read the file, so a directory of
+/// fifty thousand entries is fifty thousand chances to be slow; here it is a
+/// string join and a push, and the only unbounded step is the `read_dir`
+/// itself, which neither walk can interrupt.
+///
+/// The two loops were compared rather than merged. They share a skeleton and
+/// diverge in what the queue carries (a path, against a path with its
+/// relative prefix and inherited hidden flag) and in what each entry becomes
+/// (a test and a send, against a rewrite and a collect). A walker general
+/// enough for both is a closure with three parameters and a descend decision
+/// — more shape than the fifteen lines it saves.
 ///
 /// **A cancel yields what was found so far** rather than nothing. The caller
 /// asked to stop, and the caller decides whether a partial answer is worth

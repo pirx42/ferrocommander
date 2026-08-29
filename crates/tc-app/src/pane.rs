@@ -403,8 +403,7 @@ impl PaneView {
     /// cancel it with.
     fn walk_again(&mut self) -> Listing {
         let root = self.shown.listing.dir().clone();
-        let found = branch::walk(self.shown.fs.as_ref(), &root, &CancelToken::new());
-        Listing::branch(root, found)
+        branch::listing(self.shown.fs.as_ref(), root, &CancelToken::new())
     }
 
     /// Starts watching whatever directory this pane is now showing.
