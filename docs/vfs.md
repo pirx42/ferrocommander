@@ -202,7 +202,7 @@ documentation; the judgement over them is the same shared function the Linux
 fixtures exercise, and the macOS lists have fixture tests of their own that
 run here. What a real Mac must review first is written into
 `platform.rs` and the
-[groundwork plan](plans/2026-08-30-macos-groundwork.md) § 5.
+[groundwork plan](plans/archive/2026-08-30-macos-groundwork.md) § 5.
 
 **Why trash errors are a platform function.** The `trash` crate's error
 *shape* differs by target: its freedesktop backend carries the underlying
@@ -247,7 +247,7 @@ The macOS one was green before any macOS branch existed — 7.6 s warm, every
 dependency compiling — which is worth knowing precisely: it means a compile
 check cannot see the Linux assumptions living inside `cfg(unix)`, and the
 macOS branches this gate watches had to be *written* before it watched
-anything ([the groundwork plan](plans/2026-08-30-macos-groundwork.md)
+anything ([the groundwork plan](plans/archive/2026-08-30-macos-groundwork.md)
 is the record).
 
 The check covers `tc-core` only. Cross-checking `tc-app` would need GTK's

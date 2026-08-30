@@ -6,7 +6,7 @@
 //! branch is compile-checked by the gate's `aarch64-apple-darwin` step. What
 //! no check on a Linux box can do is *run* them — the macOS-only lists and
 //! the `getfsstat` reader are asserted from documentation, and
-//! [`docs/plans/2026-08-30-macos-groundwork.md`] § 5 names them as the first
+//! [`docs/plans/archive/2026-08-30-macos-groundwork.md`] § 5 names them as the first
 //! things a real Mac must review.
 //!
 //! Keeping the `cfg` split here rather than sprinkling it through `local.rs`

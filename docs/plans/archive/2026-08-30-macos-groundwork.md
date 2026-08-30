@@ -1,10 +1,10 @@
 # macOS groundwork — everything a Mac is not needed for
 
-Status: Proposed
+Status: Implemented
 
 `future-improvements.md` prices macOS as four pieces of work and closes with
 "verify Windows first". Windows was verified on 2026-08-30
-([windows.md](../windows.md)), so this is the next step: **do every part that
+([windows.md](../../windows.md)), so this is the next step: **do every part that
 a Linux box can do and check**, so that when a Mac exists the remaining work
 is fixes, not architecture.
 
@@ -66,7 +66,7 @@ Stated up front, because "prepared without a Mac" has a boundary:
 - **`tc-app` stays unchecked for the target**, as it is for Windows: GTK's
   `-sys` build scripts need a macOS libgtk-4 via pkg-config that a Linux box
   cannot provide. Every platform-divergent line stays in `tc-core`, which is
-  what makes that boundary acceptable ([vfs.md](../vfs.md)).
+  what makes that boundary acceptable ([vfs.md](../../vfs.md)).
 - **The end-to-end driver is out of scope.** Xvfb and xdotool are X11-only;
   the macOS equivalent needs a real GUI session. `future-improvements.md`
   keeps that entry, unchanged: it is the part that decides whether a macOS
@@ -120,7 +120,7 @@ checked by it from the moment it exists.
 
 **Phase 4 — target-honest engine tests.** The Windows run found six engine
 tests asserting Linux rather than the engine
-([future-improvements.md](../future-improvements.md)); the same sweep run
+([future-improvements.md](../../future-improvements.md)); the same sweep run
 for macOS assumptions — paths, `/proc`, flag semantics — so a future
 `cargo test` on a Mac fails only where macOS genuinely differs.
 
@@ -130,7 +130,36 @@ possible, plus the sweep:** `vfs.md`'s platform table gains a macOS column;
 (the e2e driver, the bundle, the feel-tuning) and records what moved here;
 CLAUDE.md's build section gains the target-add line.
 
-**Phase 6 — refactoring audit** (skill 49).
+**Phase 6 — refactoring audit** (skill 49). **Done.** One blanket
+`#[allow(unused_mut)]` became the precise
+`cfg_attr(not(macos), allow(unused_mut))` with its reason; nothing else asked
+for changing. The `apply()` refactor in phase 3 had already removed the one
+duplication the work created, and the mount judge extraction *reduced* the
+line count it touched.
+
+## 6. What the doing taught that the plan did not know
+
+- **The cross-check paid for itself four times before the plan closed**: dead
+  Linux code under a macOS build (twice, symmetric), and a clippy lint inside
+  `cfg(not(linux))` that the host cannot even compile.
+- **The sharpest find was not on the list.** The trash suite redirected the
+  freedesktop trash through `XDG_DATA_HOME`; macOS ignores XDG, so on a Mac
+  the suite would have trashed its fixtures into the account's *real* bin —
+  the E2E harness's old Linux bug, met from the other side. It is
+  `target_os = "linux"` now, for the layout it actually asserts.
+- **One engine fix fell out for every platform**: `remove_file` on a
+  directory now answers `IsADirectory` everywhere, settling a row of the
+  Windows six as engine behaviour rather than as three test skips.
+- **The libc premise was wrong** (§ 0's correction): the dependency this plan
+  "added" had been there since the disk figure.
+
+### § 5 addendum — the first-run review list, final
+
+The `platform.rs` macOS lists and `getfsstat` reader; the `remove_file`
+EPERM branch (unreachable on Linux — measured, `unlink` answers `EISDIR`
+even under a read-only parent); GTK delivering Command as `META_MASK`; the
+watcher's kqueue behaviour on reads, which the inotify-shaped watch tests
+assume; and the config-path convention.
 
 ## 4. Effort
 

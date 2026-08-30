@@ -122,63 +122,36 @@ Windows rather than two.
 *From:* the first Windows test run, 2026-08-30.
 
 **macOS is wanted, to the standard a Mac user would accept.**
-Decided 2026-08-29. Not "it compiles" — the engine very nearly does already,
-and a second unverified platform beside Windows would make the claim weaker
-rather than stronger. The bar is a program somebody would keep.
+Decided 2026-08-29; the groundwork done 2026-08-30
+([the plan](plans/archive/2026-08-30-macos-groundwork.md) is the record). Everything
+a Linux box could do and check is done: the gate cross-checks
+`aarch64-apple-darwin`, `platform.rs` carries the macOS branches
+(`getfsstat` mounts, `~/Library/Application Support`, `UF_HIDDEN`) with their
+rules fixture-tested here, `cmd` is an expressible modifier and the Cmd layer
+ships dormant as data, and the engine tests are target-honest. None of it has
+ever *run* on a Mac — compile-checked and fixture-tested is the same level
+the Windows branch had before its first real day, which found two gaps and a
+renderer crash no cross-check had seen.
 
-Four separate pieces of work, and the engine is the cheap one:
+What genuinely remains, and each needs a Mac in hand:
 
-| | What it is | Rough |
+| | What it is | Why it waits |
 |---|---|---|
-| `tc-core` | three Linux-only functions in the `unix` branch | ~half a day |
-| the keymap | macOS defaults, shipped as a `[keys]` layer | ~half a day |
-| packaging | an `.app` bundle with the GTK dylibs inside it | ~1–2 days |
-| the end-to-end suite | a second driver; `Xvfb` and `xdotool` are X11-only | **days, and the least certain number here** |
+| the first run | review `platform.rs`'s macOS lists, the `getfsstat` reader, the `remove_file` error branch — the plan's § 5 list | asserted from documentation; only a running system confirms them |
+| the keymap's feel | whether Cmd bindings should *move* rather than add, and what the text-field shortcuts mean under Cmd | taste, unjudgeable from here |
+| packaging | an `.app` bundle: `Contents/MacOS` layout, the GTK dylibs carried inside, the codesigning/notarization question | a bundler nobody can run is a sequence nobody can check |
+| **the end-to-end driver** | the suite drives a real binary through `Xvfb` and `xdotool`, both X11-only; macOS wants the Accessibility API against a real GUI session | the part that decides whether a macOS release is honest, and the least certain effort here |
 
-The engine is nearly free because macOS *is* `unix`: `VfsPath`, `Entry`, the
-attribute bits, `ops`, `archive`, `listing`, `search` and the viewer compile as
-they stand, `trash_error` already carries a `macos` arm, and `notify` is
-already built with `macos_kqueue`. Three functions assume Linux specifically —
-`mount_points` reads `/proc/self/mounts`, so **the drive bar would be empty**;
-`config_dir` follows XDG where macOS puts things under `~/Library`; and
-`is_hidden` knows about the leading dot but not `UF_HIDDEN`. The
-`parse_mount_table` split already separates reading the table from judging it,
-so the macOS version is a different reader against the same filter and the
-same fixture tests.
+**The open question is still GTK4 itself**, and it is a product question:
+non-native chrome, no menu bar, the least maintained of GTK's backends. If
+that does not clear the bar, this entry becomes a different one — a second
+front end over the same `tc-core`, which is the one thing the crate split
+makes possible ([archives.md](archives.md) keeps the score on what the split
+is worth).
 
-The keymap is a second *default*, not new machinery. Of the **67 bindings** in
-the table, **18 use an F-key** on a platform that gives F1–F12 to hardware
-unless the user says otherwise, and **24 carry `Ctrl`** where a Mac user
-reaches for `Cmd`. The `[keys]` table ([config.md](config.md)) already carries
-exactly this shape.
-
-(The figures here were 55 and 53 until this was checked — two numbers that add
-to more than the whole keymap, under a half-day estimate resting on them. The
-estimate survives: fewer keys to re-map, not more.)
-
-**The test suite is the part that decides whether this is honest.** The 160
-end-to-end tests are this project's main defence — six of the defects in
-[reliability.md](reliability.md) were caught by them and by nothing else — and
-they drive a real binary through `Xvfb` and `xdotool`, both X11-only. macOS has
-no headless equivalent; the same job wants AppleScript or the Accessibility
-API against a real GUI session with screen-recording permission granted. So
-either macOS ships untested at the exact layer where every bug in this project
-has lived, or that driver gets written. Shipping without it would contradict
-[reliability.md](reliability.md), so it is not a corner to cut quietly.
-
-**The open question is GTK4 itself**, and it is a product question rather than
-an engineering one: non-native window chrome, no menu bar, and the least
-maintained of GTK's backends. If that does not clear the bar, this entry
-becomes a different one — a second front end over the same `tc-core`, which is
-the one thing the crate split makes possible at all
-([archives.md](archives.md) keeps the score on what that split is worth).
-
-*Home:* **verify Windows first.** It is already a compile target in the green
-gate, it shares the whole second-platform apparatus, and running it would
-price the platform boundary for real before a fortnight is spent on the third
-one. The estimates above were read off the code by someone with no Mac to try
-it on, and the harness number is the one to distrust.
-*From:* the phase 7 discussion, against the v1 scope's Linux-and-Windows line.
+*Home:* the groundwork is in; the rest starts the day a Mac does.
+*From:* the phase 7 discussion, against the v1 scope's Linux-and-Windows
+line; groundwork per the 2026-08-30 plan.
 
 ## Testing
 

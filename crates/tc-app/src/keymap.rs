@@ -755,7 +755,9 @@ pub struct Keymap {
 
 impl Default for Keymap {
     fn default() -> Self {
-        #[allow(unused_mut)]
+        // `mut` is for the layer application below it, which only macOS
+        // compiles — the attribute says so instead of silencing broadly.
+        #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
         let mut keymap = Keymap {
             bindings: BINDINGS
                 .iter()
