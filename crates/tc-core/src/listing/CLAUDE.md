@@ -9,7 +9,7 @@ The model behind a pane: what a directory looks like once it is on screen.
 |---|---|
 | `mod.rs` | `Listing` — entries, the `..` row, the cursor, the marks, the filter, and the threaded reads |
 | `sort.rs` | `Sort`, and why directories are never mixed in with files |
-| `name.rs` | `split_name`, the one place a name is split from its extension |
+| `name.rs` | reading a name: `split_name`, the one place an extension is split off, and `contains_ignoring_case`, the one match behind both the quick filter and type-ahead |
 | `constants.rs` | the defaults a fresh listing starts from |
 
 ## Rules that hold here

@@ -254,10 +254,24 @@ nothing, since there is no previous directory to stay in. Startup falls back to
 the nearest readable ancestor; only navigation stays put. Both halves are now
 in the file, and the difference between them named.
 
-**Phase 4 — the gaps.** C1–C12. The action-name list is still the substantial
-one: **fifty-eight** names, and it should be **generated from `ACTION_NAMES`
-in `keymap.rs` rather than typed**, or it is one more thing to drift
-(skill 53) — a lesson C1's own wrong count already taught.
+**Phase 4 — the gaps.** C1–C12. **Done.** The action-name list was the
+substantial one, and it is **generated from `ACTION_NAMES` and `BINDINGS`**
+rather than typed (skill 53): `action_catalogue` renders the table, the
+document carries it between markers, and
+`the_action_name_table_in_the_docs_is_the_one_the_code_generates` fails when
+they disagree. It is a table of *names and their default keys* rather than
+names alone, because the key is the other half of what somebody rebinding
+needs.
+
+**The count settled the argument for generating it.** § 4 said fifty-nine
+names; § 4a "corrected" that to fifty-eight; the generator says **fifty-nine**,
+so the original was right and the correction was the error. Three counts of one
+list, two of them by hand, one right. The document now states no number at all
+— a count beside a generated list is the part of it that is not generated.
+
+Both new tests were probed. The drift test goes red on a stale row, a deleted
+row, and an action added in code with no row; the round trip goes red when
+`key_spec` drops its modifiers.
 
 **Phase 5 — the measurement.** Type-ahead over a large directory, into
 `performance.md`'s table, with whatever it turns out to be.

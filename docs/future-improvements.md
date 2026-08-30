@@ -194,6 +194,18 @@ than the disease.
 *Home:* revisit when design phase 2's operation tests need the same shapes.
 *From:* the walking-skeleton refactoring audit.
 
+**KDE's cut marker is not written.**
+`Ctrl+X` is recorded in the first line of the `x-special/gnome-copied-files`
+payload, which Nautilus, Nemo, Thunar and Caja read
+([clipboard.md](clipboard.md)). KDE's file managers use a marker of their own
+(`application/x-kde-cutselection`), and this writes neither it nor reads it —
+so a cut made here and pasted in Dolphin arrives as a copy, which is the safe
+direction of being wrong. Reading and writing one more small format is the
+whole of the work; nobody has asked yet.
+*Home:* beside the two formats in `tc-core::clipboard`, which is where the
+encoding lives and is tested.
+*From:* [clipboard.md](clipboard.md).
+
 ## Free space on Windows
 
 The status line's disk figure is Unix-only. `statvfs` has no Windows

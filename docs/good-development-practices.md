@@ -7,6 +7,14 @@
 > and in [skills/25-green-suite-before-commit.md](skills/25-green-suite-before-commit.md).
 > The principles (Part A), the workflow (Part B) and the four-phase cycle (Part C)
 > apply unchanged.
+>
+> **That includes every file path named below.** `docs/architecture.md`,
+> `docs/items.md`, `docs/security.md`, `scripts/gallery.mjs` and their
+> neighbours are Chimera's and do not exist here; some are marked
+> "(Chimera only)" and some are not, so treat an unfamiliar path as an
+> illustration rather than looking for it. They are backticked rather than
+> linked, which is why `scripts/check-links.py` cannot say so — the one class
+> of dead reference this repository has no check for.
 
 Working rules that have proven themselves in this project. The document
 is aimed at humans **and** AI agents contributing to the code.

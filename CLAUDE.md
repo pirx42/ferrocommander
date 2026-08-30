@@ -111,6 +111,7 @@ The project is in its build-up phase; this table grows with the code.
 | Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
 | Building the Ubuntu package, and what is in it | [docs/packaging.md](docs/packaging.md) |
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
+| `Ctrl+C`/`X`/`V`, and talking to other file managers | [docs/clipboard.md](docs/clipboard.md) |
 | Noticing external changes: the watcher, `Ctrl+R` | [docs/watching.md](docs/watching.md) |
 | Look up v1 scope / architecture | [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md) |
 | What was built, and what it cost | [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md) § 8 — v1 is implemented, all seven phases |

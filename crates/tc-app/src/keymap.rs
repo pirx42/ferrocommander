@@ -15,6 +15,8 @@ use std::collections::HashMap;
 use gtk::gdk::{Key, ModifierType};
 use tc_core::listing::SortKey;
 
+#[cfg(test)]
+use crate::constants::{ACTION_TABLE_BEGIN, ACTION_TABLE_DOC, ACTION_TABLE_END};
 use crate::constants::{
     KEYPAD_PREFIX, KEYPAD_PREFIX_TITLED, KEY_NAME_SEPARATOR, KEY_SPEC_SEPARATOR, MODIFIER_NAMES,
     UNKNOWN_ACTION, UNKNOWN_KEY,
@@ -757,6 +759,51 @@ impl Keymap {
     }
 }
 
+/// Every action name, with the keys bound to it by default.
+///
+/// Generated from [`ACTION_NAMES`] and [`BINDINGS`] rather than written down,
+/// because a list of names kept by hand beside the table it
+/// describes is a list that drifts — which is exactly what happened to
+/// `docs/keymap.md` before this existed (skill 53). A test renders this into
+/// the document and fails when the two disagree.
+///
+/// An action with no default binding still appears, with an empty key list:
+/// it is bindable, which is the question this answers.
+#[cfg(test)]
+pub(crate) fn action_catalogue() -> Vec<(&'static str, Vec<String>)> {
+    ACTION_NAMES
+        .iter()
+        .map(|(name, action)| {
+            let keys = BINDINGS
+                .iter()
+                .filter(|binding| binding.action == *action)
+                .map(|binding| key_spec(binding.key, binding.modifiers))
+                .collect();
+            (*name, keys)
+        })
+        .collect()
+}
+
+/// A keystroke written the way the `[keys]` table spells one.
+///
+/// The inverse of [`parse_key`], and only meaningful because it is: GDK's own
+/// keysym name is the first spelling `key_named` tries, so what this writes is
+/// always something that reads back. A test asserts the round trip over every
+/// default binding rather than trusting that sentence.
+#[cfg(test)]
+fn key_spec(key: Key, modifiers: ModifierType) -> String {
+    let mut spec = String::new();
+    for (name, modifier) in MODIFIER_NAMES {
+        if modifiers.contains(modifier) {
+            spec.push_str(name);
+            spec.push(KEY_SPEC_SEPARATOR);
+        }
+    }
+    // Every key in `BINDINGS` is a GDK keysym constant, so it has a name.
+    spec.push_str(&key.name().expect("a keysym from BINDINGS has a name"));
+    spec
+}
+
 /// The action written under `name`.
 fn action_named(name: &str) -> Option<Action> {
     ACTION_NAMES
@@ -1110,6 +1157,80 @@ mod tests {
         assert_eq!(keymap.action_for(Key::F8, PLAIN), None);
         // Delete is a separate binding for the same action and is untouched.
         assert_eq!(keymap.action_for(Key::Delete, PLAIN), Some(Action::Delete));
+    }
+
+    /// The generated key specs are specs this file can read back.
+    ///
+    /// [`key_spec`] is only worth anything as the inverse of [`parse_key`],
+    /// and "GDK's own name is the first spelling tried" is a claim about
+    /// `key_named`'s list rather than a guarantee. So every default binding
+    /// goes out as text and comes back as a keystroke, and the two must be the
+    /// same one — a round trip rather than a table of expected spellings,
+    /// which would only agree with whatever the code did on the day.
+    #[test]
+    fn every_generated_key_spec_reads_back_as_the_key_it_names() {
+        for binding in BINDINGS {
+            let spec = key_spec(binding.key, binding.modifiers);
+            assert_eq!(
+                parse_key(&spec),
+                Some(normalize(binding.key, binding.modifiers)),
+                "{spec} did not read back",
+            );
+        }
+    }
+
+    /// `docs/keymap.md`'s action-name table is the one this code generates.
+    ///
+    /// The table is every name the user can rebind, and it was missing from
+    /// the documentation entirely — somebody wanting a different key had to
+    /// read this file. Writing it out by hand would have made it the
+    /// project's next stale table, so it is generated and this test is what
+    /// makes "generated" true: the block between the markers in the document
+    /// must be exactly what [`action_catalogue`] renders.
+    ///
+    /// On a mismatch the correct block is printed, so the fix is a paste
+    /// rather than a hunt.
+    #[test]
+    fn the_action_name_table_in_the_docs_is_the_one_the_code_generates() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(ACTION_TABLE_DOC);
+        let document = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+
+        let rendered = render_action_table();
+        let (before, rest) = document
+            .split_once(ACTION_TABLE_BEGIN)
+            .expect("docs/keymap.md has lost its generated-table marker");
+        let (found, _) = rest
+            .split_once(ACTION_TABLE_END)
+            .expect("docs/keymap.md has lost its end marker");
+        let _ = before;
+
+        assert_eq!(
+            found.trim(),
+            rendered.trim(),
+            "\n\ndocs/keymap.md's action table is out of date. Replace the \
+             block between the markers with:\n\n{ACTION_TABLE_BEGIN}\n\
+             {rendered}\n{ACTION_TABLE_END}\n",
+        );
+    }
+
+    /// The action table as `docs/keymap.md` carries it.
+    fn render_action_table() -> String {
+        let mut table = String::from("| Action name | Default keys |\n|---|---|\n");
+        for (name, keys) in action_catalogue() {
+            let keys = match keys.is_empty() {
+                // An action nothing binds by default is still bindable, which
+                // is the question this table answers.
+                true => String::from("—"),
+                false => keys
+                    .iter()
+                    .map(|key| format!("`{key}`"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            };
+            table.push_str(&format!("| `{name}` | {keys} |\n"));
+        }
+        table
     }
 
     #[test]

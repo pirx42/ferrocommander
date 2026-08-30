@@ -93,6 +93,23 @@ pub const TEXT_FIELD_SHORTCUTS: [gtk::gdk::Key; 6] = [
     gtk::gdk::Key::y, // redo
 ];
 
+/// Where the generated action-name table lives, relative to this crate.
+///
+/// The table is what somebody rebinding a key needs and could only get by
+/// reading `keymap.rs`. It is generated from `ACTION_NAMES` and `BINDINGS`
+/// rather than typed, and a test compares the two — so the markers below are
+/// load-bearing, not decoration (skill 53).
+///
+/// Only the test reads them, so they are `cfg(test)` — but they live here
+/// rather than beside it, because this is where every string the shell owns
+/// lives and a marker written into a document is exactly that kind of string.
+#[cfg(test)]
+pub const ACTION_TABLE_DOC: &str = "../../docs/keymap.md";
+#[cfg(test)]
+pub const ACTION_TABLE_BEGIN: &str = "<!-- generated: action names -->";
+#[cfg(test)]
+pub const ACTION_TABLE_END: &str = "<!-- /generated: action names -->";
+
 /// What a settings file with a binding nobody can make sense of is told,
 /// once, on stderr. The rest of the table still applies.
 pub const UNKNOWN_KEY: &str = "no such key";

@@ -13,13 +13,13 @@
 | `Backspace` | Leave the current directory |
 | `F3` | Look inside the file under the cursor — see [viewer.md](viewer.md) |
 | `F4` | Hand it to the editor |
-| `F5` | Copy the entry under the cursor |
-| `F6` | Move it, or rename it in place |
+| `F5` | Copy what is marked |
+| `F6` | Move what is marked, or rename it |
 | `Shift+F6` | Rename the row under the cursor, in the list itself |
 | `F7` | Create a directory |
 | `Shift+F4` | Create a file and open it in the editor |
-| `F8`, `Delete` | Delete to the trash |
-| `Shift+F8`, `Shift+Delete` | Delete permanently |
+| `F8`, `Delete` | Delete what is marked, to the trash |
+| `Shift+F8`, `Shift+Delete` | The same, permanently |
 | `Space` | Mark the row under the cursor |
 | `Insert`, `Shift+↓` | Mark it and step down |
 | `Shift+↑` | Mark it and step up |
@@ -53,7 +53,7 @@
 | `Ctrl+F3` … `Ctrl+F6` | Sort by name / ext / date / size |
 | `Ctrl+H` | Show or hide the dot-files |
 | `Ctrl+S` | Narrow the pane as you type |
-| `Esc` | Stop narrowing |
+| `Esc` | Stop a running branch walk; otherwise stop narrowing |
 | `Ctrl+Q` | Quit |
 
 Activating a *file* hands it to the desktop's own handler — `xdg-open`, the
@@ -361,10 +361,15 @@ hidden:
 | `/mnt/backup/holiday.txt` | at exactly that path |
 | `holiday.txt` | beside the source, under that name |
 
-The last row is the whole of "F6 renames in place" and "F5 duplicates a
-file" - no separate rename command, and no dialog that has to guess. A rename
-*is* a move whose destination is exact, which is why `ops` has no `Rename`
-job.
+The last row is the whole of "F6 renames" and "F5 duplicates a file" — no
+separate rename command, and no dialog that has to guess. A rename *is* a move
+whose destination is exact, which is why `ops` has no `Rename` job.
+
+**That is not `Shift+F6`.** Both rename, and they are different keys for
+different moments: `F6` with a bare name in its field is a rename *through the
+dialog*, and `Shift+F6` edits the name **in place**, in the row itself, with no
+dialog over the thing being renamed. The phrase "in place" belongs to
+`Shift+F6`, and the table above used to lend it to `F6`.
 
 ## Page Up / Page Down are the widget's job
 
@@ -393,6 +398,97 @@ The traffic runs the other way too: when the shell moves the cursor it also
 moves the widget's *focus*, because the widget pages from its own focus. If
 focus did not follow, a Page Down after some arrow keys would page from
 wherever the widget last was rather than from the cursor.
+
+## Action names — what a `[keys]` line may say on the right
+
+Rebinding a key is a line in the `[keys]` table of [config.md](config.md), and
+the right-hand side has to be one of these. Until this table existed the only
+way to find one was to read `keymap.rs`.
+
+**How many there are is not written here**, which is deliberate: the plan that
+produced this table carried the number twice and got it wrong once, and a
+count beside a generated list is the one part of it that is not generated.
+
+**The table below is generated** from `ACTION_NAMES` and `BINDINGS`, and a
+test fails when it and the code disagree
+(`the_action_name_table_in_the_docs_is_the_one_the_code_generates`). Editing
+it by hand is editing something that will be overwritten with the truth — the
+markers around it are load-bearing (skill
+[53](skills/53-generate-instead-of-duplicating.md)).
+
+The key spellings in the right-hand column are the ones a settings file may
+use verbatim, and a second test presses that claim: every one of them is read
+back through the same parser a `[keys]` line goes through, and has to yield
+the keystroke it was written from. Case and modifier order do not matter when
+*you* write one — `Ctrl+Shift+F5` and `shift+ctrl+f5` are the same line.
+
+<!-- generated: action names -->
+| Action name | Default keys |
+|---|---|
+| `switch_pane` | `Tab` |
+| `cursor_up` | `Up` |
+| `cursor_down` | `Down` |
+| `cursor_first` | `Home` |
+| `cursor_last` | `End` |
+| `activate` | `Return`, `KP_Enter` |
+| `go_parent` | `BackSpace` |
+| `copy` | `F5` |
+| `pack` | `alt+F5` |
+| `move` | `F6` |
+| `reread` | `ctrl+r` |
+| `search` | `alt+F7` |
+| `multi_rename` | `ctrl+m` |
+| `undo_rename` | `ctrl+z` |
+| `view` | `F3` |
+| `edit` | `F4` |
+| `create_file` | `shift+F4` |
+| `rename_inline` | `shift+F6` |
+| `create_dir` | `F7` |
+| `delete` | `F8`, `Delete` |
+| `delete_permanently` | `shift+F8`, `shift+Delete` |
+| `toggle_mark` | `space` |
+| `toggle_mark_and_advance` | `Insert`, `shift+Down` |
+| `toggle_mark_and_retreat` | `shift+Up` |
+| `extend_mark_to_first` | `shift+Home` |
+| `extend_mark_to_last` | `shift+End` |
+| `extend_mark_page_up` | `shift+Page_Up` |
+| `extend_mark_page_down` | `shift+Page_Down` |
+| `mark_by_pattern` | `KP_Add` |
+| `unmark_by_pattern` | `KP_Subtract` |
+| `invert_marks` | `KP_Multiply` |
+| `invert_marks_including_folders` | `shift+KP_Multiply` |
+| `mark_same_extension` | `alt+KP_Add` |
+| `unmark_same_extension` | `alt+KP_Subtract` |
+| `restore_marks` | `KP_Divide` |
+| `mark_all` | `ctrl+KP_Add`, `ctrl+a` |
+| `unmark_all` | `ctrl+KP_Subtract` |
+| `quick_filter` | `ctrl+s` |
+| `clear_filter` | `Escape` |
+| `sort_by_name` | `ctrl+F3` |
+| `sort_by_ext` | `ctrl+F4` |
+| `sort_by_size` | `ctrl+F6` |
+| `sort_by_date` | `ctrl+F5` |
+| `command_history` | `ctrl+Down`, `alt+F8` |
+| `focus_command_line` | `Right` |
+| `clipboard_copy` | `ctrl+c` |
+| `clipboard_cut` | `ctrl+x` |
+| `clipboard_paste` | `ctrl+v` |
+| `insert_name` | `ctrl+Return`, `ctrl+KP_Enter` |
+| `favourites` | `ctrl+d` |
+| `branch_view` | `ctrl+b` |
+| `folder_sizes` | `shift+alt+Return`, `shift+alt+KP_Enter` |
+| `select_drive_left` | `alt+F1` |
+| `select_drive_right` | `alt+F2` |
+| `clone_to_right` | `ctrl+Right` |
+| `clone_to_left` | `ctrl+Left` |
+| `exchange_panes` | `ctrl+u` |
+| `toggle_hidden` | `ctrl+h` |
+| `quit` | `ctrl+q` |
+
+<!-- /generated: action names -->
+
+An action with `—` has no default binding. It is still bindable, which is what
+this table is for.
 
 ## One table, no key names in the widgets
 
@@ -444,12 +540,18 @@ sorting by size and then copying one file quietly put the order back to name.
 clears it and hides the field; `Enter` keeps the narrowed view and hands the
 keyboard back to the rows.
 
-While that field has the focus the shell **does not dispatch anything**. Its
-controller sits in the capture phase so the column view cannot swallow Tab and
-the arrows, and that puts it ahead of the field too — every letter would
-become a command and `Enter` would open a directory instead of accepting the
-filter. So the controller checks whether the focus is inside a text widget and
-stands down if it is.
+While that field has the focus the shell **stands down**. Its controller sits
+in the capture phase so the column view cannot swallow Tab and the arrows, and
+that puts it ahead of the field too — every letter would become a command and
+`Enter` would open a directory instead of accepting the filter. So the
+controller checks whether the focus is inside a text widget and stands down if
+it is.
+
+The rule has two exceptions and they are the command line's, not this field's:
+the shortcuts meant for use *while typing a command*, and — the other way
+round — the shortcuts a text field owns, which the keymap may not take however
+it binds them. Both are in [command-line.md](command-line.md), which is the
+one place that rule is stated in full.
 
 The field's own handler is *also* in the capture phase, and for a different
 reason: `GtkText` consumes `Return` to emit its own activate signal, so a
