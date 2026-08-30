@@ -1077,8 +1077,17 @@ impl PaneView {
     /// **The contract: the active pane's selection is adopted once per
     /// dispatched action, before the action runs.** So nothing reached from
     /// `dispatch` — no handler, no method on this type — has to call this,
-    /// and a new action gets it for free. The one other caller is the pane
-    /// exchange, which adopts the pane `dispatch` never touches.
+    /// and a new action gets it for free.
+    ///
+    /// Two callers sit outside it, and both are outside `dispatch` by nature:
+    /// the pane exchange, which adopts the pane `dispatch` never touches; and
+    /// **type-ahead**, which is not an action at all — a key no binding claims
+    /// goes straight there. That second one was missed when the letter keys
+    /// stopped being unbound, and the contract did not break to reveal it: its
+    /// words stayed true about `dispatch` while a route appeared that does not
+    /// go through `dispatch`. A new route into a pane owes this call, and the
+    /// question to ask of one is not "does the contract cover it" but "is it
+    /// an action".
     pub fn adopt_selection(&mut self) {
         if let Some(cursor) = adopted_cursor(self.selection.selected()) {
             self.shown.listing.set_cursor(cursor);

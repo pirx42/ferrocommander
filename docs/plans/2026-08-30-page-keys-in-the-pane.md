@@ -1,11 +1,33 @@
 # Page Up and Page Down — the keys the model never hears about
 
-Status: Proposed
+Status: In Progress
 
 `Page Up` and `Page Down` already move the cursor in a pane. They are the
 only cursor keys in this program that do it **without the model finding
 out**, and this is about closing that — plus the one live bug it has already
 caused.
+
+## 0. What was decided, and by whom
+
+Owner, 2026-08-30, on the three questions the proposal left open:
+
+- **Phases 1 and 2 both.** The bug and the binding.
+- **The scroll must be identical**, not close enough. So phase 2 does not hand
+  the scrolling to `scroll_to`: it reproduces what the widget does today and
+  the plan is wrong if anybody can tell the difference.
+- **`cursor_page_up` / `cursor_page_down`** as the `[keys]` names.
+
+The scroll decision is the one that changes the work, and it changes it in a
+way worth writing down before starting: **phase 2 begins with a measurement,
+not an implementation.** What the `ColumnView` does to the scroll offset on a
+page is not written down anywhere, and reproducing it from a guess is how you
+ship a key that is subtly worse than the one it replaced. So the first thing
+phase 2 does is instrument the adjustment and press the key.
+
+The mechanism is available. `scroll_to` takes a `ScrollInfo`, and
+`ScrollInfo::set_enable_vertical(false)` — GTK 4.12, inside this project's
+floor — makes it select and focus **without scrolling**, leaving the offset to
+be set deliberately rather than inferred. Checked before promising it.
 
 ## 1. What is true today
 
@@ -109,16 +131,32 @@ What this buys beyond the fix:
 - **One rule for the cursor.** The model becomes authoritative for every key
   that moves it, which is what `adopt_selection` exists to paper over.
 
-### The one thing to check by eye
+### The scroll, which the owner settled
 
-A bound key returns `Propagation::Stop`, so the widget stops paging itself
-and `sync_cursor` does the scrolling — select, focus and scroll-into-view in
-one `scroll_to`. The widget keeps the cursor row at the same screen position
-when *it* pages; scroll-into-view may instead put the row at an edge. Whether
-that reads the same is not something the end-to-end suite can see — it
-asserts on the filesystem, not on pixels — so it goes the way the scroll
-memory went: `scripts/check-scroll-memory.sh`'s method, screenshots, by hand,
-and the answer written down either way.
+A bound key returns `Propagation::Stop`, so the widget stops paging itself and
+the shell owns the scroll. `sync_cursor`'s `scroll_to(.., None)` scrolls
+*minimally* — enough to bring the row into view, which puts it at an edge. The
+widget instead keeps the cursor row where it was on screen and moves the view
+under it. Those are different, and **the owner's call is that they must not
+be** ( § 0).
+
+So phase 2 is measure, then reproduce:
+
+1. **Measure.** Instrument the vertical adjustment — value, page size, upper —
+   around a real `Page_Down` on a tall directory, under the end-to-end
+   harness's own X server. What the widget does is not documented and must not
+   be guessed at.
+2. **Reproduce.** `scroll_to` with a `ScrollInfo` whose
+   `set_enable_vertical(false)` is set, so it selects and focuses and does not
+   scroll; then set the adjustment to whatever step 1 says.
+3. **Compare.** Screenshots before and after, the way the scroll memory is
+   checked (`scripts/check-scroll-memory.sh`), because the end-to-end suite
+   asserts on the filesystem and cannot see a pixel.
+
+If step 1 says the widget's rule is something the shell cannot reproduce
+exactly, that is a finding and it goes in the plan rather than being rounded
+off — the honest outcome is "not identical, here is how it differs", not a
+quiet approximation.
 
 ## 5. Phases — one phase, one commit
 
@@ -129,10 +167,24 @@ path, and `shift+Next`/`shift+Prior` pin the marking keys. **Nothing pins the
 non-dispatched path**, which is the gap phase 1 fills — and the reason the
 bug shipped past a green suite.
 
-**Phase 1 — the adoption hole.** Type-ahead adopts the widget's selection
-before it searches. A test that pages and then types, and a second that
-clicks and then types if the harness can click. Ships alone: it is a bug, it
-is reachable without a page key, and binding the page keys would hide it.
+**Phase 1 — the adoption hole. Done.** `typed_into_the_pane` adopts before it
+searches, and `page_down_then_a_letter_searches_from_the_row_on_screen` holds
+it. The test was written first and watched to fail against the unfixed code —
+it copied `row000.txt`, the first `row*.txt` in the listing, which is exactly
+what searching from the stale cursor at `..` finds. That is the probe, in its
+strongest form: a test that has been red for the real reason rather than for a
+mutation of it.
+
+The second test — click, then type — was not written. `xdotool` can click, but
+placing a click on a *row* means knowing where that row is in window
+coordinates, which the harness has no way to compute; and the paging test
+already covers the mechanism the click would exercise. Said here rather than
+left looking like coverage.
+
+The contract comment on `adopt_selection` and its paragraph in `ui-shell.md`
+now say why nothing broke: the rule "once per dispatched action" stayed true
+while a route appeared that is not a dispatched action. The question for a new
+route is not whether the contract covers it, but whether it is an action.
 
 **Phase 2 — bind the two keys.** The actions, the dispatch arms, the tests,
 the probes, and the documentation in the same commit (skill 28) — which the

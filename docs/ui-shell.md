@@ -252,10 +252,24 @@ four handlers and six `PaneView` methods, all of them reached only *through*
 `dispatch` and therefore all of them no-ops — no main-loop turn runs in
 between — which left nobody able to say which call was the load-bearing one.
 The rule now lives with the method: the active pane's selection is adopted
-once per dispatched action, before the action runs. The one other caller is
-the pane exchange, and it adopts the **other** pane — a click gives a pane's
-widget the focus and a selection of its own without making it active, so that
-one is not the same call.
+once per dispatched action, before the action runs. Two callers sit outside
+it, and both are outside `dispatch` by nature:
+
+- **The pane exchange**, which adopts the *other* pane — a click gives a
+  pane's widget the focus and a selection of its own without making it active,
+  so that one is not the same call.
+- **Type-ahead**, which is not an action: a key no binding claims goes
+  straight to it, never through `dispatch`. It searches from the cursor, so
+  without adopting it searched from wherever the model was left — after a
+  Page Down, a row off the top of the screen.
+
+**The second one is worth the paragraph, because nothing broke.** The contract
+says "once per dispatched action" and that stayed true; what changed is that a
+route appeared which is not a dispatched action, when the letter keys stopped
+being unbound and became type-ahead. A rule can be perfectly kept and stop
+being sufficient, and no test fails at the moment it happens. So the question
+to ask of a new route into a pane is not whether the contract covers it — it
+is whether the route is an action, and if it is not, it owes the call.
 
 Every mark operation goes through `PaneView::marking`, which repaints the rows
 that changed. That is structure rather than discipline: a mark operation that

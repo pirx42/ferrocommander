@@ -2745,6 +2745,40 @@ fn page_down_then_f5_acts_on_the_row_the_widget_moved_to() {
 }
 
 #[test]
+fn page_down_then_a_letter_searches_from_the_row_on_screen() {
+    // The same stale-cursor trap as the two tests above, on the one path that
+    // is *not* a dispatched action: a key no binding claims goes straight to
+    // type-ahead, which never adopted the widget's selection. So the search
+    // began from the row the model still believed in — off the top of the
+    // screen — while the user looked at another one.
+    //
+    // `Home` puts the model on `..`, then a page moves the widget well past
+    // the first `row*.txt`. Typing `r` from the stale cursor would find
+    // `row000.txt`, the first of them; from the row actually on screen it
+    // finds one much further down. F5 with nothing marked copies the cursor
+    // row, so the filesystem says which cursor was asked.
+    let app = in_src_and_dst(with_a_tall_directory);
+
+    app.key("Home");
+    app.key("Next");
+    app.key("r");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    let copied = await_any_copy(&app);
+    assert!(
+        copied.starts_with("row"),
+        "F5 copied {copied:?} rather than a row the search landed on"
+    );
+    assert_ne!(
+        copied, "row000.txt",
+        "type-ahead searched from the cursor the page left behind, not from the row on screen"
+    );
+}
+
+#[test]
 fn page_down_then_space_marks_the_row_the_widget_moved_to() {
     // The same stale-cursor trap as the F5 test above, on the path where the
     // adopting used to be written out again: marking. The mark has to land on
