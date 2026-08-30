@@ -80,7 +80,10 @@ cross-references instead of duplication.
   | [type-ahead and the clipboard](plans/archive/2026-08-30-type-ahead-and-clipboard.md) | letters that search the rows, the `→` that had to replace them in the command line first, and `Ctrl+X`/`C`/`V` through the *system* clipboard — plus the second test this repository has caught proving nothing |
   | [field report, round one](plans/archive/2026-08-29-field-report-round-one.md) | twelve findings from the first person to *use* build 132 rather than test it: ten fixed, two withdrawn, one that did not reproduce and is recorded as not reproducing — plus the three bugs the work found in itself |
 
-  No plan is currently active.
+  **Active:**
+  [documentation drift and the hijacked keys](plans/2026-08-30-documentation-drift-and-the-hijacked-keys.md)
+  — what a review of the docs against the code found: fourteen findings, three
+  of them the code being wrong.
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
