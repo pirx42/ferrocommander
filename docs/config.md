@@ -9,7 +9,8 @@ including the atomic write.
 
 | | |
 |---|---|
-| Unix | `$XDG_CONFIG_HOME/ferrocommander/config.toml`, or `~/.config/…` |
+| Linux | `$XDG_CONFIG_HOME/ferrocommander/config.toml`, or `~/.config/…` |
+| macOS | the same `$XDG_CONFIG_HOME` override, else `~/Library/Application Support/ferrocommander/config.toml` |
 | Windows | `%APPDATA%\ferrocommander\config.toml` |
 
 What is remembered: the window size and the column widths; per pane the

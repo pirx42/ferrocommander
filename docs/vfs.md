@@ -185,15 +185,24 @@ file **here**; what it costs in `tc-app` is a different question, and
 where the engine is nearly free because macOS *is* `unix`, and the keymap, the
 packaging and the end-to-end suite are not.
 
-| | Linux | Windows |
-|---|---|---|
-| Native path | the VFS path itself | `/C:/Users/pirx` → `C:\Users\pirx` |
-| Hidden | leading dot in the name | `FILE_ATTRIBUTE_HIDDEN` |
-| VFS root `/` | the real root directory | synthetic: the list of drives |
-| Attributes | Unix mode bits, shown as `rwxr-xr-x` | Win32 file attributes, shown as `RHSA` |
-| Setting them | the full permission bits | the read-only flag only — `std` sets nothing else |
-| Mount points | `/proc/self/mounts`, minus the kernel's own | the drive list |
-| Trash errors | the crate wraps the real `io::Error`, so `NotFound` survives | Win32 status codes, kept as `Io` |
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| Native path | the VFS path itself | the VFS path itself | `/C:/Users/pirx` → `C:\Users\pirx` |
+| Hidden | leading dot in the name | leading dot, **or** `UF_HIDDEN` — Finder's flag on `~/Library` | `FILE_ATTRIBUTE_HIDDEN` |
+| VFS root `/` | the real root directory | the real root directory | synthetic: the list of drives |
+| Attributes | Unix mode bits, shown as `rwxr-xr-x` | the same — macOS *is* `unix` here | Win32 file attributes, shown as `RHSA` |
+| Setting them | the full permission bits | the full permission bits | the read-only flag only — `std` sets nothing else |
+| Mount points | `/proc/self/mounts`, minus the kernel's own | `getfsstat(2)`, minus `devfs`, `autofs` and `/System/Volumes` — the **same judge**, macOS lists | the drive list |
+| Settings live in | `$XDG_CONFIG_HOME`, else `~/.config` | `$XDG_CONFIG_HOME` when set, else `~/Library/Application Support` | `%APPDATA%` |
+| Trash errors | the crate wraps the real `io::Error`, so `NotFound` survives | kept as `Io` — the crate's macOS backend carries no `io::Error` to unwrap | Win32 status codes, kept as `Io` |
+
+**The macOS column is compile-checked and fixture-tested, never yet run.**
+Its `mount_points` lists and the `getfsstat` reader are asserted from
+documentation; the judgement over them is the same shared function the Linux
+fixtures exercise, and the macOS lists have fixture tests of their own that
+run here. What a real Mac must review first is written into
+`platform.rs` and the
+[groundwork plan](plans/2026-08-30-macos-groundwork.md) § 5.
 
 **Why trash errors are a platform function.** The `trash` crate's error
 *shape* differs by target: its freedesktop backend carries the underlying

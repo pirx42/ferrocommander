@@ -1,5 +1,13 @@
-//! Everything about the local filesystem that differs between Linux and
-//! Windows, collected in one module.
+//! Everything about the local filesystem that differs between Linux, macOS
+//! and Windows, collected in one module.
+//!
+//! macOS is `unix`, so it shares this module's `unix` half; where it differs
+//! from Linux the split is `target_os` *inside* that half, and every such
+//! branch is compile-checked by the gate's `aarch64-apple-darwin` step. What
+//! no check on a Linux box can do is *run* them — the macOS-only lists and
+//! the `getfsstat` reader are asserted from documentation, and
+//! [`docs/plans/2026-08-30-macos-groundwork.md`] § 5 names them as the first
+//! things a real Mac must review.
 //!
 //! Keeping the `cfg` split here rather than sprinkling it through `local.rs`
 //! means the platform contract is a short, readable list — three functions —
@@ -90,9 +98,34 @@ mod imp {
         Ok(std::fs::set_permissions(path, permissions)?)
     }
 
+    /// The BSD "hidden" flag, which macOS sets on `~/Library` among others.
+    ///
+    /// Spelled here rather than taken from `libc`, because `libc` defines it
+    /// for BSD targets only and the *rule* below has to compile — and be
+    /// tested — on Linux. The value is stable BSD API (`chflags(2)`).
+    const UF_HIDDEN: u32 = 0x8000;
+
+    /// Whether an entry is hidden, given its name and its BSD flags.
+    ///
+    /// Pure, so the rule is testable on Linux: a leading dot hides an entry
+    /// everywhere on Unix, and macOS *additionally* hides what carries
+    /// [`UF_HIDDEN`] — Finder's convention, and a file manager that showed
+    /// `~/Library` as ordinary would surprise a Mac user twice over.
+    pub(super) fn hidden_from(name: &str, flags: u32) -> bool {
+        name.starts_with('.') || flags & UF_HIDDEN != 0
+    }
+
     /// Unix convention: a leading dot hides the entry.
+    #[cfg(not(target_os = "macos"))]
     pub fn is_hidden(name: &str, _metadata: &std::fs::Metadata) -> bool {
-        name.starts_with('.')
+        hidden_from(name, 0)
+    }
+
+    /// macOS: the dot, or the `UF_HIDDEN` flag only the metadata knows.
+    #[cfg(target_os = "macos")]
+    pub fn is_hidden(name: &str, metadata: &std::fs::Metadata) -> bool {
+        use std::os::macos::fs::MetadataExt;
+        hidden_from(name, metadata.st_flags())
     }
 
     /// Unix has a real root directory, so the generic code path handles it.
@@ -110,6 +143,7 @@ mod imp {
     }
 
     /// Where the kernel lists what is mounted.
+    #[cfg(not(target_os = "macos"))]
     const MOUNT_TABLE: &str = "/proc/self/mounts";
 
     /// The root, which is always worth a button whatever else is mounted.
@@ -117,6 +151,7 @@ mod imp {
 
     /// Filesystem types that are the kernel talking to itself. None of them
     /// is a place a person navigates to, and a machine has dozens.
+    #[cfg(not(target_os = "macos"))]
     const PSEUDO_FILESYSTEMS: [&str; 22] = [
         "autofs",
         "binfmt_misc",
@@ -162,9 +197,11 @@ mod imp {
     /// `tmpfs` is deliberately *not* in the type list, which would have been
     /// the other way to exclude `/run`: `/tmp` is a `tmpfs` on many machines
     /// and is somewhere people very much do navigate to.
+    #[cfg(not(target_os = "macos"))]
     const PSEUDO_ROOTS: [&str; 4] = ["/proc", "/sys", "/dev", "/run"];
 
     /// Reads the mount table.
+    #[cfg(not(target_os = "macos"))]
     pub fn mount_points() -> Vec<Mount> {
         let table = std::fs::read_to_string(MOUNT_TABLE).unwrap_or_default();
         parse_mount_table(&table)
@@ -176,27 +213,45 @@ mod imp {
     /// fixture: what a real machine happens to have mounted is not something
     /// a test should depend on, and the judgement about what counts as
     /// "somewhere a person goes" is the part worth reviewing.
+    #[cfg(not(target_os = "macos"))]
     pub(super) fn parse_mount_table(table: &str) -> Vec<Mount> {
-        let mut mounts = Vec::new();
-        for line in table.lines() {
+        let candidates = table.lines().filter_map(|line| {
             let mut fields = line.split_whitespace();
             let (Some(_device), Some(point), Some(kind)) =
                 (fields.next(), fields.next(), fields.next())
             else {
-                continue;
+                return None;
             };
-            if PSEUDO_FILESYSTEMS.contains(&kind) {
+            // The table escapes spaces as octal, which is the only escape
+            // that turns up in practice.
+            Some((point.replace("\\040", " "), kind.to_string()))
+        });
+        judge_mounts(candidates, &PSEUDO_FILESYSTEMS, &PSEUDO_ROOTS)
+    }
+
+    /// Which candidates deserve a button — the half both platforms share.
+    ///
+    /// The *lists* are per platform and the readers differ completely (a text
+    /// table on Linux, `getfsstat` on macOS), but "drop the plumbing types,
+    /// drop the plumbing roots and everything under them, dedupe, label by
+    /// last component" is one judgement — and keeping it in one function is
+    /// what lets the macOS lists be fixture-tested on a Linux box.
+    pub(super) fn judge_mounts(
+        candidates: impl Iterator<Item = (String, String)>,
+        pseudo_filesystems: &[&str],
+        pseudo_roots: &[&str],
+    ) -> Vec<Mount> {
+        let mut mounts = Vec::new();
+        for (point, kind) in candidates {
+            if pseudo_filesystems.contains(&kind.as_str()) {
                 continue;
             }
-            if PSEUDO_ROOTS
+            if pseudo_roots
                 .iter()
                 .any(|root| point == *root || point.starts_with(&format!("{root}/")))
             {
                 continue;
             }
-            // The table escapes spaces as octal, which is the only escape
-            // that turns up in practice.
-            let point = point.replace("\\040", " ");
             let path = VfsPath::new(&point);
             let label = match path.file_name() {
                 Some(name) => name.to_string(),
@@ -208,6 +263,77 @@ mod imp {
             mounts.push(Mount { path, label });
         }
         mounts
+    }
+
+    /// Filesystem types that are macOS talking to itself.
+    ///
+    /// **Asserted from documentation, not from a running Mac** — the first
+    /// thing to review when one exists. `devfs` is `/dev`; `autofs` is the
+    /// automounter's placeholder mounts (`/System/Volumes/Data/home` and the
+    /// `map -hosts` style entries).
+    // `any(macos, test)` is the precise statement of who reads these: the
+    // macOS `mount_points` at runtime, and the Linux-run fixture tests below,
+    // which exist so the lists are reviewable without a Mac.
+    #[cfg(any(target_os = "macos", test))]
+    pub(super) const MACOS_PSEUDO_FILESYSTEMS: [&str; 2] = ["devfs", "autofs"];
+
+    /// Directories that are plumbing on macOS, and everything below them.
+    ///
+    /// `/System/Volumes` holds the sealed-system split (`Preboot`, `VM`,
+    /// `Update`, and the `Data` volume, which is already reachable as `/`
+    /// through firmlinks — a second button for the same files would be a
+    /// trap). `/private/var/vm` is swap. External disks land under
+    /// `/Volumes/<name>`, which is exactly what the drive bar is for and is
+    /// deliberately **not** listed here.
+    #[cfg(any(target_os = "macos", test))]
+    pub(super) const MACOS_PSEUDO_ROOTS: [&str; 3] = ["/dev", "/System/Volumes", "/private/var/vm"];
+
+    /// The mounted filesystems, asked of the kernel.
+    ///
+    /// `getfsstat(2)` with `MNT_NOWAIT`: the cached list, not a fresh `statfs`
+    /// of every mount — a network mount that has gone away must not hang the
+    /// drive bar. Two calls, as the API intends: first a count, then the fill;
+    /// a mount appearing between the two is cut off by the kernel, which
+    /// reports how many it actually wrote.
+    #[cfg(target_os = "macos")]
+    pub fn mount_points() -> Vec<Mount> {
+        let candidates = read_fsstat().into_iter();
+        judge_mounts(candidates, &MACOS_PSEUDO_FILESYSTEMS, &MACOS_PSEUDO_ROOTS)
+    }
+
+    /// Every mount as `(mount point, filesystem type)`, decoded from the
+    /// fixed-size C arrays `statfs` carries them in.
+    #[cfg(target_os = "macos")]
+    fn read_fsstat() -> Vec<(String, String)> {
+        // SAFETY: the first call asks only for the count; the second hands
+        // the kernel a buffer of exactly that many zeroed `statfs` records
+        // and the true byte size, and trusts only as many records as the
+        // kernel says it filled. The name fields are NUL-terminated by the
+        // kernel within their fixed arrays.
+        unsafe {
+            let count = libc::getfsstat(std::ptr::null_mut(), 0, libc::MNT_NOWAIT);
+            if count <= 0 {
+                return Vec::new();
+            }
+            let mut stats = vec![std::mem::zeroed::<libc::statfs>(); count as usize];
+            let bytes = std::mem::size_of_val(&stats[..]) as libc::c_int;
+            let filled = libc::getfsstat(stats.as_mut_ptr(), bytes, libc::MNT_NOWAIT);
+            if filled <= 0 {
+                return Vec::new();
+            }
+            stats.truncate(filled as usize);
+            stats
+                .iter()
+                .map(|stat| {
+                    let text = |field: &[libc::c_char]| {
+                        std::ffi::CStr::from_ptr(field.as_ptr())
+                            .to_string_lossy()
+                            .into_owned()
+                    };
+                    (text(&stat.f_mntonname), text(&stat.f_fstypename))
+                })
+                .collect()
+        }
     }
 
     /// How much room the filesystem holding `path` has, and how much is left.
@@ -240,8 +366,18 @@ mod imp {
         })
     }
 
-    /// `$XDG_CONFIG_HOME`, or `~/.config` when it is unset — the freedesktop
-    /// rule, and the one every other program on the machine follows.
+    /// Where per-user settings belong when `$XDG_CONFIG_HOME` says nothing:
+    /// the freedesktop `~/.config` on Linux, `~/Library/Application Support`
+    /// on macOS — each the place every other program on that machine uses.
+    #[cfg(not(target_os = "macos"))]
+    const CONFIG_FALLBACK: &str = ".config";
+    #[cfg(target_os = "macos")]
+    const CONFIG_FALLBACK: &str = "Library/Application Support";
+
+    /// `$XDG_CONFIG_HOME` when set and absolute, else the platform's own
+    /// place. The XDG override is honoured on macOS too: somebody who sets it
+    /// there has said where they want their dotfiles, and the tests lean on
+    /// it besides.
     pub fn config_dir() -> Option<PathBuf> {
         if let Some(configured) = std::env::var_os("XDG_CONFIG_HOME") {
             let path = PathBuf::from(configured);
@@ -249,7 +385,7 @@ mod imp {
                 return Some(path);
             }
         }
-        home_dir().map(|home| home.join(".config"))
+        home_dir().map(|home| home.join(CONFIG_FALLBACK))
     }
 
     /// The freedesktop backend wraps the real `io::Error`, so unwrapping it
@@ -455,7 +591,7 @@ mod tests {
         assert_eq!(to_std_path(&from_std_path(&native)), native);
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn the_mount_table_keeps_the_places_a_person_navigates_to() {
         // A fixture, not the running machine: what happens to be mounted
@@ -478,7 +614,7 @@ cgroup2 /sys/fs/cgroup cgroup2 rw 0 0
         assert_eq!(mounts[2].label, "My Stick", "and an escaped space is one");
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn a_stock_ubuntu_desktop_offers_its_disks_and_nothing_else() {
         // The table a real machine reported, trimmed. Everything here passed
@@ -504,7 +640,7 @@ tmpfs /run/user/1000 tmpfs rw,nosuid 0 0
         assert_eq!(points, ["/", "/boot/efi"]);
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn tmp_survives_even_when_it_is_a_tmpfs() {
         // The other way to have excluded `/run` was to call every `tmpfs`
@@ -523,11 +659,66 @@ tmpfs /run tmpfs rw,nosuid,nodev 0 0
         assert_eq!(points, ["/", "/tmp"]);
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn a_mount_table_that_makes_no_sense_yields_no_buttons() {
         assert!(imp::parse_mount_table("").is_empty());
         assert!(imp::parse_mount_table("garbage\nalso garbage\n").is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_macs_mount_list_offers_the_root_and_the_external_disks() {
+        // What `getfsstat` reports on a stock Mac, per documentation — the
+        // reader itself can only run there, but the judgement over its output
+        // is shared code and these are the macOS lists, reviewed here on
+        // Linux because that is the box we have. `/System/Volumes/*` is the
+        // sealed-system plumbing (`Data` is `/` again, through firmlinks — a
+        // second button for the same files would be a trap); external disks
+        // land under `/Volumes/<name>` and are the drive bar's whole point.
+        let reported = [
+            ("/", "apfs"),
+            ("/dev", "devfs"),
+            ("/System/Volumes/Preboot", "apfs"),
+            ("/System/Volumes/VM", "apfs"),
+            ("/System/Volumes/Update", "apfs"),
+            ("/System/Volumes/Data", "apfs"),
+            ("/System/Volumes/Data/home", "autofs"),
+            ("/private/var/vm", "apfs"),
+            ("/Volumes/Backup", "apfs"),
+            ("/Volumes/My Stick", "msdos"),
+        ];
+        let mounts = imp::judge_mounts(
+            reported
+                .iter()
+                .map(|(point, kind)| (point.to_string(), kind.to_string())),
+            &imp::MACOS_PSEUDO_FILESYSTEMS,
+            &imp::MACOS_PSEUDO_ROOTS,
+        );
+
+        let points: Vec<&str> = mounts.iter().map(|m| m.path.as_str()).collect();
+        assert_eq!(points, ["/", "/Volumes/Backup", "/Volumes/My Stick"]);
+        assert_eq!(mounts[0].label, "/", "the root labels itself");
+        assert_eq!(
+            mounts[2].label, "My Stick",
+            "a space needs no unescaping here"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dot_hides_everywhere_and_the_bsd_flag_hides_on_its_own() {
+        // The rule behind `is_hidden`, pure so this box can test what only a
+        // Mac can trigger: Finder hides `~/Library` with UF_HIDDEN (0x8000),
+        // a flag Linux never sets — which is why the Linux branch passes 0.
+        assert!(imp::hidden_from(".config", 0), "the dot, flags or not");
+        assert!(imp::hidden_from("Library", 0x8000), "the flag alone");
+        assert!(imp::hidden_from(".hidden", 0x8000), "both at once");
+        assert!(!imp::hidden_from("Documents", 0), "neither");
+        assert!(
+            !imp::hidden_from("Documents", 0x4000),
+            "a different flag is not this flag"
+        );
     }
 
     #[cfg(unix)]

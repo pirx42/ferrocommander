@@ -13,8 +13,11 @@ is fixes, not architecture.
 Owner, 2026-08-30, on the four questions the proposal raised:
 
 - **The gate gains a macOS cross-check**, `aarch64-apple-darwin` only.
-- **`mount_points` uses `getfsstat(2)` via a new `libc` dependency** —
-  the real API, not a parse of `mount`'s output.
+- **`mount_points` uses `getfsstat(2)` via `libc`** — the real API, not a
+  parse of `mount`'s output. *(The proposal called `libc` a new dependency
+  and priced the decision accordingly; it is not — `space()` has used
+  `libc::statvfs` since the status line gained its disk figure. The decision
+  stands, one input to it corrected.)*
 - **The macOS keymap layer is prepared as data**, shipped dormant, marked
   unjudged until a Mac can feel it.
 - **No packaging script.** A bundler nobody can run is a sequence nobody can
