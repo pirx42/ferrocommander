@@ -430,6 +430,25 @@ pub const PACK_FALLBACK_NAME: &str = "archive";
 pub const EDIT_IN_ARCHIVE: &str =
     "This file is inside an archive. F3 shows it; editing it needs it unpacked first.";
 
+/// What `Ctrl+C` and `Ctrl+X` say inside an archive, and what `Ctrl+V` says
+/// when the pane being pasted into is one.
+///
+/// The first is the reason `F4` and Enter are refused there: an entry has no
+/// operating-system path, so a URI naming one would point at a file on the
+/// disk that merely shares its name. The second is simply that an archive is
+/// read-only.
+pub const CLIPBOARD_IN_ARCHIVE: &str =
+    "These are inside an archive. Unpack them first — the clipboard carries paths on the disk.";
+pub const PASTE_INTO_ARCHIVE: &str =
+    "This is inside an archive, which is read-only. Unpack it somewhere and paste there.";
+
+/// How much of a clipboard payload is read.
+///
+/// A clipboard is somebody else's data and its size is their choice, so it is
+/// bounded: a megabyte is tens of thousands of paths, and a file manager
+/// pasting more than that has a different problem.
+pub const CLIPBOARD_READ_LIMIT: usize = 1024 * 1024;
+
 /// What `Enter` says when the file is inside an archive.
 ///
 /// Separate from [`EDIT_IN_ARCHIVE`] rather than shared: they are different

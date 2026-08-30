@@ -36,6 +36,8 @@
 | `Ctrl+↓`, `Alt+F8` | The command history — see [command-line.md](command-line.md) |
 | a letter, digit or symbol | Move the cursor to the next row whose name contains it |
 | `→` | Put the keyboard in the command line |
+| `Ctrl+C` / `Ctrl+X` | Put what is marked on the system clipboard, to copy or to move |
+| `Ctrl+V` | Copy or move what is on the clipboard into this pane |
 | `Ctrl+Enter` | Put the name under the cursor into the command line |
 | `Alt+F7` | Find files below the active pane — see [search.md](search.md) |
 | `Alt+F5` | Pack what is marked into a new archive, beside the other pane — see [archives.md](archives.md) |

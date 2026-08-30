@@ -3249,6 +3249,98 @@ fn the_title_names_the_build_it_is_running() {
 }
 
 #[test]
+fn ctrl_c_then_ctrl_v_copies_into_the_other_pane() {
+    // The system clipboard, not a buffer of our own — which is why this works
+    // between the panes *and* with Nautilus, for the same code.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("ctrl+c");
+
+    app.key("Tab");
+    app.key("ctrl+v");
+
+    app.await_exists("dst/notes.txt");
+    app.await_contents("dst/notes.txt", SOURCE_TEXT);
+    // A copy leaves the source where it was.
+    assert!(app.path("src/notes.txt").exists(), "the original went");
+}
+
+#[test]
+fn ctrl_x_then_ctrl_v_moves_rather_than_copies() {
+    // The verb is the one thing `text/uri-list` cannot carry and the GNOME
+    // format exists for. Losing it turns a move into a copy silently.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("ctrl+x");
+
+    app.key("Tab");
+    app.key("ctrl+v");
+
+    app.await_exists("dst/notes.txt");
+    app.await_contents("dst/notes.txt", SOURCE_TEXT);
+    // The engine's move: it copies, checks, and only then removes the source.
+    app.await_gone("src/notes.txt");
+}
+
+#[test]
+fn the_clipboard_carries_everything_that_is_marked() {
+    // The same rule F5 follows — everything marked, or the cursor row — so
+    // the two keys never disagree about what an operation is for.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Insert");
+    app.key("Insert");
+    app.key("ctrl+c");
+
+    app.key("Tab");
+    app.key("ctrl+v");
+
+    app.await_exists("dst/data.bin");
+    app.await_exists("dst/notes.txt");
+}
+
+#[test]
+fn a_name_with_a_space_survives_the_clipboard() {
+    // A file called `my notes.txt` is ordinary, and a URI that carried the
+    // space raw would be one nothing can read back — including us.
+    let app = in_src_and_dst(|home| {
+        arrange(home);
+        std::fs::write(home.join("src/my notes.txt"), SOURCE_TEXT).unwrap();
+    });
+    // `..`, nested, data.bin, my notes.txt, notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("ctrl+c");
+
+    app.key("Tab");
+    app.key("ctrl+v");
+
+    app.await_exists("dst/my notes.txt");
+}
+
+#[test]
+fn copying_inside_an_archive_is_refused_rather_than_pointing_at_the_disk() {
+    // An entry in an archive has no operating-system path, so a URI naming
+    // one would point at a file on the disk that merely shares its name.
+    let app = in_src_and_dst(with_an_archive);
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/bundle.zip", "/dst");
+
+    // `..`, deeper, packed.txt.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("ctrl+c");
+
+    app.focus_dialog(DIALOG_OUTPUT);
+    app.key("Return");
+    app.settle();
+    assert!(
+        !app.path("dst/packed.txt").exists(),
+        "something was put on the clipboard after all"
+    );
+}
+
+#[test]
 fn the_right_arrow_puts_the_keyboard_in_the_command_line() {
     // A pane has no horizontal movement to spend the key on, and the command
     // line needs a way in that does not cost the letter keys — which

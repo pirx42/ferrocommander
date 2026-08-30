@@ -62,6 +62,12 @@ pub enum Action {
     /// Shift+F8 / Shift+Del — delete for good.
     DeletePermanently,
     /// Space — mark the row under the cursor, leaving the cursor where it is.
+    /// Puts what is marked on the system clipboard, to be copied.
+    ClipboardCopy,
+    /// The same, to be moved.
+    ClipboardCut,
+    /// Copies or moves what is on the clipboard into the active pane.
+    ClipboardPaste,
     /// Puts the keyboard in the command line.
     ///
     /// The way in, now that a letter searches the pane instead of typing.
@@ -145,7 +151,7 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 56] = [
+    const ALL: [Action; 59] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
@@ -167,6 +173,9 @@ impl Action {
         Action::CreateDir,
         Action::Delete,
         Action::DeletePermanently,
+        Action::ClipboardCopy,
+        Action::ClipboardCut,
+        Action::ClipboardPaste,
         Action::FocusCommandLine,
         Action::ToggleMark,
         Action::ToggleMarkAndAdvance,
@@ -545,6 +554,23 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::CloneToRight,
     },
+    // The three every desktop shares. Nothing in this program claimed them,
+    // and a file manager that did not answer them would be the odd one out.
+    Binding {
+        key: Key::c,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::ClipboardCopy,
+    },
+    Binding {
+        key: Key::x,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::ClipboardCut,
+    },
+    Binding {
+        key: Key::v,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::ClipboardPaste,
+    },
     // Plain Right, which nothing claimed: a pane has no horizontal movement
     // to spend it on, and the command line needs a way in from the keyboard.
     Binding {
@@ -649,6 +675,9 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("sort_by_date", Action::SortBy(SortKey::Modified)),
     ("command_history", Action::CommandHistory),
     ("focus_command_line", Action::FocusCommandLine),
+    ("clipboard_copy", Action::ClipboardCopy),
+    ("clipboard_cut", Action::ClipboardCut),
+    ("clipboard_paste", Action::ClipboardPaste),
     ("insert_name", Action::InsertName),
     ("favourites", Action::Favourites),
     ("branch_view", Action::BranchView),

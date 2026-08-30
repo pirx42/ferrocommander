@@ -7,6 +7,7 @@
 
 pub mod archive;
 pub mod branch;
+pub mod clipboard;
 pub mod command;
 pub mod config;
 pub mod glob;

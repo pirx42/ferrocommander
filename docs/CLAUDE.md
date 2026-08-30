@@ -34,6 +34,9 @@ cross-references instead of duplication.
 - [command-line.md](command-line.md) — the command line at the bottom: how a
   typed line is run, why `cd` is read rather than spawned, and when output is
   shown.
+- [clipboard.md](clipboard.md) — `Ctrl+C`/`X`/`V`: why it is the system
+  clipboard and never a buffer of our own, what the three formats carry, and
+  what the encoding has to get right.
 - [config.md](config.md) — the settings file: where it lives, why it is
   written as it changes rather than on exit, why the write is atomic, and why
   nothing about it may stop the program starting.

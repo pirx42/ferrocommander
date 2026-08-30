@@ -16,6 +16,11 @@ repository = "https://github.com/pirx42/ferrocommander"
 [workspace.dependencies]
 tc-core = { path = "crates/tc-core" }
 tempfile = "3"
+# Percent-encoding for the `file://` URIs the clipboard carries. A path with
+# a space in it is ordinary, and encoding one by hand is the kind of small
+# job that is wrong in a corner nobody tests. Already in the tree as a
+# dependency of `trash`, so this costs no new code to build.
+urlencoding = "2"
 # How much room is left on a filesystem, which the status line shows. Unix
 # only: `statvfs` has no std equivalent, and the alternative is running `df`
 # and parsing it — a process per directory step, for a number the kernel will

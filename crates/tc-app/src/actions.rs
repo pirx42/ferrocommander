@@ -13,18 +13,22 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use gtk::gdk;
 use gtk::glib;
+use gtk::prelude::*;
 
+use tc_core::clipboard;
 use tc_core::config;
 use tc_core::ops::{DeleteMode, Destination, Job};
 use tc_core::vfs::{LocalFs, VfsError, VfsPath};
 
 use crate::constants::{
-    COMMAND_IN_ARCHIVE, EDIT_IN_ARCHIVE, FAVOURITE_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT,
-    OPEN_IN_ARCHIVE, PATTERN_DEFAULT, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE,
-    PROMPT_MOVE, PROMPT_PACK, PROMPT_PATTERN, RIGHT_PANE, TITLE_COPY, TITLE_CREATE_DIR,
-    TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE,
-    TITLE_OUTPUT, TITLE_PACK, TITLE_UNMARK_PATTERN,
+    CLIPBOARD_IN_ARCHIVE, CLIPBOARD_READ_LIMIT, COMMAND_IN_ARCHIVE, EDIT_IN_ARCHIVE,
+    FAVOURITE_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT, OPEN_IN_ARCHIVE, PASTE_INTO_ARCHIVE,
+    PATTERN_DEFAULT, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK,
+    PROMPT_PATTERN, RIGHT_PANE, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE,
+    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK,
+    TITLE_UNMARK_PATTERN,
 };
 use crate::jobs::Packing;
 use crate::keymap::Action;
@@ -83,6 +87,9 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         // the same as starting fresh, and this key should not be the one that
         // decides that.
         Action::FocusCommandLine => shell.borrow().command_line.grab_focus(),
+        Action::ClipboardCopy => put_on_clipboard(shell, false),
+        Action::ClipboardCut => put_on_clipboard(shell, true),
+        Action::ClipboardPaste => paste_from_clipboard(shell),
         Action::ToggleMark => shell.borrow_mut().active_pane().toggle_mark(0),
         Action::ToggleMarkAndAdvance => shell.borrow_mut().active_pane().toggle_mark(1),
         Action::ToggleMarkAndRetreat => shell.borrow_mut().active_pane().toggle_mark(-1),
@@ -816,6 +823,143 @@ pub(crate) fn start_viewing(shell: &Rc<RefCell<Shell>>) {
         return;
     };
     dialogs::Viewer::open(&window, fs, view);
+}
+
+/// `Ctrl+C` and `Ctrl+X`: put what is marked on the system clipboard.
+///
+/// The *system* clipboard rather than a buffer of our own, and that is the
+/// whole point: the same keystroke has to reach Nautilus, and a second
+/// FerroCommander window is just another program as far as this is
+/// concerned. It costs nothing extra — writing the format other file managers
+/// read is what makes both work.
+///
+/// Three formats, because they answer three different readers: the GNOME one
+/// carries the verb, `text/uri-list` is what everything else understands, and
+/// plain text is what a terminal or an editor will paste as a path.
+///
+/// Inside an archive this is refused with a reason, for the reason `F4` and
+/// Enter already are: the entries have no operating-system path, and a URI
+/// naming one would point at a file on the disk that merely shares its name.
+fn put_on_clipboard(shell: &Rc<RefCell<Shell>>, cut: bool) {
+    let state = shell.borrow();
+    let pane = &state.panes[state.active];
+    let sources = jobs::sources(pane.listing());
+    if sources.is_empty() {
+        return;
+    }
+    if pane.in_archive() {
+        let window = state.window();
+        drop(state);
+        if let Some(window) = window {
+            dialogs::show_output(&window, TITLE_OUTPUT, CLIPBOARD_IN_ARCHIVE);
+        }
+        return;
+    }
+    let Some(window) = state.window() else {
+        return;
+    };
+    let clipped = clipboard::Clipped {
+        paths: sources,
+        cut,
+    };
+    let gnome = gdk::ContentProvider::for_bytes(
+        clipboard::GNOME_COPIED_FILES,
+        &glib::Bytes::from_owned(clipboard::encode_gnome(&clipped).into_bytes()),
+    );
+    let uris = gdk::ContentProvider::for_bytes(
+        clipboard::URI_LIST,
+        &glib::Bytes::from_owned(clipboard::encode_uri_list(&clipped.paths).into_bytes()),
+    );
+    let text = gdk::ContentProvider::for_value(&paths_as_text(&clipped.paths).to_value());
+    let union = gdk::ContentProvider::new_union(&[gnome, uris, text]);
+    window.clipboard().set_content(Some(&union)).ok();
+}
+
+/// The paths one per line, for whatever pastes text rather than files.
+fn paths_as_text(paths: &[VfsPath]) -> String {
+    paths
+        .iter()
+        .map(|path| path.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `Ctrl+V`: copy or move what is on the clipboard into the active pane.
+///
+/// Reading is asynchronous — the clipboard's owner is another process and may
+/// take its time — so this hands off to a callback and returns. Nothing is
+/// blocked meanwhile, which is the same reason every other long thing in this
+/// program is a callback.
+fn paste_from_clipboard(shell: &Rc<RefCell<Shell>>) {
+    let (window, into, read_only) = {
+        let state = shell.borrow();
+        let pane = &state.panes[state.active];
+        let Some(window) = state.window() else {
+            return;
+        };
+        (window, pane.target_dir(), pane.fs().read_only())
+    };
+    // An archive is read-only, so the paste is refused before anything is
+    // read rather than after the engine has scanned it.
+    if read_only {
+        dialogs::show_output(&window, TITLE_OUTPUT, PASTE_INTO_ARCHIVE);
+        return;
+    }
+
+    let shell = shell.clone();
+    window.clipboard().read_async(
+        &[clipboard::GNOME_COPIED_FILES],
+        glib::Priority::DEFAULT,
+        gtk::gio::Cancellable::NONE,
+        move |result| {
+            let Ok((stream, _)) = result else {
+                return;
+            };
+            let pasting = shell.clone();
+            let into = into.clone();
+            read_all(stream, move |payload| {
+                let Some(clipped) = clipboard::decode_gnome(&payload) else {
+                    return;
+                };
+                submit_paste(&pasting, clipped, into);
+            });
+        },
+    );
+}
+
+/// Builds the job a pasted clipboard asks for and hands it to the queue.
+fn submit_paste(shell: &Rc<RefCell<Shell>>, clipped: clipboard::Clipped, into: VfsPath) {
+    if clipped.paths.is_empty() {
+        return;
+    }
+    // A cut is a move, which is the engine's own operation: it copies, checks,
+    // and only then removes the source. Nothing here deletes anything.
+    let job = match clipped.cut {
+        true => Job::Move {
+            sources: clipped.paths,
+            destination: Destination::Into(into),
+        },
+        false => Job::Copy {
+            sources: clipped.paths,
+            destination: Destination::Into(into),
+        },
+    };
+    submit(shell, job, Writes::InThisPane);
+}
+
+/// Reads a clipboard stream to its end and hands over what it said.
+fn read_all(stream: gtk::gio::InputStream, done: impl FnOnce(String) + 'static) {
+    stream.read_bytes_async(
+        CLIPBOARD_READ_LIMIT,
+        glib::Priority::DEFAULT,
+        gtk::gio::Cancellable::NONE,
+        move |result| {
+            let Ok(bytes) = result else {
+                return;
+            };
+            done(String::from_utf8_lossy(&bytes).into_owned());
+        },
+    );
 }
 
 /// Enter on a file: hand it to whatever the desktop opens that kind with.
