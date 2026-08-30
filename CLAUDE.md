@@ -43,6 +43,7 @@ cargo test --workspace     # All tests, including the end-to-end UI suite
 cargo fmt --all -- --check # Format gate
 cargo clippy --workspace --all-targets -- -D warnings  # Lint gate (CI)
 cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings  # Windows cfg branch
+cargo clippy -p tc-core --all-targets --target aarch64-apple-darwin -- -D warnings   # macOS cfg branch
 cargo build --release      # Release build
 ```
 
@@ -67,9 +68,10 @@ failures that cost the most there (`os error 4551`, which is Smart App Control
 and not a missing package, and `core.autocrlf`, which bites twice) both
 announce themselves as something else entirely.
 
-The Windows lint step needs its target installed once —
-`rustup target add x86_64-pc-windows-gnu`. No `sudo`, and nothing else in the
-gate asks for it, so a fresh clone fails only at that one step.
+The Windows and macOS lint steps each need their target installed once —
+`rustup target add x86_64-pc-windows-gnu` and
+`rustup target add aarch64-apple-darwin`. No `sudo`, and nothing else in the
+gate asks for them, so a fresh clone fails only at those two steps.
 
 **If your global git config sets `autocrlf = true`,** turn it off for this
 repository (`git config core.autocrlf false`). On Linux it rewrites the

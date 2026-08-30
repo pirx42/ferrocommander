@@ -224,15 +224,22 @@ Symlink tests are `#[cfg(unix)]`: creating a symlink on Windows requires
 elevated privileges, so the tests would fail for reasons unrelated to the
 code. `LocalFs` itself handles symlinks on both platforms.
 
-Because half of `platform.rs` is invisible to a Linux build, the green gate
-cross-checks the other half:
+Because parts of `platform.rs` are invisible to a Linux build, the green
+gate cross-checks the other targets:
 
 ```bash
 cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+cargo clippy -p tc-core --all-targets --target aarch64-apple-darwin -- -D warnings
 ```
 
-This is not ceremony — it caught a Windows-only build break (an import used
-only inside the `cfg(unix)` test module) on the very first run.
+The Windows one is not ceremony — it caught a Windows-only build break (an
+import used only inside the `cfg(unix)` test module) on the very first run.
+The macOS one was green before any macOS branch existed — 7.6 s warm, every
+dependency compiling — which is worth knowing precisely: it means a compile
+check cannot see the Linux assumptions living inside `cfg(unix)`, and the
+macOS branches this gate watches had to be *written* before it watched
+anything ([the groundwork plan](plans/2026-08-30-macos-groundwork.md)
+is the record).
 
 The check covers `tc-core` only. Cross-checking `tc-app` would need GTK's
 `-sys` build scripts to find a mingw libgtk-4 through pkg-config, which a
