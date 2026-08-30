@@ -51,6 +51,22 @@ cargo build --release      # Release build
 optional garnish: without them `cargo test --workspace` fails, by design —
 a UI test that quietly skips is worse than no UI test.
 
+**On Windows** the build wants MSYS2's **MINGW64** environment — not UCRT64,
+because Rust's `x86_64-pc-windows-gnu` links msvcrt and the
+`mingw-w64-x86_64-*` packages are what match it:
+
+```powershell
+pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-gtk4
+$env:PATH = "C:\msys64\mingw64\bin;$env:USERPROFILE\.cargo\bin;" + $env:PATH
+```
+
+That directory has to stay on `PATH` at *runtime* too — the GTK4 DLLs live
+there — and the app needs `GSK_RENDERER=cairo` to start at all. Read
+[docs/windows.md](docs/windows.md) **before** the first Windows build: the two
+failures that cost the most there (`os error 4551`, which is Smart App Control
+and not a missing package, and `core.autocrlf`, which bites twice) both
+announce themselves as something else entirely.
+
 The Windows lint step needs its target installed once —
 `rustup target add x86_64-pc-windows-gnu`. No `sudo`, and nothing else in the
 gate asks for it, so a fresh clone fails only at that one step.
@@ -110,6 +126,7 @@ The project is in its build-up phase; this table grows with the code.
 | Favourite directories (Ctrl+D): the list, and where it lives | [docs/keymap.md](docs/keymap.md) + [docs/config.md](docs/config.md) |
 | Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
 | Building the Ubuntu package, and what is in it | [docs/packaging.md](docs/packaging.md) |
+| Building or testing on Windows, and why it just failed | [docs/windows.md](docs/windows.md) |
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
 | `Ctrl+C`/`X`/`V`, and talking to other file managers | [docs/clipboard.md](docs/clipboard.md) |
 | Noticing external changes: the watcher, `Ctrl+R` | [docs/watching.md](docs/watching.md) |

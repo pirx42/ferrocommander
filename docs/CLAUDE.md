@@ -13,8 +13,8 @@ cross-references instead of duplication.
 - [listing.md](listing.md) — the directory model behind a pane: ordering
   rules, the `..` row, hidden-file filtering, cursor behavior.
 - [ui-shell.md](ui-shell.md) — the GTK4 window: widget tree, row rendering,
-  columns, active-pane marking, the build stamp in the title, and the GTK
-  version floor.
+  columns, active-pane marking, the build stamp in the title, the GTK
+  version floor, and the renderer the Windows build has to be told to use.
 - [ops.md](ops.md) — the file-operation engine: jobs, the scan/execute
   split, progress events, conflict resolution, what a cancel does and does
   not undo.
@@ -43,6 +43,10 @@ cross-references instead of duplication.
 - [packaging.md](packaging.md) — the Ubuntu `.deb`: what it holds, how its
   version ties to the title bar, and why the logic is in a script rather than
   in the workflow.
+- [windows.md](windows.md) — building, running and testing on Windows: the
+  MSYS2 toolchain, the two failures that announce themselves as something
+  else, the renderer the app has to be told to use, and what the suite can
+  and cannot do there.
 - [reliability.md](reliability.md) — the standing reliability requirement for
   file operations, and where the tests live.
 - [performance.md](performance.md) — the standing speed requirement, the

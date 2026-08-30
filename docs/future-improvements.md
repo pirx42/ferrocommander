@@ -4,7 +4,8 @@
 
 Known gaps that were deliberately left open, with the reason and the place
 they belong. Each was found while implementing something else; none is a bug
-in what shipped.
+in what shipped — except the two Windows entries under *Platform coverage*,
+which are real ones, and are recorded here because there is nowhere better.
 
 ## Engine
 
@@ -82,14 +83,43 @@ in practice rather than in principle.
 
 ## Platform coverage
 
-**The Windows GTK build is unverified.**
-The green gate cross-compiles `tc-core` for `x86_64-pc-windows-gnu`, which
-covers every platform-divergent line in the project — `tc-app` has no `cfg`
-branches. It cannot cover `tc-app` itself, because GTK's `-sys` build scripts
-need a mingw libgtk-4 through pkg-config that a Linux box has no way to
-provide. Nothing has been *run* on Windows.
-*Home:* needs a Windows or mingw toolchain in the loop.
-*From:* [vfs.md](vfs.md), [ui-shell.md](ui-shell.md).
+**The Windows app needs `GSK_RENDERER=cairo` to start.**
+Built and run on Windows 11 for the first time on 2026-08-30 — MSYS2 MINGW64,
+GTK4 4.22.4, `x86_64-pc-windows-gnu`. The workspace compiles clean, and under
+cairo the app works: both panes list, the drive bar offers the real drives,
+the status line and the command line are live. With the renderer GTK picks by
+itself it dies about six seconds in with `0xC0000005`, and dies quietly —
+empty stderr, no window ever presented, five runs out of five.
+
+The obvious explanation does not survive the evidence: an explicit
+`GSK_RENDERER=vulkan` runs fine, so this is not a GPU that cannot do Vulkan.
+`gl` and `ngl` refuse to realize at all — "OpenGL requires Direct
+Composition" — which makes GTK's fallback path, rather than any one renderer,
+the thing to suspect. The machine it was found on has an AMD Radeon 880M with
+NVIDIA Optimus Vulkan layers loaded, which is not the simple case.
+*Home:* needs a debugger on Windows, and a second Windows machine to tell a
+driver problem from a code one.
+*From:* the first Windows run, 2026-08-30 ([ui-shell.md](ui-shell.md),
+[windows.md](windows.md)).
+
+**The command line does not run anything on Windows.**
+`command.rs` reads `$SHELL` and falls back to `/bin/sh` — a constant whose own
+comment says "present on every Unix by definition", which is true and is
+exactly the assumption Windows breaks. There is no `$SHELL` there and no
+`/bin/sh`, so every command fails with *"the system cannot find the path"*
+before it starts. Nine of the fifteen `tc-core` failures in the first Windows
+test run were this one cause.
+
+The fix is a platform branch to `%COMSPEC%` (`cmd.exe`) with `/C` in place of
+`-c`, which belongs in `vfs::platform` beside every other such difference. It
+is not merely swapping the name: the section it would break is
+[command-line.md](command-line.md)'s "through a shell, on purpose" — pipes,
+globs and `~` are the reason the feature exists, and `cmd.exe` does not do
+`~` or globbing. Whether the answer is PowerShell instead, or the MSYS2 shell
+when one is present, is a product decision rather than a porting detail.
+*Home:* with the Windows startup crash above — both want one session on
+Windows rather than two.
+*From:* the first Windows test run, 2026-08-30.
 
 **macOS is wanted, to the standard a Mac user would accept.**
 Decided 2026-08-29. Not "it compiles" — the engine very nearly does already,
@@ -151,6 +181,28 @@ it on, and the harness number is the one to distrust.
 *From:* the phase 7 discussion, against the v1 scope's Linux-and-Windows line.
 
 ## Testing
+
+**Six engine tests assert Linux rather than the engine.**
+The first Windows run of `cargo test -p tc-core --no-fail-fast` (2026-08-30)
+passes 331 of 346. Nine failures are the `/bin/sh` gap above. The other six
+are the suite's own assumptions:
+
+| Test | What it assumes |
+|---|---|
+| `a_file_under_a_hidden_directory_is_hidden…` | a leading dot hides a directory — [vfs.md](vfs.md) says it does not on Windows |
+| `a_real_filesystem_reports_a_total_and_something_free` | free space, which is Unix-only here |
+| `removing_a_directory_as_a_file_reports_is_a_directory` | `IsADirectory`; Windows gives `PermissionDenied` |
+| `trashing_something_that_is_gone_reports_not_found` | `NotFound`; `trash` hands back a raw Win32 code |
+| `reading_a_subdirectory_is_not_a_change_to_the_directory` | inotify staying quiet on a read; `ReadDirectoryChangesW` fires |
+| `a_column_width_reaches_the_file_as_a_number…` | that a `VfsPath` string is a real path — it hands `/C:/…` to `std::fs` |
+
+Only the last is a plain test bug. The rest are real differences, and `cfg`
+guards would hide them rather than settle them — the two error-mapping rows
+are [vfs.md](vfs.md)'s "Windows keeps the raw code" decision meeting tests
+that want a named error, which is worth deciding once rather than skipped
+five times.
+*Home:* whenever Windows gets a session of its own.
+*From:* the first Windows test run, 2026-08-30.
 
 **Which bindings the suite presses is now counted, not claimed.**
 Kept as a record of a gap that closed, because the entry outlived it in both

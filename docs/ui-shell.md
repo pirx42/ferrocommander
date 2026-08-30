@@ -335,6 +335,25 @@ Raising it is not free elsewhere: from 4.12 a `SignalListItemFactory` hands
 its callbacks a plain `Object` rather than a `ListItem`, because a factory
 can also produce header and cell items, so the column factory downcasts.
 
+## The renderer on Windows
+
+The Windows build needs `GSK_RENDERER=cairo` to start. With the renderer GTK
+picks by itself the process dies about six seconds in with `0xC0000005`, and
+dies quietly: empty stderr, no window ever presented, none of what a Rust
+panic would have printed. Five runs out of five, GTK 4.22.4, 2026-08-30.
+
+The obvious explanation does not fit. An explicit `GSK_RENDERER=vulkan`
+*survives*, so a GPU that cannot do Vulkan is not what is happening, and `gl`
+and `ngl` decline to realize at all — "OpenGL requires Direct Composition" —
+which points at GTK's fallback path rather than at any one renderer. It is
+recorded rather than fixed because separating a driver problem from a code one
+needs a debugger on Windows and a second machine to compare against
+([future-improvements.md](future-improvements.md)).
+
+Under cairo the shell is otherwise correct: both panes list, the drive bar
+offers the real drives, the status line and the command line work. How to set
+it, and the rest of what a Windows build needs: [windows.md](windows.md).
+
 ## The title names the build
 
 The window is called `FerroCommander #527 (ef8b326)` — the product, the build

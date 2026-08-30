@@ -123,6 +123,12 @@ and the reason the feature exists. It also means the user's shell startup
 applies — the point rather than a side effect, though it does mean a broken
 `.zshrc` shows up here.
 
+**On Windows this runs nothing at all.** Neither `$SHELL` nor `/bin/sh`
+exists there, so a command fails before it starts. What should take their
+place is a product question and not just a constant, because `cmd.exe` does
+not do `~` or globbing — the things the paragraph above calls the reason the
+feature exists ([future-improvements.md](future-improvements.md)).
+
 ## Nothing blocks
 
 The command runs on a thread of its own and the answer arrives back on the

@@ -238,8 +238,10 @@ The check covers `tc-core` only. Cross-checking `tc-app` would need GTK's
 `-sys` build scripts to find a mingw libgtk-4 through pkg-config, which a
 Linux box does not have. That is an acceptable boundary because **every
 platform-divergent line lives in `tc-core`** — `tc-app` contains no `cfg`
-branches at all. Verifying the Windows GTK build needs a real Windows or
-mingw toolchain.
+branches at all. The Windows GTK build itself was verified by hand on
+2026-08-30 — MSYS2 MINGW64 with GTK4 4.22.4 — and it compiles and runs; what
+it needs in order to start is in [ui-shell.md](ui-shell.md). That was a
+one-off on a developer machine, not something the gate can do.
 
 ## Known gaps
 
