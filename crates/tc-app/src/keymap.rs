@@ -62,6 +62,10 @@ pub enum Action {
     /// Shift+F8 / Shift+Del — delete for good.
     DeletePermanently,
     /// Space — mark the row under the cursor, leaving the cursor where it is.
+    /// Puts the keyboard in the command line.
+    ///
+    /// The way in, now that a letter searches the pane instead of typing.
+    FocusCommandLine,
     ToggleMark,
     /// Insert / Shift+↓ — mark it and step down, so the key can be held.
     ToggleMarkAndAdvance,
@@ -141,7 +145,7 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 55] = [
+    const ALL: [Action; 56] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
@@ -163,6 +167,7 @@ impl Action {
         Action::CreateDir,
         Action::Delete,
         Action::DeletePermanently,
+        Action::FocusCommandLine,
         Action::ToggleMark,
         Action::ToggleMarkAndAdvance,
         Action::ToggleMarkAndRetreat,
@@ -540,6 +545,13 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::CloneToRight,
     },
+    // Plain Right, which nothing claimed: a pane has no horizontal movement
+    // to spend it on, and the command line needs a way in from the keyboard.
+    Binding {
+        key: Key::Right,
+        modifiers: PLAIN,
+        action: Action::FocusCommandLine,
+    },
     Binding {
         key: Key::Left,
         modifiers: ModifierType::CONTROL_MASK,
@@ -636,6 +648,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("sort_by_size", Action::SortBy(SortKey::Size)),
     ("sort_by_date", Action::SortBy(SortKey::Modified)),
     ("command_history", Action::CommandHistory),
+    ("focus_command_line", Action::FocusCommandLine),
     ("insert_name", Action::InsertName),
     ("favourites", Action::Favourites),
     ("branch_view", Action::BranchView),

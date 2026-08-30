@@ -34,6 +34,7 @@
 | `Ctrl+A`, `Ctrl+Num +` | Mark everything visible |
 | `Ctrl+Num −` | Unmark everything visible |
 | `Ctrl+↓`, `Alt+F8` | The command history — see [command-line.md](command-line.md) |
+| `→` | Put the keyboard in the command line |
 | `Ctrl+Enter` | Put the name under the cursor into the command line |
 | `Alt+F7` | Find files below the active pane — see [search.md](search.md) |
 | `Alt+F5` | Pack what is marked into a new archive, beside the other pane — see [archives.md](archives.md) |

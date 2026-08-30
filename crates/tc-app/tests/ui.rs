@@ -3251,6 +3251,43 @@ fn the_title_names_the_build_it_is_running() {
 }
 
 #[test]
+fn the_right_arrow_puts_the_keyboard_in_the_command_line() {
+    // A pane has no horizontal movement to spend the key on, and the command
+    // line needs a way in that does not cost the letter keys — which
+    // type-ahead is about to take.
+    //
+    // Asserted through Space rather than by typing a command, and that is not
+    // squeamishness: *today* a letter reaches the command line whether or not
+    // this key works, so a test that typed one would pass with the binding
+    // deleted. It was written that way first and the probe caught it.
+    //
+    // Space is the one key whose meaning differs at the only moment focus
+    // differs — before anything has been typed. In the rows it marks; in the
+    // entry it is a space. So: mark from the entry (which marks nothing),
+    // move on, and copy. What lands in `dst` says where the keyboard was.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down"]);
+
+    app.key("Right");
+    app.key("space");
+    app.key("Escape");
+
+    // Onto notes.txt, which is what F5 takes when nothing is marked.
+    app.key("Down");
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "Space marked a row, so the keyboard never left the pane"
+    );
+}
+
+#[test]
 fn typing_a_letter_starts_a_command_and_enter_runs_it() {
     // Total Commander's feel, and the only way into the command line from the
     // keyboard: a letter no binding claims types instead of being dropped.

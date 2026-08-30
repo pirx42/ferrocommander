@@ -77,6 +77,12 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
             let loading = shell.borrow_mut().panes[index].go_parent();
             await_listing(shell, index, loading);
         }
+        // Focus and nothing else, with the cursor at the end of whatever is
+        // there. In practice the line is empty when this arrives — Escape is
+        // the only way back to the rows and it clears — but focusing is not
+        // the same as starting fresh, and this key should not be the one that
+        // decides that.
+        Action::FocusCommandLine => shell.borrow().command_line.grab_focus(),
         Action::ToggleMark => shell.borrow_mut().active_pane().toggle_mark(0),
         Action::ToggleMarkAndAdvance => shell.borrow_mut().active_pane().toggle_mark(1),
         Action::ToggleMarkAndRetreat => shell.borrow_mut().active_pane().toggle_mark(-1),

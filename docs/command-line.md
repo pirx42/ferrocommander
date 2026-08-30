@@ -137,3 +137,21 @@ them: an error printed between two lines of output belongs between them.
 - **Output is capped** at `OUTPUT_LIMIT`, and the cut is marked. A command may
   print gigabytes, and a truncated tail must never read as the end of what it
   said.
+
+## Getting into it from the keyboard
+
+`→` focuses the command line. A pane has no horizontal movement to spend the
+key on — `Ctrl+←`/`→` clone a pane and plain `Left` and `Right` were unbound —
+and the line needs a way in that does not cost the letter keys.
+
+That last part is the point. Typing a letter has always been the way in, and
+that is what makes the letters unavailable for anything else; type-ahead wants
+them ([listing.md](listing.md)). This key exists so the reason letters type
+here stops applying, which is why it landed before type-ahead rather than
+after.
+
+`Escape` is still the way out, and it **clears** the line on the way — one key
+for "never mind" rather than select-all-and-delete followed by a reach for
+Tab. So "text in the line while the rows have the keyboard" is not a state
+this program has, and `→` focusing rather than clearing is a property with
+nowhere to show itself today.

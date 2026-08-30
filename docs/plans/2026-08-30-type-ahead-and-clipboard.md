@@ -1,6 +1,6 @@
 # Type-ahead, the Right arrow, and the system clipboard
 
-Status: Draft
+Status: In Progress
 
 Three features asked for together, and they are not three independent
 things: the first takes the keys the command line currently lives on, and the
@@ -101,9 +101,12 @@ rather than about what is done with it.
 
 ## 5. Phases — one phase, one commit
 
-**Phase 0 — coverage pre-check.** Characterization tests for what a letter
-does now and for the matcher being reused, so the change of rule in phase 2
-is visible as a change rather than as a diff nobody can read.
+**Phase 0 — coverage pre-check.** *Done, and it added nothing.* Both rules
+this plan touches are already covered: the letter path by three end-to-end
+tests, and `contains_ignoring_case` by a table that already includes the
+extension cases type-ahead depends on (`".txt"`, `"port.t"`). Skill 43 says
+to skip the phase when the cover is there, so no characterization tests were
+written — the check is the deliverable, not more tests.
 
 **Phase 1 — `Right` opens the command line.** First, and deliberately: it is
 the replacement route, so it must exist before the letters stop being one.
