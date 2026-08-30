@@ -136,6 +136,23 @@ focused button rather than Cancel, for the reason the delete dialog opens on
 Cancel — Enter is the key everyone reaches for, and it must never be the one
 that stops a copy halfway.
 
+Testing that took two attempts, and the first one turned `main` red. A
+progress window exists only while a job outlasts `PROGRESS_DELAY`, so the
+first version made the job slow with half a gigabyte of bytes — and the
+fixture writes that file immediately before the copy reads it, so it is in
+the page cache and the copy runs at memory speed. The runner did it in under
+300 ms, no window appeared, and the test failed on a machine faster than the
+one the number was chosen on.
+
+Bytes were the wrong lever. The test now uses two that are not
+hardware-sensitive: a **collision**, which stops the engine until the test
+answers and so guarantees the app's own clock passes the threshold, and
+**twenty thousand small files** behind it, so the window is still open when
+the test reaches for it — a copy of many small files is bound by syscalls per
+file, which varies far less between machines than throughput does. Twenty
+files opened the window and closed it again inside a microsecond, which is
+how the second lever earned its place.
+
 What is still missing is the way *back*: a window listing what is running, so
 a job put in the background can be watched again or cancelled later. Until
 then, backgrounding is one-way

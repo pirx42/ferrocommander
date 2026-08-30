@@ -36,9 +36,20 @@ const ARCHIVED_TEXT: &str = "this one came out of the zip";
 const DIALOG_COPY: &str = "Copy";
 /// The progress window's title, spelled out like every other expectation.
 const TITLE_PROGRESS: &str = "Working";
-/// The watchable copy's file: 512 MB, written 8 MB at a time.
-const LARGE_FILE_CHUNK: usize = 8 * 1024 * 1024;
-const LARGE_FILE_CHUNKS: usize = 64;
+/// Files copied after the collision is answered.
+///
+/// Two different things have to be true for this test to have a window to
+/// press a button on, and they need two different levers. The collision
+/// makes the app's clock pass `PROGRESS_DELAY`, so the window is *allowed*
+/// to open. These make the job go on running afterwards, so the window is
+/// still there when the test reaches for it — twenty of them opened it and
+/// closed it again inside a microsecond.
+///
+/// Counted in files rather than bytes on purpose: a copy of many small files
+/// is bound by syscalls per file, which varies far less between machines
+/// than throughput does. Half a gigabyte of bytes was the first attempt and
+/// it was hardware-sensitive enough to be fast on the runner and slow here.
+const TRAILING_FILES: usize = 20_000;
 const DIALOG_MOVE: &str = "Move / Rename";
 const DIALOG_NEW_DIR: &str = "New directory";
 const DIALOG_DELETE: &str = "Confirm delete";
@@ -519,27 +530,27 @@ fn f5_with_both_panes_in_one_directory_will_not_copy_a_file_onto_itself() {
     app.await_contents("precious.txt", SOURCE_TEXT);
 }
 
-/// The usual fixture, plus a file big enough for the copy to be watchable.
+/// A collision on the *first* file, and more files behind it.
 ///
-/// Real bytes rather than a sparse file: what makes the copy outlast
-/// `PROGRESS_DELAY` — so there is a progress window to press a button on — is
-/// reading them back off the disk, and a sparse file has nothing to read.
+/// This is how a job is held open long enough to have a progress window,
+/// without depending on how fast a disk is. The first version of this
+/// fixture wrote half a gigabyte and reasoned about copy speed; the runner
+/// copied it in under the 300 ms threshold, no window appeared, and `main`
+/// went red. Bytes were never the right lever: the fixture writes the file
+/// immediately before the copy reads it, so it is in the page cache and the
+/// copy runs at memory speed.
 ///
-/// Half a gigabyte because the threshold is 300 ms and `cp` does 256 MB in
-/// about 450 ms here: a margin of one and a half is not a margin, and the
-/// failure it would cause is the flaky kind, appearing only on a machine
-/// faster than the one the number was picked on. Written in chunks so the
-/// fixture does not hold it all in memory at once.
-fn with_a_large_file(home: &Path) {
-    use std::io::Write;
-
+/// A conflict is a lever that owes nothing to hardware. The engine stops and
+/// waits for an answer, so the test decides how long the job takes; the files
+/// behind the collision are there to keep progress events coming afterwards,
+/// which is what opens the window.
+fn with_a_collision_then_more(home: &Path) {
     arrange(home);
-    let mut file = std::fs::File::create(home.join("src/large.bin")).unwrap();
-    let chunk = vec![7u8; LARGE_FILE_CHUNK];
-    for _ in 0..LARGE_FILE_CHUNKS {
-        file.write_all(&chunk).unwrap();
+    std::fs::write(home.join("src/aaa-collides.txt"), "source").unwrap();
+    std::fs::write(home.join("dst/aaa-collides.txt"), "target").unwrap();
+    for index in 0..TRAILING_FILES {
+        std::fs::write(home.join(format!("src/zzz-{index:03}.txt")), "trailing").unwrap();
     }
-    file.sync_all().unwrap();
 }
 
 /// A home whose `PATH` holds an `xdg-open` that records what it was given.
@@ -3384,13 +3395,19 @@ fn a_job_sent_to_the_background_finishes_without_its_window() {
     // the whole program waited on it. Background closes the window and
     // nothing else — the token is not pulled, the events go on being drained,
     // and the copy runs to its end.
-    let app = in_src_and_dst(with_a_large_file);
+    let app = in_src_and_dst(with_a_collision_then_more);
 
-    // `..`, nested, data.bin, large.bin — only the big one, so the copy is
-    // as short as it can be while still lasting long enough to be watched.
-    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("ctrl+a");
     app.key("F5");
     app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    // The job stops here until it is answered, which is what makes the rest
+    // of this deterministic: by the time the answer goes in, more than
+    // PROGRESS_DELAY has passed on the app's own clock, so the next progress
+    // event opens the window whatever the disk did.
+    app.focus_dialog(DIALOG_CONFLICT);
+    app.settle();
     app.key("Return");
 
     app.focus_dialog(TITLE_PROGRESS);
@@ -3399,29 +3416,11 @@ fn a_job_sent_to_the_background_finishes_without_its_window() {
     app.key("Return");
     app.await_dialog_closed(TITLE_PROGRESS);
 
-    // The window is gone and the copy is not: this is the whole claim.
-    //
-    // Polled to its full length rather than to its existence, because the two
-    // are genuinely different here — the first run of this test caught the
-    // file at 329 MB of 536 MB, which is the feature working and the
-    // assertion arriving early.
-    let want = (LARGE_FILE_CHUNK * LARGE_FILE_CHUNKS) as u64;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    loop {
-        let copied = app
-            .path("dst/large.bin")
-            .metadata()
-            .map(|file| file.len())
-            .unwrap_or_default();
-        if copied == want {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the backgrounded copy stopped at {copied} of {want}"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+    // The window is gone and the copy is not: this is the whole claim. The
+    // last file to be copied is the one asserted on, so a job that stopped
+    // when its window did would not have reached it.
+    app.await_exists(&format!("dst/zzz-{:03}.txt", TRAILING_FILES - 1));
+    app.await_exists("dst/notes.txt");
 }
 
 #[test]
