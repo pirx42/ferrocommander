@@ -76,7 +76,10 @@ cross-references instead of duplication.
   | [an Ubuntu package](plans/archive/2026-08-29-ubuntu-package.md) | the first CI this repository has had: a `.deb` built and published on every commit to `main`, why the logic is in a script rather than the workflow, and the two bugs writing the README found |
   | [field report, round one](plans/archive/2026-08-29-field-report-round-one.md) | twelve findings from the first person to *use* build 132 rather than test it: ten fixed, two withdrawn, one that did not reproduce and is recorded as not reproducing — plus the three bugs the work found in itself |
 
-  No plan is currently active.
+  **Active:**
+  [type-ahead and the clipboard](plans/2026-08-30-type-ahead-and-clipboard.md)
+  — letters that search, the Right arrow that replaces them in the command
+  line, and `Ctrl+X`/`C`/`V` reaching other applications.
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
