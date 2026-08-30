@@ -87,6 +87,11 @@ cross-references instead of duplication.
   | [page keys in the pane](plans/archive/2026-08-30-page-keys-in-the-pane.md) | `Page Up`/`Page Down` bound as ordinary cursor keys — the type-ahead bug that found the hole in `adopt_selection`'s contract, a design whose stated reason had expired, and a scroll reproduced by measuring the widget rather than guessing at it |
   | [adoption without remembering](plans/archive/2026-08-30-adoption-without-remembering.md) | `adopt_selection` became a signal instead of a call somebody has to know to make — no live bug behind it, only a rule that had been kept perfectly and failed anyway twice in a week; plus the test that stopped covering its subject without going red |
 
+  **Active:**
+  [space counts a folder](plans/2026-08-30-space-counts-a-folder.md) — Total
+  Commander's `Space`, which counts a folder as it marks it, so the status
+  line's marked-bytes total stops being a lie for folders.
+
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
 
