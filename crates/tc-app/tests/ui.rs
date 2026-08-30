@@ -2801,6 +2801,31 @@ fn page_down_lands_a_screenful_further_on_not_at_the_end() {
 }
 
 #[test]
+fn a_click_then_f5_copies_the_row_that_was_clicked() {
+    // The dispatched half of the click. Its sibling above goes through
+    // type-ahead, which is not an action; this one goes through `dispatch`,
+    // and between them they cover both routes out of a click.
+    //
+    // `Home` parks the model on `..`, which F5 refuses to copy with nothing
+    // marked. So if the click never reaches the model, F5 does nothing at all
+    // and `await_any_copy` times out saying so — the absence is the assertion.
+    let app = in_src_and_dst(with_a_tall_directory);
+
+    app.key("Home");
+    app.click((200, 500));
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    let copied = await_any_copy(&app);
+    assert!(
+        copied.starts_with("row"),
+        "F5 copied {copied:?} rather than the row that was clicked"
+    );
+}
+
+#[test]
 fn a_click_then_a_letter_searches_from_the_row_that_was_clicked() {
     // A mouse click is the only thing left that moves the widget's selection
     // without the model hearing: the keyboard routes all adopt, and the page

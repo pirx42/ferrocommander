@@ -1106,20 +1106,22 @@ impl PaneView {
     /// Paging is deliberately left to the widget: it knows the height of the
     /// viewport, and the model has no idea how many rows are on screen.
     ///
-    /// **The contract: the active pane's selection is adopted once per
-    /// dispatched action, before the action runs.** So nothing reached from
-    /// `dispatch` — no handler, no method on this type — has to call this,
-    /// and a new action gets it for free.
+    /// **Nobody has to call this.** `wire_selection` connects it to the
+    /// widget's own `selection-changed`, so a move the *user* made is in the
+    /// model before anything reads the cursor, and a new route into a pane
+    /// owes nothing.
     ///
-    /// Two callers sit outside it, and both are outside `dispatch` by nature:
-    /// the pane exchange, which adopts the pane `dispatch` never touches; and
-    /// **type-ahead**, which is not an action at all — a key no binding claims
-    /// goes straight there. That second one was missed when the letter keys
-    /// stopped being unbound, and the contract did not break to reveal it: its
-    /// words stayed true about `dispatch` while a route appeared that does not
-    /// go through `dispatch`. A new route into a pane owes this call, and the
-    /// question to ask of one is not "does the contract cover it" but "is it
-    /// an action".
+    /// It used to be a discipline: "adopted once per dispatched action". That
+    /// rule was kept perfectly and stopped being sufficient anyway, twice in
+    /// one week — when paging belonged to the widget, and when the letter keys
+    /// became type-ahead, which is not an action. Neither author knew there
+    /// was a call to make, and nothing failed to tell them. A rule that fails
+    /// silently on the paths nobody thought of is the argument for a signal
+    /// over a convention.
+    ///
+    /// One caller remains, and it is outside the signal by nature: the pane
+    /// exchange adopts the **other** pane before swapping, which is not a move
+    /// the widget just made.
     pub fn adopt_selection(&mut self) {
         if let Some(cursor) = adopted_cursor(self.selection.selected()) {
             self.shown.listing.set_cursor(cursor);
