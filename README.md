@@ -11,7 +11,7 @@ Built from scratch in Rust and GTK4.
 The latest build of `main` is published as a `.deb`:
 
 ```sh
-wget -P /tmp https://github.com/pirx42/ferrocommander/releases/download/main/ferrocommander_amd64.deb
+wget -P /tmp https://github.com/pirx42/ferrocommander/releases/download/rolling/ferrocommander_amd64.deb
 sudo apt install /tmp/ferrocommander_amd64.deb
 ```
 
@@ -33,9 +33,13 @@ runtime; `dpkg` will refuse and leave the package half-configured.
 22.04 ships 4.6. Details, and the rest of the packaging:
 [docs/packaging.md](docs/packaging.md).
 
-The release is *rolling* — one tag, `main`, replaced on every commit, always
-holding the newest build that passed the full test suite. There are no
+The release is *rolling* — one tag, `rolling`, replaced on every commit,
+always holding the newest build that passed the full test suite. There are no
 versioned releases yet.
+
+Not called `main`: a tag with the same name as a branch makes `git push
+origin main` fail with "src refspec main matches more than one", because git
+cannot tell which of the two is meant.
 
 ## What it does
 

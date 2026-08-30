@@ -110,6 +110,18 @@ image has what the `apt-get` line assumes, whether `gh release delete` and
 `create` in sequence are reliable, and whether `fetch-depth: 0` really gives
 `build.rs` the commit count. Those are watched on the first real run.
 
+## The tag is called `rolling`, not `main`
+
+A tag and a branch with the same name make every `git push origin main` fail
+with `src refspec main matches more than one`: git cannot tell which of the
+two refs is meant, and the push has to name `refs/heads/main` in full. That
+is a foot-gun on every push for the life of the repository, in exchange for a
+tag name nobody reads — the release *title* is what people see, and the
+download URL is what they use.
+
+Found by pushing, not by reading: the workflow published a tag called `main`
+on its first green run, and the next `git push origin main` failed.
+
 ## The asset has no version in its name
 
 The release is rolling — one tag, replaced every commit — so its download URL

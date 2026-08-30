@@ -66,6 +66,12 @@ jobs:
       - name: Publish the rolling build
         env:
           GH_TOKEN: ${{ github.token }}
+          # **Not `main`.** A tag of the same name as a branch makes every
+          # `git push origin main` fail with "src refspec main matches more
+          # than one", because git cannot tell which ref is meant. That is a
+          # foot-gun on every push for the life of the repository, in exchange
+          # for a tag name nobody reads — the URL below is what people see.
+          ROLLING_TAG: rolling
         # One release, replaced every time, so the download URL is stable and
         # yesterday's builds do not accumulate.
         #
@@ -83,10 +89,10 @@ jobs:
           Install with \`sudo apt install ./ferrocommander_amd64.deb\`, which
           pulls in the GTK 4 runtime; \`dpkg -i\` will not."
 
-          gh release create main --prerelease --target "$GITHUB_SHA" \
+          gh release create "$ROLLING_TAG" --prerelease --target "$GITHUB_SHA" \
             --title "Latest build from main" --notes "$notes" \
-          || gh release edit main --prerelease --target "$GITHUB_SHA" \
+          || gh release edit "$ROLLING_TAG" --prerelease --target "$GITHUB_SHA" \
             --title "Latest build from main" --notes "$notes"
 
-          gh release upload main \
+          gh release upload "$ROLLING_TAG" \
             target/debian/ferrocommander_amd64.deb --clobber
