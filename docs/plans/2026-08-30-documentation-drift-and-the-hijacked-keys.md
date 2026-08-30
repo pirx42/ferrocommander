@@ -6,11 +6,15 @@ The owner read `keymap.md` and found a row describing a key as doing
 something it stopped doing that morning. This is what came of pulling that
 thread.
 
-Fourteen findings so far, and they are not one kind of thing. **Three are the
-code being wrong**, one of them a regression this week's work introduced and
-confirmed by running it. Eight are documents that now contradict the program.
-The rest are gaps — places where a document promises something it does not
-deliver.
+Thirty-six findings, and they are not one kind of thing. **Three are the code
+being wrong**, one of them a regression this week's work introduced and
+confirmed by running it. Twenty-three are documents that now contradict the
+program. The rest are gaps — places where a document promises something it
+does not deliver.
+
+Fourteen of those were in hand when the plan was written; the sweep in phase 2
+found the other twenty-two, which is the answer to whether the sweep was worth
+asking for.
 
 The order matters and is fixed: the regression ships first, alone. A prose
 pass is not a reason for `Ctrl+V` to go on being broken, and the documents
@@ -106,6 +110,109 @@ with themselves.
   and sits with the others; this one is called "Column widths" and sits after
   the section about why the crate uses `serde`.
 
+## 4a. What the sweep added
+
+Phase 2 read every remaining file in `docs/` and all ten `CLAUDE.md` files
+against the code. It found **fifteen more contradictions and seven more
+gaps**, which more than doubles the list the owner's one row started.
+
+Two mechanical passes ran alongside the reading, both worth keeping: every
+backticked identifier in the documentation checked for existence in the
+code, and every ALL-CAPS constant likewise. The first produced ten candidates
+of which **four were false positives** — a historical rename
+(`choose_place`), two dependencies named as a *proposal*
+(`rustix`/`utimensat`), and two GTK API names (`activate_action`,
+`gtk_column_view_scroll_to`). That ratio is why they are candidates and not
+findings: a grep cannot tell a claim from a reference.
+
+### More documents that contradict the program
+
+| | Where | What it says | What is true |
+|---|---|---|---|
+| B9 | `keymap.md:479` | `activation_target` — "the directory the cursor row leads into, or `None` for a file" | it is `activation_step`, and it returns a `Step` — `Into`, `Enter` or `Out`. The third variant is how you leave an archive, and the doc has no room for it |
+| B10 | `ops.md:278` | the probe table names `a_move_within_one_filesystem_reads_no_bytes` | the test is `a_move_within_one_filesystem_neither_reads_nor_walks` |
+| B11 | `ops.md:15` | the Jobs table: `Copy`, `Move`, `Delete`, `CreateDir` | `Job::CreateFile` is missing — `Shift+F4`, which `keymap.md` documents at length |
+| B12 | `vfs/CLAUDE.md` | "**Only** `to_std_path`, `mount_points`, `render_attributes` and the two `unix_mode` bridges escape it" | fourteen functions leave `platform`, including `space`, `config_dir`, `trash_error` and `root_entries` |
+| B13 | `ui-shell.md:387` | `./target/release/tc-app` | the binary is `ferrocommander` — `packaging.md` explains the `[[bin]]` rename two files away |
+| B14 | `ui-shell.md:274` | "Both panes open at the user's home directory. Remembering the last directory is config persistence — phase 3" | phase 3 shipped; the panes open where they were left |
+| B15 | `ui-shell.md:277` | "Phase D puts the reason in the path bar" | it is in the path bar (`PATH_BAR_ERROR_SEPARATOR`), and `keymap.md` documents the rendering |
+| B16 | `vfs.md:69` | "Phase 6's archives **will** not [have a recycle bin]" | they shipped, and they do not |
+| B17 | `keymap.md:415` | "`Ctrl+↓` — in phase 3 it **will** mean something else entirely" | it does: the command history |
+| B18 | `future-improvements.md` | the suite "covers every binding except `Ctrl+Q` and `Backspace`" | `Backspace` is pressed in three tests, and `Ctrl+Q` is how the harness closes every one of them. `keymap.md`'s own "not exercised" list repeats the `Backspace` half |
+| B19 | `CLAUDE.md`, `ui-shell.md`, `future-improvements.md` | 138, 138 and 117 end-to-end tests | **160**. Three files, three numbers, none of them right |
+| B20 | `performance.md:183` | "The 12 ms floor in the table is names only" | there is no 12 ms in the table; the reading floor it names is 67 ms |
+| B21 | `future-improvements.md` | macOS: "55 F-key bindings" and "53 `Ctrl` bindings" | the table holds **67 bindings in total** — 18 with an F-key, 24 with Ctrl. The two figures add to more than the whole keymap |
+| B22 | `packaging.md` | left unchecked: "whether `gh release delete` and `create` in sequence are reliable" | there is no delete: the workflow does `create \|\| edit`, then `upload --clobber` |
+| B23 | `archives.md:224` | what an archive refuses: the command line and `F4` | also `Enter` on an ordinary file, `Ctrl+D`, `Ctrl+C`, `Ctrl+X` and paste — six refusal messages exist, two are documented (this is B8, and it is bigger than B8 said) |
+
+**B14 through B17 are one kind of thing**, and it is the kind that is hardest
+to see while writing: a feature described as future work by the document that
+was written before it, and left that way by every reader since because the
+sentence is grammatical and the section around it is right. Four of them,
+across three files, all pointing at code that shipped weeks ago.
+
+**B19 is the one that indicts the method.** `ui-shell.md` says, of this exact
+number, "A number in a document is a claim like any other — this one is dated
+by its measurement now." It was 138 when that was written and it is 160 now,
+and the dating did not help, because nothing re-reads a number. It is the
+argument in § 8 in miniature.
+
+Phase 2's own gate run supplies the replacement rather than leaving phase 3 to
+do arithmetic: **160 tests in 527.5 s** on this box, 3.30 s each — against the
+442 s the document records for 138, which is 3.20 s each. The per-test cost is
+the number that held; the total is the one that moved, and it moved because
+the suite grew.
+
+### More gaps
+
+- **C6 · `clipboard.md` promises an entry that does not exist.** It sends the
+  reader to `future-improvements.md` for KDE's own cut marker. There is no
+  such entry there, and no mention of the clipboard at all.
+- **C7 · The root cookbook has no clipboard row**, under a table whose own
+  line is "this table grows with the code". `docs/CLAUDE.md` has one; the
+  cookbook a reader actually starts from does not.
+- **C8 · `reliability.md`'s suite table omits `tests/clipboard.rs`**, which
+  pins the format that decides whether a paste copies or moves — the one
+  place in this program where misreading a byte deletes somebody's files.
+- **C9 · `listing/CLAUDE.md` calls `name.rs` "`split_name`, the one place a
+  name is split from its extension".** It also holds
+  `contains_ignoring_case`, the matcher behind both the quick filter and
+  type-ahead, which is the more load-bearing of the two.
+- **C10 · `config.md`'s opening line lists five remembered things**; `Settings`
+  carries nine. Every one of the missing four has its own section further
+  down, so the file answers its own summary four times over.
+- **C11 · `keymap.md` states the stand-down rule absolutely** — "while that
+  field has the focus the shell does not dispatch anything" — where
+  `command-line.md` states it with two exceptions. Same rule, two strengths.
+- **C12 · `good-development-practices.md` marks some Chimera references
+  "(Chimera only)" and not others.** `docs/architecture.md`,
+  `docs/security.md`, `docs/items.md` and `scripts/gallery.mjs` are named
+  without the marker and do not exist here. They are backticked paths rather
+  than links, so `check-links.py` cannot see them.
+
+**One correction to § 4.** C1 says fifty-nine action names. There are
+**fifty-eight** — the count that made C1 worth writing was itself wrong,
+which is the argument for generating the list rather than typing it.
+
+### What was checked and found sound
+
+Recorded because a review that only lists faults says nothing about its own
+coverage:
+
+- **Every module table.** `tc-app/src/`, `vfs/`, `listing/`, `ops/` and
+  `archive/` list exactly the files that are there. Only `tc-core/src/` is
+  wrong, and only by `clipboard.rs` (B5).
+- **The skills index and the trigger table.** Every file in `docs/skills/` is
+  named by `docs/skills/CLAUDE.md` *and* by the root trigger table, both
+  ways round, with nothing dangling.
+- `listing.md` end to end — every method it names exists, the `SortKey`
+  variants match, and "fourteen selection methods" is exactly right.
+- `vfs.md`'s error table, path rules, mount rules and platform table.
+- `ops.md`'s conflict resolutions, progress variants and constants.
+- `multi-rename.md`, `search.md`, `viewer.md`, `watching.md`,
+  `reliability.md` — every identifier checked, all present.
+- `python3 scripts/check-links.py`: zero broken links.
+
 ## 5. One measurement that was never taken
 
 Type-ahead runs a case-insensitive substring match over **every visible row on
@@ -128,13 +235,18 @@ test per key that fails without it. Ships alone.
 
 **Phase 2 — finish the sweep.** Every remaining file in `docs/` and every
 `CLAUDE.md`, read against the code. Findings appended to this plan before
-anything is edited, so the list is a record rather than a diff.
+anything is edited, so the list is a record rather than a diff. **Done** —
+§ 4a, twenty-two more findings.
 
-**Phase 3 — the contradictions.** B1–B8 and whatever phase 2 adds.
+**Phase 3 — the contradictions.** B1–B23. Big enough now to be worth an order:
+the four shipped-as-future sentences (B14–B17) first, since they are one edit
+each and one class; then the three stale counts (B19–B21), which want the
+measurement phase 5 takes anyway; then the rest, file by file.
 
-**Phase 4 — the gaps.** C1–C5. The action-name list is the substantial one:
-fifty-nine names, and it should be **generated from the table in `keymap.rs`
-rather than typed**, or it is one more thing to drift (skill 53).
+**Phase 4 — the gaps.** C1–C12. The action-name list is still the substantial
+one: **fifty-eight** names, and it should be **generated from `ACTION_NAMES`
+in `keymap.rs` rather than typed**, or it is one more thing to drift
+(skill 53) — a lesson C1's own wrong count already taught.
 
 **Phase 5 — the measurement.** Type-ahead over a large directory, into
 `performance.md`'s table, with whatever it turns out to be.
@@ -151,13 +263,16 @@ factor does not apply the same way — they are estimated directly.
 |---|---|---|---|
 | 0 pre-check | 0.25 d | 0.10 | 0.25 h |
 | 1 the hijacked keys | 1 d | 0.10 | 1 h |
-| 2 the sweep | — | — | 2 h |
-| 3 contradictions | — | — | 1 h |
-| 4 gaps | 1 d | 0.10 | 1 h |
+| 2 the sweep | — | — | 2 h — **spent, and it landed on the estimate** |
+| 3 contradictions | — | — | 1 h → **2 h**, for 23 rather than 8 |
+| 4 gaps | 1 d | 0.10 | 1 h → **1.5 h**, for 12 rather than 5 |
 | 5 measurement | 0.5 d | 0.10 | 0.5 h |
 | 6 audit | 0.5 d | 0.10 | 0.5 h |
 
-**About six hours**, and the first of them is the one that matters.
+**About seven and a half hours** now, and the first of them is still the one
+that matters. The sweep is the only phase whose estimate survived contact,
+which is what happens when the cost is reading a known number of lines rather
+than fixing an unknown number of things.
 
 ## 8. What is deliberately not in this
 
@@ -166,5 +281,15 @@ factor does not apply the same way — they are estimated directly.
   tables against the directories, so this class of drift fails the gate
   instead of waiting for a reader. It is the durable fix and it is a plan of
   its own — noted here so the choice is on the record.
+
+  **The sweep strengthened the case rather than settling it.** Two of the
+  three checks that would have caught most of this were run by hand in phase 2
+  and took seconds: every backticked identifier against the code, and every
+  module table against its directory. `future-improvements.md` already carries
+  an entry saying the keymap table is kept by hand and offering to generate it
+  "if it ever drifts in practice rather than in principle" — B1, C2, C3 and C4
+  are that condition, met. What a script cannot check is the larger half of
+  this list: a sentence that describes a shipped feature as future work is
+  well-formed prose naming nothing.
 - **Rewriting documents that are merely old.** A sentence written before a
   feature existed is not wrong; only claims the code contradicts are in scope.
