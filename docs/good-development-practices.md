@@ -1151,6 +1151,28 @@ staticJsonLoader; the vitest environment brings the complete bootstrap
 for free. Example: loot-odds Monte Carlo (`LOOT_ODDS=1`, 2026-07-06) —
 pattern analogous to the slow suite.
 
+#### 4.u A test that picks its own inputs picks flattering ones (FerroCommander, 2026-08-30)
+
+**Rule.** Fixture data and benchmark inputs the test author invents come
+from the friendly end of the distribution unless something forces them not
+to. Place the data where the property is contended — names at the end of a
+scanned list, files big enough to outlive a keystroke — or state in a
+comment why the placement does not matter. And when a trigger is rebound,
+re-probe the tests that reached the behaviour through it: a test can stop
+covering its subject without ever going red.
+
+**Why.** Three instances in two days, all found by mutation probes rather
+than by review: an accumulation rule whose end-to-end fixture (4 KB + 1 B)
+finished scanning before the race it tested could begin; a benchmark that
+reported 0.02 ms where the true cost was 18.7 ms, because its generated
+names sat at the front of the list its subject scans from the front; and
+three paging tests that stayed green after the page keys were rebound and
+the widget stopped moving the selection they existed to catch.
+
+Full write-up and procedure: skill
+[74](skills/74-worst-case-inputs-for-tests-and-benchmarks.md); the probe
+itself is skill [59](skills/59-mutation-probe-over-coverage-percent.md).
+
 ---
 
 ### 5. Documentation

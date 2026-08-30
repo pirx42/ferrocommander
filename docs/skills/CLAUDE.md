@@ -64,6 +64,7 @@ One skill per file. Cross-links between related skills.
 - [27-coverage-gap-triage.md](27-coverage-gap-triage.md) — Coverage gaps: reachable/defensive/dead.
 - [52-test-conservation-invariants.md](52-test-conservation-invariants.md) — Test conservation invariants instead of value asserts (here e.g.: byte sums on copy, file counts on move, pack→unpack roundtrip).
 - [59-mutation-probe-over-coverage-percent.md](59-mutation-probe-over-coverage-percent.md) — Disable the effect and see whether the suite screams — coverage measures execution, not assertion.
+- [74-worst-case-inputs-for-tests-and-benchmarks.md](74-worst-case-inputs-for-tests-and-benchmarks.md) — A test or benchmark that picks its own inputs picks flattering ones; place the data where the property is contended, and re-probe a test whose trigger was rebound.
 
 ### Documentation
 - [28-docs-in-same-commit.md](28-docs-in-same-commit.md) — Docs in the same commit as the code.

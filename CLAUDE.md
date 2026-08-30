@@ -219,6 +219,7 @@ files.
 | Testing file-ops/engine code OR "why did no test catch this bug?" | [52](docs/skills/52-test-conservation-invariants.md) conservation invariants (byte sums, file counts, pack↔unpack roundtrip) over value asserts |
 | Coverage gap discovered | [27](docs/skills/27-coverage-gap-triage.md) triage reachable/defensive/dead |
 | "Is this covered?" / bug in covered code | [59](docs/skills/59-mutation-probe-over-coverage-percent.md) mutation probe: disable the effect, see if the suite screams |
+| Test/benchmark constructs its own fixture data, OR a probe stays green, OR a key/trigger was rebound | [74](docs/skills/74-worst-case-inputs-for-tests-and-benchmarks.md) worst-case inputs; re-probe tests whose subject moved |
 | Code change with doc impact | [28](docs/skills/28-docs-in-same-commit.md) docs in the same commit |
 | New doc file | [29](docs/skills/29-one-topic-per-doc.md) one topic + cross-link |
 | Design decision made | [30](docs/skills/30-document-the-why.md) document the "why" |
