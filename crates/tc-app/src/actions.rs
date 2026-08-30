@@ -907,18 +907,34 @@ fn paste_from_clipboard(shell: &Rc<RefCell<Shell>>) {
     }
 
     let shell = shell.clone();
+    // Both formats, best first. GDK picks whichever the clipboard's owner
+    // actually offers and says which it chose, so one read covers a file
+    // manager that speaks the GNOME format and a program that only publishes
+    // a list of URIs.
     window.clipboard().read_async(
-        &[clipboard::GNOME_COPIED_FILES],
+        &[clipboard::GNOME_COPIED_FILES, clipboard::URI_LIST],
         glib::Priority::DEFAULT,
         gtk::gio::Cancellable::NONE,
         move |result| {
-            let Ok((stream, _)) = result else {
+            let Ok((stream, mime)) = result else {
                 return;
             };
             let pasting = shell.clone();
             let into = into.clone();
+            let gnome = mime == clipboard::GNOME_COPIED_FILES;
             read_all(stream, move |payload| {
-                let Some(clipped) = clipboard::decode_gnome(&payload) else {
+                let clipped = match gnome {
+                    true => clipboard::decode_gnome(&payload),
+                    // A list of URIs cannot say "cut", so it is a copy. Not a
+                    // guess: the format has nowhere to put the verb, and
+                    // assuming the other direction would delete somebody
+                    // else's files on no evidence at all.
+                    false => Some(clipboard::Clipped {
+                        paths: clipboard::decode_uri_list(&payload),
+                        cut: false,
+                    }),
+                };
+                let Some(clipped) = clipped else {
                     return;
                 };
                 submit_paste(&pasting, clipped, into);
@@ -934,7 +950,8 @@ fn submit_paste(shell: &Rc<RefCell<Shell>>, clipped: clipboard::Clipped, into: V
     }
     // A cut is a move, which is the engine's own operation: it copies, checks,
     // and only then removes the source. Nothing here deletes anything.
-    let job = match clipped.cut {
+    let cut = clipped.cut;
+    let job = match cut {
         true => Job::Move {
             sources: clipped.paths,
             destination: Destination::Into(into),
@@ -944,7 +961,22 @@ fn submit_paste(shell: &Rc<RefCell<Shell>>, clipped: clipboard::Clipped, into: V
             destination: Destination::Into(into),
         },
     };
-    submit(shell, job, Writes::InThisPane);
+    if !cut {
+        submit(shell, job, Writes::InThisPane);
+        return;
+    }
+    // A cut is spent by being pasted. Leaving it there invites a second paste
+    // that can only fail, over files the first one already moved — every
+    // desktop file manager clears it for the same reason.
+    let clearing = shell.clone();
+    submit_then(shell, job, Writes::InThisPane, move || {
+        if let Some(window) = clearing.borrow().window() {
+            window
+                .clipboard()
+                .set_content(gdk::ContentProvider::NONE)
+                .ok();
+        }
+    });
 }
 
 /// Reads a clipboard stream to its end and hands over what it said.

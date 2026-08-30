@@ -3319,6 +3319,39 @@ fn a_name_with_a_space_survives_the_clipboard() {
 }
 
 #[test]
+fn a_cut_is_spent_by_being_pasted() {
+    // Leaving it on the clipboard invites a second paste that can only fail,
+    // over files the first one already moved. Every desktop file manager
+    // clears it for the same reason.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("ctrl+x");
+
+    app.key("Tab");
+    app.key("ctrl+v");
+    app.await_exists("dst/notes.txt");
+    app.await_gone("src/notes.txt");
+
+    // Into `nested`, and paste again: there is nothing left on the clipboard,
+    // so nothing arrives and nothing is reported as failing either.
+    app.key("Tab");
+    app.keys(&["Home", "Down"]);
+    app.key("Return");
+    await_panes_at(&app, "/src/nested", "/dst");
+    app.key("ctrl+v");
+    app.settle();
+
+    assert!(
+        !app.path("src/nested/notes.txt").exists(),
+        "a spent cut was pasted a second time"
+    );
+    assert!(
+        !app.has_dialog(DIALOG_FAILURES),
+        "the second paste failed loudly instead of doing nothing"
+    );
+}
+
+#[test]
 fn copying_inside_an_archive_is_refused_rather_than_pointing_at_the_disk() {
     // An entry in an archive has no operating-system path, so a URI naming
     // one would point at a file on the disk that merely shares its name.
