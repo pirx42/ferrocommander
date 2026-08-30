@@ -2745,6 +2745,62 @@ fn page_down_then_f5_acts_on_the_row_the_widget_moved_to() {
 }
 
 #[test]
+fn page_down_moves_the_cursor_a_screenful_and_page_up_brings_it_back() {
+    // The plain page keys are the model's now, not the widget's. A round trip
+    // is what says the two directions agree about how far a page is: down
+    // then up has to land where it started, or one of them is off by the
+    // overlap row and only a screenshot would ever say so.
+    //
+    // F5 with nothing marked copies the cursor row, so the filesystem reports
+    // where the cursor ended up.
+    let app = in_src_and_dst(with_a_tall_directory);
+
+    app.key("Home");
+    app.key("Next");
+    app.key("Prior");
+    // Down off `..`, which F5 will not copy, and onto the first real row.
+    app.key("Down");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    // Home is `..`; one row down from it is the only directory, `nested`.
+    let copied = await_any_copy(&app);
+    assert_eq!(
+        copied, "nested",
+        "a page down and back up did not return the cursor to where it started"
+    );
+}
+
+#[test]
+fn page_down_lands_a_screenful_further_on_not_at_the_end() {
+    // The other half: that a page is a *page*. If the step were the whole
+    // listing the round trip above would still pass, because both directions
+    // would clamp.
+    let app = in_src_and_dst(with_a_tall_directory);
+
+    app.key("Home");
+    app.key("Next");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    let copied = await_any_copy(&app);
+    assert!(
+        copied.starts_with("row"),
+        "a page down landed on {copied:?}, which is not one of the 200 rows"
+    );
+    // The last row is what a step of the whole listing would reach.
+    assert_ne!(
+        copied,
+        format!("row{:03}.txt", TALL_DIRECTORY_ROWS - 1),
+        "a page down ran to the end of the listing rather than one screenful"
+    );
+}
+
+#[test]
 fn page_down_then_a_letter_searches_from_the_row_on_screen() {
     // The same stale-cursor trap as the two tests above, on the one path that
     // is *not* a dispatched action: a key no binding claims goes straight to

@@ -9,6 +9,7 @@
 | `Tab` | Switch to the other pane |
 | `↑` / `↓` | Move the cursor one row |
 | `Home` / `End` | Move the cursor to the first / last row |
+| `PgUp` / `PgDn` | Move the cursor one screenful, less a row of overlap |
 | `Enter`, `Num Enter` | Enter the directory under the cursor, or open the file with the desktop's handler |
 | `Backspace` | Leave the current directory |
 | `F3` | Look inside the file under the cursor — see [viewer.md](viewer.md) |
@@ -387,33 +388,76 @@ dialog*, and `Shift+F6` edits the name **in place**, in the row itself, with no
 dialog over the thing being renamed. The phrase "in place" belongs to
 `Shift+F6`, and the table above used to lend it to `F6`.
 
-## Page Up / Page Down are the widget's job
+## Page Up / Page Down were the widget's job until they were measured
 
-They are deliberately **not** in the table. Paging depends on how many rows
-fit on screen, and the model has no idea how tall the viewport is — the
-`ColumnView` does. So the page keys fall through to the widget, which moves
-its own selection and scrolls.
+They are in the table now. They were not, and the reason given was that
+"paging depends on how many rows fit on screen, and the model has no idea how
+tall the viewport is — the `ColumnView` does". That was true when it was
+written and stopped being true the moment `Shift+PgUp`/`PgDn` needed the same
+number: `PaneView::page_rows` measures the viewport off the scroll adjustment,
+and the measurement the argument called impossible had been a method on the
+type ever since. A decision whose reason had expired, left standing because
+nobody went back to it.
 
-**With Shift they are bound, and the pane measures a page itself.** The
-scrolled window's adjustment knows the content height and the viewport height,
-and the rows are uniform, so the row count falls out of the ratio; before the
-first layout there is no height to divide by and a fallback constant stands
-in. That measurement is the one part of this that could quietly be wrong, so
-it has an end-to-end test on a screen tall enough to hold every row, where one
-`Shift+PgDn` has to mark all of them.
+What forced the revisit was not tidiness. The widget moves its *own* selection
+and the model hears nothing until the next dispatched action adopts it — which
+is fine for an action and wrong for type-ahead, the one route into a pane that
+is not one. Paging and then typing searched from a row off the top of the
+screen ([listing.md](listing.md)).
 
-That leaves the widget's selection ahead of the model's cursor, so the pane
-**adopts the selection before acting on any bound key**. Without that step the
-two drift apart and the next Enter opens whatever row the cursor was on
-before the page, not the row the user is looking at.
+**The step is a screenful less one row, and that row was measured, not
+chosen.** The `ColumnView`'s own paging scrolled thirteen rows where fourteen
+fit, leaving the last row of one page as the first of the next — which is what
+lets a reader place themselves after a jump. Reproducing it was the
+requirement, so the numbers were taken from the running app before anything
+was written: at a 39-pixel row and a 579-pixel viewport the widget settled at
+offsets 0, 474, 981, 1488, and a thirteen-row step with the ordinary
+scroll-into-view reproduces all four exactly. `PAGE_OVERLAP_ROWS` is that one
+row.
 
-The same mechanism covers anything else the widget handles on its own, and is
-what mouse selection will ride on in a later phase.
+It also settled a disagreement nobody had noticed: `Shift+PgDn` marked
+fourteen rows where `PgDn` moved thirteen. Both now ask `page_step`, so one
+place decides what a page is.
+
+**Checked by eye, because nothing else can see it.**
+`scripts/check-page-scroll.sh` drives the real app and leaves five
+screenshots. What it showed: the first page moves the cursor thirteen rows and
+does **not** scroll, because the row it lands on is already visible — which is
+what the widget did too; the second page shows `row-013` at the top and
+`row-026` at the bottom, so the row the cursor sat on becomes the first row of
+the next page; and two pages down followed by two up returns the pane
+**pixel-identical** to where it started. The only difference anywhere in that
+last comparison is in the *other* pane, where GTK's overlay scrollbar was
+caught mid-fade — a screenshot-timing artifact, not a behaviour.
+
+The arithmetic is pinned by
+`a_page_is_a_screenful_less_the_row_that_carries_over`, which carries the
+measured numbers. The **appearance** is not pinned by anything: the end-to-end
+suite asserts on the filesystem, and a down-and-back-up test cannot see the
+overlap either, since both directions use the same step and cancel out. Said
+here rather than left looking like coverage it is not.
+
+**The pane measures a page itself.** The scrolled window's adjustment knows
+the content height and the viewport height, and the rows are uniform, so the
+row count falls out of the ratio; before the first layout there is no height
+to divide by and a fallback constant stands in. That measurement is the one
+part of this that could quietly be wrong, so it is pinned twice end to end: a
+`Shift+PgDn` on a screen tall enough to hold every row has to mark all of
+them, and a plain `PgDn` has to land among the two hundred rows without
+running to the last of them — a step of the whole listing would pass a
+down-and-back-up test, because both directions would clamp.
+
+**The widget still moves a selection of its own**, on a mouse click, so the
+pane **adopts the selection before acting on any dispatched key** — and, since
+2026-08-30, before a type-ahead letter too, which is not a dispatched key
+([ui-shell.md](ui-shell.md)). Without that the two drift apart and the next
+Enter opens whatever row the cursor was on before the click.
 
 The traffic runs the other way too: when the shell moves the cursor it also
-moves the widget's *focus*, because the widget pages from its own focus. If
-focus did not follow, a Page Down after some arrow keys would page from
-wherever the widget last was rather than from the cursor.
+moves the widget's *focus*, because anything the widget does handle on its own
+starts from its focus. If focus did not follow, a click after some arrow keys
+would leave the widget starting from wherever it last was rather than from the
+cursor.
 
 ## Action names — what a `[keys]` line may say on the right
 
@@ -446,6 +490,8 @@ the keystroke it was written from. Case and modifier order do not matter when
 | `cursor_down` | `Down` |
 | `cursor_first` | `Home` |
 | `cursor_last` | `End` |
+| `cursor_page_up` | `Page_Up` |
+| `cursor_page_down` | `Page_Down` |
 | `activate` | `Return`, `KP_Enter` |
 | `go_parent` | `BackSpace` |
 | `copy` | `F5` |

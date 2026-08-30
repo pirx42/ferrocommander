@@ -29,6 +29,10 @@ pub enum Action {
     CursorDown,
     CursorFirst,
     CursorLast,
+    /// Page Up / Page Down — a screenful, less the row of overlap that makes
+    /// the jump placeable.
+    CursorPageUp,
+    CursorPageDown,
     /// Enter the directory under the cursor.
     Activate,
     /// Leave the current directory.
@@ -151,12 +155,14 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 59] = [
+    const ALL: [Action; 61] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
         Action::CursorFirst,
         Action::CursorLast,
+        Action::CursorPageUp,
+        Action::CursorPageDown,
         Action::Activate,
         Action::GoParent,
         Action::Copy,
@@ -396,6 +402,20 @@ static BINDINGS: &[Binding] = &[
     // The one pair that is bound with Shift and unbound without it: plain
     // paging is the widget's job, because only it knows how tall the viewport
     // is. With Shift the pane measures a page and marks what it crosses.
+    // Plain paging was the `ColumnView`'s own until the model started needing
+    // to know where the cursor is — type-ahead searches from it, and a widget
+    // that moved the selection without saying so left the search behind. The
+    // step and the scroll are the widget's own, measured; see `page_step`.
+    Binding {
+        key: Key::Page_Up,
+        modifiers: PLAIN,
+        action: Action::CursorPageUp,
+    },
+    Binding {
+        key: Key::Page_Down,
+        modifiers: PLAIN,
+        action: Action::CursorPageDown,
+    },
     Binding {
         key: Key::Page_Up,
         modifiers: ModifierType::SHIFT_MASK,
@@ -632,6 +652,8 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("cursor_down", Action::CursorDown),
     ("cursor_first", Action::CursorFirst),
     ("cursor_last", Action::CursorLast),
+    ("cursor_page_up", Action::CursorPageUp),
+    ("cursor_page_down", Action::CursorPageDown),
     ("activate", Action::Activate),
     ("go_parent", Action::GoParent),
     ("copy", Action::Copy),
@@ -888,6 +910,8 @@ mod tests {
             (Key::Down, PLAIN, Action::CursorDown),
             (Key::Home, PLAIN, Action::CursorFirst),
             (Key::End, PLAIN, Action::CursorLast),
+            (Key::Page_Up, PLAIN, Action::CursorPageUp),
+            (Key::Page_Down, PLAIN, Action::CursorPageDown),
             (Key::Return, PLAIN, Action::Activate),
             (Key::KP_Enter, PLAIN, Action::Activate),
             (Key::BackSpace, PLAIN, Action::GoParent),
@@ -1768,12 +1792,19 @@ mod tests {
     }
 
     #[test]
-    fn paging_is_bound_with_shift_and_unbound_without_it() {
-        // The asymmetry is deliberate: plain paging belongs to the widget,
-        // which is the only thing that knows how tall the viewport is.
+    fn paging_is_bound_with_and_without_shift_and_means_different_things() {
+        // This test used to assert the opposite for the plain keys: that they
+        // were *unbound*, because "plain paging belongs to the widget, which
+        // is the only thing that knows how tall the viewport is". That reason
+        // expired when `page_rows` was built for the marking twins — the
+        // measurement it called impossible is a method on `PaneView` — and the
+        // keys were bound on 2026-08-30 so the model hears about the move.
+        // Kept and inverted rather than deleted: the asymmetry is still the
+        // thing worth pinning, it is just no longer an asymmetry of binding.
         for key in [Key::Page_Up, Key::Page_Down] {
-            assert_eq!(bound(key, PLAIN), None, "{key:?}");
-            assert!(bound(key, ModifierType::SHIFT_MASK).is_some(), "{key:?}");
+            let plain = bound(key, PLAIN).expect("plain paging moves the cursor");
+            let shifted = bound(key, ModifierType::SHIFT_MASK).expect("shift marks");
+            assert_ne!(plain, shifted, "{key:?}");
         }
     }
 

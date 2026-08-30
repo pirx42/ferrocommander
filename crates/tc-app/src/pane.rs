@@ -21,9 +21,9 @@ use crate::constants::{
     BRANCH_MARKER, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
     CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME,
     COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
-    COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER, PAGE_ROWS_FALLBACK, PANE_SPACING,
-    PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT,
-    XALIGN_LEFT, XALIGN_RIGHT,
+    COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER, PAGE_OVERLAP_ROWS, PAGE_ROWS_FALLBACK,
+    PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING,
+    TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
@@ -306,6 +306,16 @@ pub struct PaneView {
     transition: Transition,
     /// Why the last navigation attempt failed, shown beside the path.
     error: Option<String>,
+}
+
+/// How far a page key moves when `visible` rows fit on screen.
+///
+/// Split out of [`PaneView::page_step`] because the rule is the part that can
+/// be checked without a display server — what a viewport measures is GTK's
+/// business, what is done with the number is ours. At least one row, or a
+/// viewport too short for two would page nowhere.
+fn page_step_for(visible: usize) -> usize {
+    visible.saturating_sub(PAGE_OVERLAP_ROWS).max(1)
 }
 
 impl PaneView {
@@ -957,15 +967,29 @@ impl PaneView {
         self.shown.listing.len().saturating_sub(1)
     }
 
-    /// How many rows fit on screen, for the two page keys that mark.
+    /// How far a page key moves: a screenful, less one row of overlap.
     ///
-    /// Measured rather than assumed: the model has no idea how tall the
-    /// viewport is, which is exactly why plain Page Up/Down are left to the
-    /// widget ([`docs/keymap.md`]). The adjustment knows the content height
+    /// **The overlap is what makes it match**, and it was measured rather than
+    /// chosen. Paging used to be the `ColumnView`'s own business, and its
+    /// scroll settled at thirteen rows where a screenful held fourteen — so it
+    /// leaves the last visible row on screen as the first of the next page,
+    /// which is what stops a reader losing their place across a jump. Moving
+    /// by the full screenful instead lands one row further every time, and the
+    /// difference compounds.
+    ///
+    /// At least one row, or a viewport too short for two rows would page
+    /// nowhere.
+    pub fn page_step(&self) -> usize {
+        page_step_for(self.page_rows())
+    }
+
+    /// How many rows fit on screen.
+    ///
+    /// Measured rather than assumed: the adjustment knows the content height
     /// and the viewport height, and the rows are uniform, so the row count
     /// falls out of the ratio. Before the first layout there is no height to
     /// divide by and the fallback stands in.
-    pub fn page_rows(&self) -> usize {
+    fn page_rows(&self) -> usize {
         let adjustment = self.scroller.vadjustment();
         let (content, viewport) = (adjustment.upper(), adjustment.page_size());
         let rows = self.shown.listing.len() as f64;
@@ -1759,6 +1783,30 @@ enum Transition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A page moves a screenful less the row that carries the reader over.
+    ///
+    /// The numbers are the ones measured off the running app on 2026-08-30,
+    /// when plain paging still belonged to the `ColumnView`: a 39-pixel row
+    /// in a 579-pixel viewport is fourteen rows visible, and the widget's own
+    /// paging scrolled thirteen of them — offsets 0, 474, 981, 1488, which a
+    /// thirteen-row step with the ordinary scroll-into-view reproduces
+    /// exactly. Reproducing it was the requirement, so the figure it turns on
+    /// is pinned here rather than left to a comment.
+    ///
+    /// **What this does not pin is the scroll itself.** Where a row ends up on
+    /// screen is not something the end-to-end suite can see — it asserts on
+    /// the filesystem — and a down-and-back-up test cannot see the overlap
+    /// either, because both directions use the same step and cancel. This
+    /// holds the arithmetic; the appearance is checked by eye and recorded in
+    /// [`docs/keymap.md`].
+    #[test]
+    fn a_page_is_a_screenful_less_the_row_that_carries_over() {
+        assert_eq!(page_step_for(14), 13, "the measured case");
+        // A viewport that fits one row still has to move, or the key is dead.
+        assert_eq!(page_step_for(1), 1);
+        assert_eq!(page_step_for(0), 1);
+    }
 
     fn row(selected: bool, renaming: bool) -> Row {
         Row {

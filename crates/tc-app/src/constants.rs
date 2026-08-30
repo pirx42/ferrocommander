@@ -49,6 +49,14 @@ pub const SETTINGS_UNWRITABLE: &str = "settings could not be saved";
 /// land here does something sensible rather than nothing.
 pub const PAGE_ROWS_FALLBACK: usize = 20;
 
+/// Rows a page key leaves on screen from the page before it.
+///
+/// One, and measured rather than picked: this is what the `ColumnView`'s own
+/// paging did before the keys were bound, and reproducing it exactly was the
+/// requirement. A jump that shares no row with the page before it gives the
+/// reader nothing to place themselves by.
+pub const PAGE_OVERLAP_ROWS: usize = 1;
+
 /// Both panes start equally wide — neither side is the "main" one.
 pub const PANE_SPLIT_RATIO: f32 = 0.5;
 

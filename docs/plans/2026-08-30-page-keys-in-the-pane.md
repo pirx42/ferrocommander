@@ -186,16 +186,47 @@ now say why nothing broke: the rule "once per dispatched action" stayed true
 while a route appeared that is not a dispatched action. The question for a new
 route is not whether the contract covers it, but whether it is an action.
 
-**Phase 2 — bind the two keys.** The actions, the dispatch arms, the tests,
-the probes, and the documentation in the same commit (skill 28) — which the
-bindings-table check makes mandatory rather than optional. `keymap.md`'s
-"the widget's job" section is rewritten to say what is true *and why it
-changed* (skill 30), and `page_rows()` loses the comment that argues against
-its own existence.
+**Phase 2 — bind the two keys. Done**, and the measurement in step 1 changed
+the design for the better.
 
-**Phase 3 — the scroll, by eye.** Screenshots before and after, and a
-paragraph in `ui-shell.md` recording what was checked and how — the honest
-version of a property no test in this repository can see.
+**The plan's premise was wrong.** It said the widget "keeps the cursor row at
+the same screen position", and that reproducing it might need `ScrollInfo` to
+suppress GTK's own scrolling. Instrumenting the adjustment said otherwise: at
+a 39-pixel row in a 579-pixel viewport, fourteen rows fit and the widget's
+paging settled at offsets **0, 474, 981, 1488** — a *thirteen*-row step with
+the ordinary minimal scroll-into-view, which reproduces all four exactly. So
+the widget scrolls minimally, like `scroll_to` already does, and keeps one row
+of overlap. `ScrollInfo` was not needed at all; the whole difference between
+"close enough" and "identical" was one row.
+
+That row is `PAGE_OVERLAP_ROWS`, and it earned a second finding: `Shift+PgDn`
+was marking fourteen rows where `PgDn` moved thirteen. Both ask `page_step`
+now — one place decides what a page is (skill 44).
+
+Five gate checks failed the moment the actions existed and named exactly what
+was missing: the bindings table, the generated action table, the end-to-end
+press check, the `ALL` list, and the test asserting the old design. **That is
+the first time this repository's documentation checks have been load-bearing
+for a change rather than for a review**, and they behaved as advertised.
+
+The old design's test was rewritten rather than deleted, and says what changed
+and why (skill 24).
+
+**Phase 3 — the scroll, by eye. Done**, via `scripts/check-page-scroll.sh`,
+which is committed rather than left in a scratch directory (skill 68) because
+it is the only check on the appearance there will ever be.
+
+It showed the first page moving thirteen rows without scrolling, the second
+page opening on the row the cursor had just been on, and a two-down-two-up
+round trip returning the pane pixel-identical. The single difference in that
+comparison was in the *other* pane, an overlay scrollbar caught mid-fade.
+
+**A probe found what the tests cannot see.** Removing the overlap row left
+`page_down_moves_the_cursor_a_screenful_and_page_up_brings_it_back` green: a
+round trip cannot see the step size, because both directions use it and
+cancel. So the arithmetic was split into a pure `page_step_for` and pinned by
+a unit test carrying the measured numbers, and the appearance is recorded in
+`keymap.md` as verified by hand — not as covered.
 
 **Phase 4 — refactoring audit** (skill 49).
 

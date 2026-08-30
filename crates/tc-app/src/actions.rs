@@ -65,6 +65,8 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::CursorDown => shell.borrow_mut().active_pane().move_cursor_by(1),
         Action::CursorFirst => shell.borrow_mut().active_pane().move_cursor_to_first(),
         Action::CursorLast => shell.borrow_mut().active_pane().move_cursor_to_last(),
+        Action::CursorPageUp => move_by_page(shell, -1),
+        Action::CursorPageDown => move_by_page(shell, 1),
         Action::Activate => {
             let index = shell.borrow().active;
             let loading = shell.borrow_mut().panes[index].activate();
@@ -480,6 +482,19 @@ pub(crate) fn clone_pane(shell: &Rc<RefCell<Shell>>, target: usize) {
     await_listing(shell, target, Some(loading));
 }
 
+/// PgUp / PgDn: move the cursor one page, as the widget used to.
+///
+/// A free function for the reason [`extend_by_page`] is one: the page has to
+/// be measured off the pane before the same pane is borrowed to act on it.
+/// `move_cursor_by` clamps at both ends rather than wrapping, which is what
+/// the arrow keys do and what Total Commander does.
+pub(crate) fn move_by_page(shell: &Rc<RefCell<Shell>>, direction: isize) {
+    let mut state = shell.borrow_mut();
+    let pane = state.active_pane();
+    let page = pane.page_step() as isize;
+    pane.move_cursor_by(direction * page);
+}
+
 /// Shift+PgUp / Shift+PgDn: mark across one screenful and land there.
 ///
 /// A free function because the page size has to be measured off the pane
@@ -487,7 +502,7 @@ pub(crate) fn clone_pane(shell: &Rc<RefCell<Shell>>, target: usize) {
 pub(crate) fn extend_by_page(shell: &Rc<RefCell<Shell>>, direction: isize) {
     let mut state = shell.borrow_mut();
     let pane = state.active_pane();
-    let page = pane.page_rows() as isize;
+    let page = pane.page_step() as isize;
     let target = (pane.cursor() as isize + direction * page).max(0) as usize;
     pane.extend_mark_to(target);
 }
