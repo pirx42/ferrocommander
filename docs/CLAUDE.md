@@ -81,12 +81,7 @@ cross-references instead of duplication.
   | [field report, round one](plans/archive/2026-08-29-field-report-round-one.md) | twelve findings from the first person to *use* build 132 rather than test it: ten fixed, two withdrawn, one that did not reproduce and is recorded as not reproducing — plus the three bugs the work found in itself |
   | [documentation drift and the hijacked keys](plans/archive/2026-08-30-documentation-drift-and-the-hijacked-keys.md) | what reading every document against the code found: thirty-six findings, three of them the code being wrong — including a regression that sent `Ctrl+V` in the command line to the file copier — plus the action-name table nobody could find, now generated, and the type-ahead measurement that was owed |
   | [page keys in the pane](plans/archive/2026-08-30-page-keys-in-the-pane.md) | `Page Up`/`Page Down` bound as ordinary cursor keys — the type-ahead bug that found the hole in `adopt_selection`'s contract, a design whose stated reason had expired, and a scroll reproduced by measuring the widget rather than guessing at it |
-
-  **Active:**
-  [adoption without remembering](plans/2026-08-30-adoption-without-remembering.md)
-  — making `adopt_selection` a signal rather than a call somebody has to know
-  to make. No live bug behind it; the case is that the rule has failed
-  silently twice in a week.
+  | [adoption without remembering](plans/archive/2026-08-30-adoption-without-remembering.md) | `adopt_selection` became a signal instead of a call somebody has to know to make — no live bug behind it, only a rule that had been kept perfectly and failed anyway twice in a week; plus the test that stopped covering its subject without going red |
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.

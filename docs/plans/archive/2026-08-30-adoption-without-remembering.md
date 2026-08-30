@@ -1,6 +1,6 @@
 # Adoption without remembering — the selection signal
 
-Status: In Progress
+Status: Implemented
 
 `PaneView::adopt_selection` reads the widget's selection back into the model.
 Two places call it, and both call it because somebody remembered to. This is
@@ -177,7 +177,32 @@ removal, since the sentence being replaced was made false by it (skill 28).
 each keeps the epitaph of the rule it replaced: kept perfectly, insufficient
 anyway, twice in a week, on paths whose authors had no way to know.
 
-**Phase 4 — refactoring audit** (skill 49).
+**Phase 4 — refactoring audit** (skill 49). **Done.**
+
+Net **−33 lines** of production code: two explicit calls and their two
+paragraphs of contract, replaced by one handler.
+
+**One finding, and it was hiding behind a comment that had stopped being
+true.** `refresh` saved the model's cursor across the store rebuild and
+restored it afterwards, because "emptying and refilling the store makes the
+widget move its own selection, which `adopt_selection` would then read back as
+the user's intent". Nothing between those two lines can change the model's
+cursor — reaching `refresh` at all means holding the borrow that keeps the
+handler out — so the restore wrote back a value that never moved. Checked by
+removing it and running all 166 end-to-end tests, not by reasoning alone. The
+lines are gone and the comment now says why no protection is needed (skill
+19).
+
+That the *old* comment named `adopt_selection` is what made it worth looking
+at: it described a hazard in terms of a mechanism this plan replaced, which is
+the shape of a comment that has outlived its subject.
+
+**Left alone.** `wire_selection` sits beside `wire_filter_bar` and duplicates
+its shape — clone the widget, clone the shell, `try_borrow_mut`, act — which
+is real duplication of about four lines. Extracting it would mean a helper
+generic over the widget and the signal, for two call sites whose *reasoning*
+is shared and already cross-referenced in both comments. The reasoning is the
+part worth sharing, and it is.
 
 ## 6. Effort
 

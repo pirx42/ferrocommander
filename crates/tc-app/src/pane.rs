@@ -659,15 +659,20 @@ impl PaneView {
         self.show_space();
 
         // Emptying and refilling the store makes the widget move its own
-        // selection, which `adopt_selection` would then read back as the
-        // user's intent. The model's cursor is restored afterwards.
-        let cursor = self.shown.listing.cursor();
+        // selection, and `wire_selection` hears every such move — but this one
+        // is ours and arrives while the shell is borrowed, so the handler
+        // stands down and the model's cursor is never touched. `sync_cursor`
+        // below then puts the widget back on it.
+        //
+        // This used to save and restore the cursor across the rebuild. That
+        // was a no-op: nothing between the two lines could change it, because
+        // reaching `refresh` at all means holding the borrow that keeps the
+        // handler out (skill 19).
         self.store.remove_all();
         for index in 0..self.shown.listing.len() {
             self.store.append(&self.entry_at(index));
         }
 
-        self.shown.listing.set_cursor(cursor);
         self.status
             .set_text(&crate::jobs::selection_status(&self.shown.listing));
         self.sync_cursor();
