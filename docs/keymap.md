@@ -478,6 +478,26 @@ starts from its focus. If focus did not follow, a click after some arrow keys
 would leave the widget starting from wherever it last was rather than from the
 cursor.
 
+## The macOS layer
+
+On macOS a second table sits between the defaults and the user's `[keys]`:
+`MACOS_LAYER` in `keymap.rs`, **data in exactly the `[keys]` shape**, run
+through the same parser — so the platform layer costs no second mechanism and
+"what a line may say" cannot drift between the two. Precedence is platform
+under person: a user's `[keys]` line beats the layer the way it beats any
+default.
+
+It is **additive and unjudged**: `Cmd+C/X/V/A/Z/Q/R` gain their universal
+macOS meanings and every `Ctrl` binding keeps working. Whether parts of the
+`Ctrl` table should *move* to Cmd is a taste question for somebody at a real
+Mac — the layer being data is what makes that tuning an edit, not a build.
+Tests apply the layer explicitly on Linux, so it is reviewable here: it must
+parse, it must not take the Ctrl twins away, and a user override must beat it.
+
+The bindings table above documents `BINDINGS` — the defaults every platform
+shares — and its check counts exactly those; the layer is deliberately not in
+it, being no platform's default but macOS's addition.
+
 ## Action names — what a `[keys]` line may say on the right
 
 Rebinding a key is a line in the `[keys]` table of [config.md](config.md), and

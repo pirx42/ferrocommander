@@ -714,6 +714,30 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("quit", Action::Quit),
 ];
 
+/// The macOS layer: what Command means there, laid over the defaults.
+///
+/// **Data, in exactly the `[keys]` shape** — each entry is what a user could
+/// have written, run through the same parser, so shipping it costs no second
+/// mechanism. Applied between the defaults and the user's own table, which
+/// keeps the precedence obvious: platform under person.
+///
+/// **Additive and unjudged.** Every `Ctrl` binding keeps working; these add
+/// the spellings a Mac hand expects for the commands whose Cmd form is
+/// universal there (copy, cut, paste, select all, undo, quit, refresh).
+/// Whether more of the `Ctrl` table should *move* to Cmd is a taste question
+/// nobody can answer from a Linux box — this is the deliberate minimum, and
+/// the groundwork plan lists it among the things a real Mac reviews first.
+#[cfg(any(target_os = "macos", test))]
+pub(crate) const MACOS_LAYER: [(&str, &str); 7] = [
+    ("cmd+c", "clipboard_copy"),
+    ("cmd+x", "clipboard_cut"),
+    ("cmd+v", "clipboard_paste"),
+    ("cmd+a", "mark_all"),
+    ("cmd+z", "undo_rename"),
+    ("cmd+q", "quit"),
+    ("cmd+r", "reread"),
+];
+
 /// The defaults, with the user's own bindings laid over them.
 ///
 /// An overlay rather than a replacement: a key nobody mentions keeps what it
@@ -731,12 +755,22 @@ pub struct Keymap {
 
 impl Default for Keymap {
     fn default() -> Self {
-        Keymap {
+        #[allow(unused_mut)]
+        let mut keymap = Keymap {
             bindings: BINDINGS
                 .iter()
                 .map(|binding| ((binding.key, binding.modifiers), binding.action))
                 .collect(),
+        };
+        // The platform's own layer goes under the user's [keys], and a
+        // complaint from it is a programming error rather than user input —
+        // a test walks the layer on every platform, so it cannot get here
+        // broken without the gate saying so.
+        #[cfg(target_os = "macos")]
+        for (spec, action) in MACOS_LAYER {
+            debug_assert!(keymap.apply(spec, action).is_none(), "{spec}");
         }
+        keymap
     }
 }
 
@@ -753,24 +787,32 @@ impl Keymap {
         let mut keymap = Keymap::default();
         let mut complaints = Vec::new();
         for (spec, action) in overrides {
-            let Some(stroke) = parse_key(spec) else {
-                complaints.push(format!("{UNKNOWN_KEY}: {spec}"));
-                continue;
-            };
-            // An empty action is how a key is taken away, which is not the
-            // same as leaving it out — leaving it out keeps the default.
-            if action.is_empty() {
-                keymap.bindings.remove(&stroke);
-                continue;
-            }
-            match action_named(action) {
-                Some(action) => {
-                    keymap.bindings.insert(stroke, action);
-                }
-                None => complaints.push(format!("{UNKNOWN_ACTION}: {action}")),
-            }
+            complaints.extend(keymap.apply(spec, action));
         }
         (keymap, complaints)
+    }
+
+    /// Lays one binding over what is there, reporting what made no sense.
+    ///
+    /// One function for the user's `[keys]` lines and the platform layer,
+    /// so "what a line may say" cannot drift between the two.
+    fn apply(&mut self, spec: &str, action: &str) -> Option<String> {
+        let Some(stroke) = parse_key(spec) else {
+            return Some(format!("{UNKNOWN_KEY}: {spec}"));
+        };
+        // An empty action is how a key is taken away, which is not the
+        // same as leaving it out — leaving it out keeps the default.
+        if action.is_empty() {
+            self.bindings.remove(&stroke);
+            return None;
+        }
+        match action_named(action) {
+            Some(action) => {
+                self.bindings.insert(stroke, action);
+                None
+            }
+            None => Some(format!("{UNKNOWN_ACTION}: {action}")),
+        }
     }
 
     /// The action a keystroke triggers, or `None` when nothing is bound.
@@ -1546,6 +1588,66 @@ mod tests {
             table.push_str(&format!("| `{name}` | {keys} |\n"));
         }
         table
+    }
+
+    /// A keymap with the macOS layer applied, built the way a Mac builds it.
+    ///
+    /// On this box `Default` does not apply the layer, so the test applies it
+    /// the same way `Default` does there — through the same `apply` — which
+    /// is what makes the layer reviewable without a Mac.
+    fn with_macos_layer() -> Keymap {
+        let mut keymap = Keymap::default();
+        for (spec, action) in MACOS_LAYER {
+            assert!(
+                keymap.apply(spec, action).is_none(),
+                "the shipped layer must parse: {spec} = {action}"
+            );
+        }
+        keymap
+    }
+
+    #[test]
+    fn the_macos_layer_adds_cmd_without_taking_ctrl() {
+        // Additive is the deliberate minimum: a Mac hand gets Cmd+C, and
+        // everything the Linux table promised still works. The layer moving
+        // beyond additive is a decision for somebody at a real Mac.
+        let keymap = with_macos_layer();
+        for (key, action) in [
+            (Key::c, Action::ClipboardCopy),
+            (Key::x, Action::ClipboardCut),
+            (Key::v, Action::ClipboardPaste),
+            (Key::a, Action::MarkAll),
+            (Key::z, Action::UndoRename),
+            (Key::q, Action::Quit),
+            (Key::r, Action::Reread),
+        ] {
+            assert_eq!(
+                keymap.action_for(key, ModifierType::META_MASK),
+                Some(action),
+                "{key:?} under Cmd"
+            );
+            assert_eq!(
+                keymap.action_for(key, ModifierType::CONTROL_MASK),
+                Some(action),
+                "{key:?} under Ctrl still"
+            );
+        }
+    }
+
+    #[test]
+    fn a_users_binding_wins_over_the_macos_layer() {
+        // Platform under person: the layer is applied before the [keys]
+        // table, so somebody who rebinds cmd+q gets their binding, exactly as
+        // they would over a plain default.
+        let mut keymap = with_macos_layer();
+        assert!(keymap.apply("cmd+q", "reread").is_none());
+        assert_eq!(
+            keymap.action_for(Key::q, ModifierType::META_MASK),
+            Some(Action::Reread)
+        );
+        // And an empty action takes a layer key away like any other.
+        assert!(keymap.apply("cmd+r", "").is_none());
+        assert_eq!(keymap.action_for(Key::r, ModifierType::META_MASK), None);
     }
 
     #[test]
