@@ -228,15 +228,11 @@ fn typed_into_the_pane(
     let Some(character) = key.to_unicode().filter(|typed| !typed.is_control()) else {
         return glib::Propagation::Proceed;
     };
-    let mut state = shell.borrow_mut();
-    let pane = state.active_pane();
-    // Type-ahead searches from the cursor, and this is the one route into a
-    // pane that `dispatch` does not own — so the adoption every action gets
-    // for free has to be asked for here. Without it a search that follows
-    // anything the *widget* moved the selection with (a page, a click) starts
-    // from the row the model was left on, off the top of the screen.
-    pane.adopt_selection();
-    pane.type_ahead(character);
+    // No adoption here any more: `wire_selection` has already put the user's
+    // move in the model, so the cursor this searches from is the row on
+    // screen. That this line could go is checked by
+    // `a_click_then_a_letter_searches_from_the_row_that_was_clicked`.
+    shell.borrow_mut().active_pane().type_ahead(character);
     glib::Propagation::Stop
 }
 

@@ -447,11 +447,11 @@ them, and a plain `PgDn` has to land among the two hundred rows without
 running to the last of them — a step of the whole listing would pass a
 down-and-back-up test, because both directions would clamp.
 
-**The widget still moves a selection of its own**, on a mouse click, so the
-pane **adopts the selection before acting on any dispatched key** — and, since
-2026-08-30, before a type-ahead letter too, which is not a dispatched key
-([ui-shell.md](ui-shell.md)). Without that the two drift apart and the next
-Enter opens whatever row the cursor was on before the click.
+**The widget still moves a selection of its own**, on a mouse click — the one
+move that is genuinely the user's and goes through no binding. The model hears
+about it through the widget's own signal rather than through a call anybody
+has to remember ([ui-shell.md](ui-shell.md)); without that the two drift apart
+and the next Enter opens whatever row the cursor was on before the click.
 
 The traffic runs the other way too: when the shell moves the cursor it also
 moves the widget's *focus*, because anything the widget does handle on its own

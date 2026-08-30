@@ -154,16 +154,28 @@ walks. That is the evidence phase 2 needs before it starts taking the safety
 net away, and it is worth more than the seven-row table in § 2 because it
 exercises every route rather than the five a probe happened to press.
 
-**Phase 2 — take the explicit calls out, one per commit.** `dispatch` first
-(the larger blast radius, so it gets its own gate run), then
-`typed_into_the_pane`. Each removal is its own probe: the tests that pin that
-path must stay green without it, and if one goes red the automatic path does
-not cover that case and the call stays with a comment saying why.
+**Phase 2 — take the explicit calls out, one per commit. Done**, both, and
+neither needed a comment explaining why it had to stay.
 
-**Phase 3 — the contract, rewritten.** `adopt_selection`'s doc comment and its
-paragraph in `ui-shell.md` currently teach a discipline. If phase 2 lands they
-describe a mechanism instead, and the sentence worth keeping is the one about
-how the old rule failed: it was perfectly kept and stopped being sufficient.
+**The first removal exposed a gap the plan had not seen.** The three tests
+that pinned `dispatch`'s adoption all page with the keyboard — and paging
+became a bound action the day before, so the widget no longer moves the
+selection there and those tests no longer exercise what they were written for.
+They passed with the line removed because they no longer touch it. The case
+that still does is a click followed by an *action*, and nothing covered it, so
+`a_click_then_f5_copies_the_row_that_was_clicked` was written to be the probe
+before the removal could be believed.
+
+That is worth naming as a hazard of this kind of work: **a test can stop
+covering its subject without going red**, when the subject moves out from
+under it. Both removals are now held by tests that fail with the handler
+disabled — checked, both, in both directions.
+
+**Phase 3 — the contract, rewritten. Done**, in the same commit as the second
+removal, since the sentence being replaced was made false by it (skill 28).
+`adopt_selection`, `ui-shell.md` and `keymap.md` describe a mechanism now, and
+each keeps the epitaph of the rule it replaced: kept perfectly, insufficient
+anyway, twice in a week, on paths whose authors had no way to know.
 
 **Phase 4 — refactoring audit** (skill 49).
 

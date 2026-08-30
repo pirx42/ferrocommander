@@ -251,25 +251,30 @@ asking. So the traffic runs both ways:
 four handlers and six `PaneView` methods, all of them reached only *through*
 `dispatch` and therefore all of them no-ops — no main-loop turn runs in
 between — which left nobody able to say which call was the load-bearing one.
-The rule now lives with the method: the active pane's selection is adopted
-once per dispatched action, before the action runs. Two callers sit outside
-it, and both are outside `dispatch` by nature:
+**Nobody calls it any more.** `wire_selection` connects `adopt_selection` to
+the widget's own `selection-changed`, so a move the user made is in the model
+before anything reads the cursor. One caller remains and is outside the signal
+by nature: the pane exchange adopts the **other** pane before swapping, which
+is not a move the widget just made.
 
-- **The pane exchange**, which adopts the *other* pane — a click gives a
-  pane's widget the focus and a selection of its own without making it active,
-  so that one is not the same call.
-- **Type-ahead**, which is not an action: a key no binding claims goes
-  straight to it, never through `dispatch`. It searches from the cursor, so
-  without adopting it searched from wherever the model was left — after a
-  Page Down, a row off the top of the screen.
+**The borrow is what tells a move of ours from a move of theirs.** The shell
+sets the selection itself in `sync_cursor` and churns it in `refresh`, and
+reading those back as intent is how a rebuild would eat the cursor — so the
+handler takes the shell with `try_borrow_mut` and does nothing when it fails.
+That is not a hopeful guard: every move the shell makes is made from inside a
+`borrow_mut` and a click is not, which was measured before it was relied on —
+seven model-driven emissions with the borrow held, the click without it — and
+it is the same discrimination the quick filter's handler already makes.
 
-**The second one is worth the paragraph, because nothing broke.** The contract
-says "once per dispatched action" and that stayed true; what changed is that a
-route appeared which is not a dispatched action, when the letter keys stopped
-being unbound and became type-ahead. A rule can be perfectly kept and stop
-being sufficient, and no test fails at the moment it happens. So the question
-to ask of a new route into a pane is not whether the contract covers it — it
-is whether the route is an action, and if it is not, it owes the call.
+**It was a discipline until 2026-08-30, and the discipline is worth the
+paragraph.** The rule read "the active pane's selection is adopted once per
+dispatched action", it was kept perfectly, and it stopped being sufficient
+twice in one week: once when paging belonged to the widget, and once when the
+letter keys became type-ahead, which is not an action. Neither author knew a
+call was owed, and nothing failed to tell them — the contract's words stayed
+true about `dispatch` while routes appeared that do not go through
+`dispatch`. A rule that fails silently on the paths nobody thought of is the
+argument for a signal over a convention, and that is what replaced it.
 
 Every mark operation goes through `PaneView::marking`, which repaints the rows
 that changed. That is structure rather than discipline: a mark operation that
