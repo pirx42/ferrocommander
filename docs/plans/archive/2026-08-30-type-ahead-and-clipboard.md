@@ -1,6 +1,8 @@
 # Type-ahead, the Right arrow, and the system clipboard
 
-Status: In Progress
+Status: Implemented — substance extracted to `keymap.md`, `listing.md`,
+`command-line.md` and the new `clipboard.md`
+(commits `1df3a1d`, `e7e634f`, `5cf254f`, `597b7b4`, `22bd399`)
 
 Three features asked for together, and they are not three independent
 things: the first takes the keys the command line currently lives on, and the
@@ -157,3 +159,63 @@ surprises live.
   file somewhere below is what `Alt+F7` and `Ctrl+B` are for.
 - **A configurable type-ahead timeout.** One value, in the constants, until
   somebody says otherwise.
+
+## 8. What was actually done
+
+All three features are in, and the order the plan insisted on turned out to
+matter for a reason it did not foresee.
+
+### The ordering earned itself twice
+
+`→` first, then the letters — that part went as planned. What the plan did
+not see is that **phase 1's test could not discriminate until phase 2
+landed**. Pressing `→` and typing a command passed with the binding deleted,
+because a letter reached the command line either way. The probe caught it;
+the test now goes through `Space`, whose meaning differs at the only moment
+focus differs.
+
+That is the second test in this repository caught proving nothing, after the
+stylesheet one. Both were caught the same way — by breaking the thing on
+purpose and watching the test stay green.
+
+### The prediction about the three tests held exactly
+
+The plan named three tests pinning the letter rule and said one must change
+while the other two must not. That is what happened: the one whose rule *is*
+the feature was rewritten, and the two about where a letter must **not** go
+passed untouched. The stop-signal was armed and did not fire.
+
+Fifteen further tests changed, which the plan did not predict and should
+have: they typed a command as a *means*, so they now press `→` first with
+their assertions untouched. Two more were rewritten rather than patched,
+because they proved a rename guard *through* the fallback this work removed
+— "with no editor open the typing falls to the command line".
+
+### Phases 3 and 4 collapsed into one, and then did not
+
+The plan separated "inside FerroCommander" from "with everything else". Using
+the *system* clipboard for both — which is the right design — made the split
+an accounting fiction, so they were committed together.
+
+Then the commit message overclaimed: two of phase 4's corners were still
+open, and a follow-up finished them. Saying so cost less than leaving the
+claim standing.
+
+### What the audit found
+
+The plain-text encoder was in the shell while its two siblings were in
+tc-core. Moved.
+
+And a real one, found by asking what the API promises rather than by a test:
+`read_bytes_async` reads *up to* its limit, so a full buffer and a truncated
+one are indistinguishable — and the code used whatever came back. A copy
+would have silently missed files; a **cut would have moved a subset and then
+cleared the clipboard holding the rest**. A read that comes back exactly full
+is refused now.
+
+### What is not here
+
+- **KDE's cut marker**, as decided. A cut in Dolphin pastes as a copy.
+- **Drag and drop**, which the formats would mostly serve.
+- **Windows**, where the clipboard is `CF_HDROP` and none of this applies.
+  The module says so rather than pretending to be portable.
