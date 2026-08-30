@@ -88,6 +88,12 @@ cross-references instead of duplication.
   | [adoption without remembering](plans/archive/2026-08-30-adoption-without-remembering.md) | `adopt_selection` became a signal instead of a call somebody has to know to make — no live bug behind it, only a rule that had been kept perfectly and failed anyway twice in a week; plus the test that stopped covering its subject without going red |
   | [space counts a folder](plans/archive/2026-08-30-space-counts-a-folder.md) | Total Commander's `Space`, which counts a folder as it marks it, so the status line's marked-bytes total stops reading `0 B` — plus two benchmarks that flattered themselves, and the stall the second one hid |
 
+  **Active:**
+  [macOS groundwork](plans/2026-08-30-macos-groundwork.md) — every part of
+  the macOS port a Linux box can do and check, so a future Mac needs fixes
+  rather than architecture. Found before it started: `Cmd` is not
+  expressible in the keymap at all.
+
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
 
