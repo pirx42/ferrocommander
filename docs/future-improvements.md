@@ -201,6 +201,17 @@ guards would hide them rather than settle them — the two error-mapping rows
 are [vfs.md](vfs.md)'s "Windows keeps the raw code" decision meeting tests
 that want a named error, which is worth deciding once rather than skipped
 five times.
+
+**The macOS groundwork settled three of the six** (2026-08-30), because macOS
+shares two of the differences and sharpened one: `remove_file` on a directory
+now answers `IsADirectory` on every platform — POSIX lets `unlink(2)` say
+`EPERM` and macOS does, so the engine settles the spelling on the error path
+rather than each test skipping it; the trash-of-a-missing-path test asserts
+`NotFound` on Linux and "an error" elsewhere, which is vfs.md's own per-target
+decision written into the assertion; and the trash suite is `target_os =
+"linux"` rather than `unix`, because what it asserts is the *freedesktop
+layout* — on a Mac it would trash its fixtures into the account's real bin.
+The hidden-directory, free-space and watcher rows still wait for Windows.
 *Home:* whenever Windows gets a session of its own.
 *From:* the first Windows test run, 2026-08-30.
 

@@ -96,7 +96,19 @@ impl VirtualFs for LocalFs {
     }
 
     fn remove_file(&self, path: &VfsPath) -> Result<(), VfsError> {
-        Ok(fs::remove_file(platform::to_std_path(path))?)
+        let native = platform::to_std_path(path);
+        fs::remove_file(&native).map_err(|error| {
+            // POSIX lets unlink(2) refuse a directory with EPERM, and macOS
+            // does (Windows says PermissionDenied too); only Linux answers
+            // EISDIR. The error set is closed and IsADirectory is what it
+            // promises for this call, so the platforms' three spellings are
+            // settled here — a stat on the error path only, which a delete
+            // that just failed can afford.
+            match error.kind() != std::io::ErrorKind::IsADirectory && native.is_dir() {
+                true => VfsError::IsADirectory,
+                false => VfsError::from(error),
+            }
+        })
     }
 
     fn rename(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {

@@ -5,10 +5,17 @@
 //! test in the same binary would race it. Cargo gives every integration test
 //! file its own process, so one file with one test is the isolation.
 //!
-//! Unix only: the Windows recycle bin cannot be redirected into a tempdir, so
-//! the test would have to trash something for real. `LocalFs::trash` itself
-//! works on both platforms.
-#![cfg(unix)]
+//! Linux only, and the boundary is sharper than "unix": what this asserts is
+//! the **freedesktop** trash layout, redirected through `XDG_DATA_HOME`. The
+//! macOS backend ignores XDG and files deletions under `~/.Trash` — so on a
+//! Mac this test would not merely fail, it would trash its fixtures **for
+//! real**, into the account's actual bin. That is the same failure the
+//! end-to-end harness once shipped on Linux before it pinned `XDG_DATA_HOME`
+//! ([`docs/ui-shell.md`]), met from the other side. The Windows recycle bin
+//! cannot be redirected either. `LocalFs::trash` itself works on all three
+//! platforms; recoverability is simply only *assertable* where the spec gives
+//! the trash an address.
+#![cfg(target_os = "linux")]
 
 use std::collections::BTreeSet;
 use std::fs;
