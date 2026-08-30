@@ -34,6 +34,11 @@ const ARCHIVED_TEXT: &str = "this one came out of the zip";
 /// crate: a test that reads its expectations out of the code under test can
 /// only ever agree with it.
 const DIALOG_COPY: &str = "Copy";
+/// The progress window's title, spelled out like every other expectation.
+const TITLE_PROGRESS: &str = "Working";
+/// The watchable copy's file: 512 MB, written 8 MB at a time.
+const LARGE_FILE_CHUNK: usize = 8 * 1024 * 1024;
+const LARGE_FILE_CHUNKS: usize = 64;
 const DIALOG_MOVE: &str = "Move / Rename";
 const DIALOG_NEW_DIR: &str = "New directory";
 const DIALOG_DELETE: &str = "Confirm delete";
@@ -497,6 +502,29 @@ fn f5_with_both_panes_in_one_directory_will_not_copy_a_file_onto_itself() {
     // The refusal has to reach the user, not just the log.
     app.focus_dialog(DIALOG_FAILURES);
     app.await_contents("precious.txt", SOURCE_TEXT);
+}
+
+/// The usual fixture, plus a file big enough for the copy to be watchable.
+///
+/// Real bytes rather than a sparse file: what makes the copy outlast
+/// `PROGRESS_DELAY` — so there is a progress window to press a button on — is
+/// reading them back off the disk, and a sparse file has nothing to read.
+///
+/// Half a gigabyte because the threshold is 300 ms and `cp` does 256 MB in
+/// about 450 ms here: a margin of one and a half is not a margin, and the
+/// failure it would cause is the flaky kind, appearing only on a machine
+/// faster than the one the number was picked on. Written in chunks so the
+/// fixture does not hold it all in memory at once.
+fn with_a_large_file(home: &Path) {
+    use std::io::Write;
+
+    arrange(home);
+    let mut file = std::fs::File::create(home.join("src/large.bin")).unwrap();
+    let chunk = vec![7u8; LARGE_FILE_CHUNK];
+    for _ in 0..LARGE_FILE_CHUNKS {
+        file.write_all(&chunk).unwrap();
+    }
+    file.sync_all().unwrap();
 }
 
 /// A home whose `PATH` holds an `xdg-open` that records what it was given.
@@ -3333,6 +3361,52 @@ fn ctrl_down_offers_a_command_that_was_run_before() {
     app.key("Return");
 
     app.await_exists("src/first-again");
+}
+
+#[test]
+fn a_job_sent_to_the_background_finishes_without_its_window() {
+    // Reported from the field: a copy could not be put in the background, so
+    // the whole program waited on it. Background closes the window and
+    // nothing else — the token is not pulled, the events go on being drained,
+    // and the copy runs to its end.
+    let app = in_src_and_dst(with_a_large_file);
+
+    // `..`, nested, data.bin, large.bin — only the big one, so the copy is
+    // as short as it can be while still lasting long enough to be watched.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.focus_dialog(TITLE_PROGRESS);
+    // Background is the focused button, so Enter is it — which is also the
+    // point: Enter must never be the one that stops a copy halfway.
+    app.key("Return");
+    app.await_dialog_closed(TITLE_PROGRESS);
+
+    // The window is gone and the copy is not: this is the whole claim.
+    //
+    // Polled to its full length rather than to its existence, because the two
+    // are genuinely different here — the first run of this test caught the
+    // file at 329 MB of 536 MB, which is the feature working and the
+    // assertion arriving early.
+    let want = (LARGE_FILE_CHUNK * LARGE_FILE_CHUNKS) as u64;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        let copied = app
+            .path("dst/large.bin")
+            .metadata()
+            .map(|file| file.len())
+            .unwrap_or_default();
+        if copied == want {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the backgrounded copy stopped at {copied} of {want}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 #[test]

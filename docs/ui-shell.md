@@ -128,6 +128,19 @@ checks between tasks and inside the copy loop, and the window closes on the
 click rather than waiting for the worker to notice, because a dialog that
 lingers after a click looks broken.
 
+**Background sends the job on without watching it.** The button closes the
+window and does nothing else: the cancel token is not pulled, the future
+draining the job's events keeps draining them, so the copy runs to its end,
+its failures are still reported and both panes still reload. It is the
+focused button rather than Cancel, for the reason the delete dialog opens on
+Cancel — Enter is the key everyone reaches for, and it must never be the one
+that stops a copy halfway.
+
+What is still missing is the way *back*: a window listing what is running, so
+a job put in the background can be watched again or cancelled later. Until
+then, backgrounding is one-way
+([future-improvements.md](future-improvements.md)).
+
 The arithmetic behind the bar is in `progress.rs` and is pure: `Meter` folds
 the event stream into a fraction, a caption and the current path. `Advanced`
 carries a delta, so summing it is the window's job, not the engine's. **How a

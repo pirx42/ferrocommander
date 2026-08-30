@@ -192,3 +192,20 @@ returns `None`, so the figure is simply absent there.
 A status line with nothing in it is honest; one showing a made-up number is
 not. Whoever adds the crate gets the figure for free — the trait method, the
 call site and the formatting are already there and platform-agnostic.
+
+## A window listing the running jobs
+
+`Background` closes a progress window and leaves its job running, which is
+what the field report asked for. What it does not yet have is the way back:
+once backgrounded, a job cannot be watched again or cancelled, because
+nothing lists it.
+
+The engine is ready for that list — every job's progress, cancel token and
+report already hang off its own `JobHandle`, and the shell already holds one
+per running job. What is missing is a non-modal window over them.
+
+The queue behind it still runs jobs **one at a time**, which is a documented
+property rather than an oversight: two copies writing into one directory at
+once is a reliability question (docs/reliability.md), not a convenience one,
+and it deserves deciding on its own rather than as a side effect of adding a
+window.

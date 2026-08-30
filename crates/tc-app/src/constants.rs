@@ -306,6 +306,12 @@ pub const PROMPT_CREATE_DIR: &str = "Name of the new directory:";
 /// Button labels.
 pub const BUTTON_OK: &str = "OK";
 pub const BUTTON_CANCEL: &str = "Cancel";
+
+/// What sends a running job on without watching it.
+///
+/// Not "Close": the window is not what is being dismissed, the *watching* is,
+/// and the job carries on either way. Total Commander calls it Background.
+pub const BUTTON_BACKGROUND: &str = "Background";
 pub const BUTTON_DELETE: &str = "Delete";
 pub const BUTTON_OVERWRITE: &str = "Overwrite";
 pub const BUTTON_SKIP: &str = "Skip";

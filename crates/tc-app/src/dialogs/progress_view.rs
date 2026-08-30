@@ -4,7 +4,7 @@ use gtk::prelude::*;
 
 use tc_core::ops::CancelToken;
 
-use crate::constants::{BUTTON_CANCEL, TITLE_PROGRESS};
+use crate::constants::{BUTTON_BACKGROUND, BUTTON_CANCEL, TITLE_PROGRESS};
 use crate::progress::Meter;
 
 use super::{button_row, shell};
@@ -35,9 +35,21 @@ impl ProgressView {
         content.append(&bar);
 
         let row = button_row();
+        // Background first, and focused below, because it is the harmless
+        // one: Enter is the key everyone reaches for, and it must never be
+        // the one that stops a copy halfway.
+        let background = gtk::Button::with_label(BUTTON_BACKGROUND);
         let button = gtk::Button::with_label(BUTTON_CANCEL);
+        row.append(&background);
         row.append(&button);
         content.append(&row);
+
+        // Only the window goes. Nothing here touches the cancel token, and
+        // the future feeding this view goes on draining the job's events —
+        // so the copy runs to its end, its failures are still reported, and
+        // both panes still reload when it is done.
+        let backgrounding = window.clone();
+        background.connect_clicked(move |_| backgrounding.close());
 
         let closing = window.clone();
         button.connect_clicked(move |_| {
@@ -49,7 +61,7 @@ impl ProgressView {
         });
 
         window.present();
-        button.grab_focus();
+        background.grab_focus();
         ProgressView { window, path, bar }
     }
 
