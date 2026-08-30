@@ -865,7 +865,8 @@ mod tests {
     use super::*;
     use crate::constants::{
         ACTION_TABLE_BEGIN, ACTION_TABLE_DOC, ACTION_TABLE_END, BINDINGS_TABLE_HEADING,
-        DOC_KEY_NAMES, PAIRED_ROW_SEPARATOR, SAME_ACTION_SEPARATOR,
+        DOC_KEY_NAMES, PAIRED_ROW_SEPARATOR, SAME_ACTION_SEPARATOR, UI_HARNESS, UI_KEY_SPELLINGS,
+        UI_SUITE, UI_UNPRESSED,
     };
 
     /// What a keystroke does with nobody's settings laid over the defaults.
@@ -1012,7 +1013,27 @@ mod tests {
             (Key::r, ModifierType::CONTROL_MASK, Action::Reread),
             (Key::h, ModifierType::CONTROL_MASK, Action::ToggleHidden),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
+            (Key::Right, PLAIN, Action::FocusCommandLine),
+            (Key::c, ModifierType::CONTROL_MASK, Action::ClipboardCopy),
+            (Key::x, ModifierType::CONTROL_MASK, Action::ClipboardCut),
+            (Key::v, ModifierType::CONTROL_MASK, Action::ClipboardPaste),
+            (
+                Key::KP_Enter,
+                ModifierType::SHIFT_MASK.union(ModifierType::ALT_MASK),
+                Action::FolderSizes,
+            ),
         ];
+        // The list is written out rather than read from `BINDINGS`, because a
+        // test that takes its expectations from the code it checks can only
+        // agree with it. The count is the other half of that bargain: without
+        // it, a binding added to `BINDINGS` and forgotten here is checked by
+        // nothing and nothing says so — which is exactly what happened to the
+        // five entries above, all added in one week and none noticed.
+        assert_eq!(
+            expected.len(),
+            BINDINGS.len(),
+            "every binding is expected here, and only bindings are",
+        );
         for (key, modifiers, action) in expected {
             assert_eq!(bound(key, modifiers), Some(action), "{key:?}");
         }
@@ -1312,6 +1333,118 @@ mod tests {
                      separates them with `{PAIRED_ROW_SEPARATOR}`",
                     first.0,
                 );
+            }
+        }
+    }
+
+    /// Every default binding is pressed by the end-to-end suite, or excused.
+    ///
+    /// The suite drives the real binary with real key events and is where
+    /// every bug in this project has lived, so which keys it actually presses
+    /// is a fact worth holding rather than describing. Before this, the answer
+    /// lived in a paragraph in `keymap.md` — and the paragraph had been wrong
+    /// since `Num −` arrived, which nobody noticed because its twin `Num +`
+    /// has a test and nothing was counting.
+    ///
+    /// **Pressed is not the same as proven.** This says a key reaches the
+    /// program in some test, not that its own behaviour is asserted there —
+    /// `Tab` is pressed by nearly every test just to get somewhere. It is the
+    /// half that can be checked mechanically, and the half whose absence is
+    /// silent.
+    #[test]
+    fn every_binding_is_pressed_end_to_end_or_says_why_not() {
+        let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let tests: String = [UI_SUITE, UI_HARNESS]
+            .iter()
+            .map(|name| {
+                let path = crate_root.join(name);
+                std::fs::read_to_string(&path)
+                    .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+            })
+            .collect();
+
+        let excused: HashMap<_, _> = UI_UNPRESSED.iter().copied().collect();
+        let mut unpressed = Vec::new();
+        let mut excused_but_pressed = Vec::new();
+        for binding in BINDINGS {
+            let spec = key_spec(binding.key, binding.modifiers);
+            match (
+                pressed_somewhere(&tests, binding),
+                excused.contains_key(spec.as_str()),
+            ) {
+                (false, false) => unpressed.push(spec),
+                (true, true) => excused_but_pressed.push(spec),
+                _ => {}
+            }
+        }
+        unpressed.sort();
+        excused_but_pressed.sort();
+
+        assert!(
+            unpressed.is_empty(),
+            "no end-to-end test presses these, and UI_UNPRESSED does not excuse them: \
+             {unpressed:?}",
+        );
+        // The other direction, so the list cannot quietly outlive its reasons:
+        // a key that has since been given a test does not stay excused.
+        assert!(
+            excused_but_pressed.is_empty(),
+            "UI_UNPRESSED excuses keys the suite does press — drop them from it: \
+             {excused_but_pressed:?}",
+        );
+    }
+
+    /// Whether the suite's text presses this binding, by any of its spellings.
+    ///
+    /// Modifiers are tried in every order, because `xdotool` takes them in
+    /// whichever one the test author wrote.
+    fn pressed_somewhere(tests: &str, binding: &Binding) -> bool {
+        let names = std::iter::once(
+            binding
+                .key
+                .name()
+                .expect("a keysym from BINDINGS has a name")
+                .to_string(),
+        )
+        .chain(
+            UI_KEY_SPELLINGS
+                .iter()
+                .filter(|(key, _)| *key == binding.key)
+                .map(|(_, spelling)| (*spelling).to_string()),
+        );
+        let present: Vec<_> = MODIFIER_NAMES
+            .iter()
+            .filter(|(_, modifier)| binding.modifiers.contains(*modifier))
+            .map(|(name, _)| *name)
+            .collect();
+
+        names.into_iter().any(|name| {
+            orderings(&present)
+                .into_iter()
+                .any(|order| tests.contains(&format!("\"{}\"", order.join("+") + "+" + &name)))
+                // No modifiers: the key stands on its own.
+                || (present.is_empty() && tests.contains(&format!("\"{name}\"")))
+        })
+    }
+
+    /// Every ordering of the modifiers, since a spec may be written either way.
+    fn orderings(present: &[&'static str]) -> Vec<Vec<&'static str>> {
+        match present {
+            [] => Vec::new(),
+            [only] => vec![vec![*only]],
+            [a, b] => vec![vec![*a, *b], vec![*b, *a]],
+            _ => {
+                let mut all = Vec::new();
+                for (index, first) in present.iter().enumerate() {
+                    let mut rest: Vec<_> = present.to_vec();
+                    rest.remove(index);
+                    for tail in orderings(&rest) {
+                        let mut one = vec![*first];
+                        one.extend(tail);
+                        all.push(one);
+                    }
+                }
+                all
             }
         }
     }

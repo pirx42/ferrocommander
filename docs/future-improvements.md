@@ -152,18 +152,25 @@ it on, and the harness number is the one to distrust.
 
 ## Testing
 
-**Every binding is now exercised end to end.**
-Kept as a record of a gap that closed rather than deleted, because the entry
-outlived it in both directions. `Backspace` was listed here as uncoverable —
-"going up a directory has no filesystem effect to assert on" — and it is
-pressed in three tests today, which reach the effect through what happens
+**Which bindings the suite presses is now counted, not claimed.**
+Kept as a record of a gap that closed, because the entry outlived it in both
+directions and the replacement overclaimed in turn. `Backspace` was listed
+here as uncoverable — "going up a directory has no filesystem effect to assert
+on" — and three tests press it today, reaching the effect through what happens
 *next* in the parent directory. `Ctrl+Q` was listed as uncoverable because
 quitting would end the app under test; it is how the harness closes every one
 of the 160.
 
-Neither entry was wrong when written and both stopped being true without
-anybody noticing, which is the argument for reading the documents against the
-code rather than only writing them.
+**"Every binding is now exercised" replaced that on 2026-08-30 and was also
+wrong**, by eight. The real figure — 59 of 67 bindings pressed, the other
+eight excused with a reason each — was arrived at by counting rather than
+reading, and it is now `UI_UNPRESSED` plus
+`every_binding_is_pressed_end_to_end_or_says_why_not`
+([keymap.md](keymap.md)) rather than a sentence here.
+
+Three sentences about this in three days, each written in good faith, none of
+them right. That is the argument for a test over a paragraph, more than any
+of the drift found by reading was.
 
 *(The Page Up/Down selection-adoption path used to be listed here as needing
 "an assertion about which row the cursor is on, which the filesystem cannot

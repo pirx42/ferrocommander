@@ -56,6 +56,9 @@ const DIALOG_DELETE: &str = "Confirm delete";
 const DIALOG_CONFLICT: &str = "Target already exists";
 const DIALOG_FAILURES: &str = "Some items were not processed";
 const DIALOG_PATTERN: &str = "Select by pattern";
+/// `Num −` opens a window of its own, titled for what it does — which
+/// nothing here knew until a test pressed the key.
+const DIALOG_UNMARK_PATTERN: &str = "Deselect by pattern";
 const DIALOG_DRIVES: &str = "Drives";
 const DIALOG_FAVOURITES: &str = "Favourite directories";
 const DIALOG_OUTPUT: &str = "Command output";
@@ -2879,6 +2882,36 @@ fn ctrl_a_then_f8_deletes_everything_in_the_pane() {
     app.await_gone("src/nested");
     // The directory the pane is standing in is not one of its own entries.
     assert!(app.path("src").exists());
+}
+
+#[test]
+fn a_wildcard_can_take_a_mark_off_again() {
+    // `Num −` is the only marking key with no end-to-end test, which read as
+    // covered because its twin `Num +` has one and `Ctrl+Num −` has three.
+    // Mark everything, then take one file back out of the selection: what
+    // arrives is the difference.
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+a");
+    app.key("KP_Subtract");
+    app.focus_dialog(DIALOG_UNMARK_PATTERN);
+    app.type_text("*.bin");
+    app.key("Return");
+
+    app.focus_main();
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    // The rest of the selection still arrives — an unmark that took the whole
+    // selection with it would pass a test that only checked the absence.
+    app.await_exists("dst/notes.txt");
+    app.await_exists("dst/nested/inner.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "the pattern did not take the mark off the file it named"
+    );
 }
 
 #[test]

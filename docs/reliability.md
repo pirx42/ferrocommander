@@ -65,7 +65,7 @@ suite and end to end through the real binary.
 | `crates/tc-core/tests/rename.rs` | the multi-rename rules, as a table, plus what they refuse ([multi-rename.md](multi-rename.md)) |
 | `crates/tc-core/tests/search.rs` | the walk: every hit and no others, refusals skipped, cancellation ([search.md](search.md)) |
 | `crates/tc-core/tests/clipboard.rs` | the wire formats other file managers read — and the verb that decides whether a paste copies or **moves** ([clipboard.md](clipboard.md)) |
-| `crates/tc-app/tests/ui.rs` | the real binary, driven by real key presses ([ui-shell.md](ui-shell.md)) |
+| `crates/tc-app/tests/ui.rs` | the real binary, driven by real key presses — and which bindings it presses is itself a test, not a claim ([keymap.md](keymap.md)) |
 
 **The doubles every suite shares live in `crates/tc-core/tests/common/`** —
 the tree builder, the snapshot comparison, the `delegate_vfs!` macro, and the

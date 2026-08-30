@@ -99,6 +99,62 @@ pub const TEXT_FIELD_SHORTCUTS: [gtk::gdk::Key; 6] = [
 /// reading `keymap.rs`. It is generated from `ACTION_NAMES` and `BINDINGS`
 /// rather than typed, and a test compares the two — so the markers below are
 /// load-bearing, not decoration (skill 53).
+/// Where the end-to-end suite lives, relative to this crate.
+#[cfg(test)]
+pub const UI_SUITE: &str = "tests/ui.rs";
+
+/// Where the harness lives — it presses keys of its own, `Ctrl+Q` among them.
+#[cfg(test)]
+pub const UI_HARNESS: &str = "tests/harness/mod.rs";
+
+/// Keys the end-to-end suite may press by another spelling than the keysym.
+///
+/// `xdotool` takes X names, so `Page_Down` is `Next`; and the alias table lets
+/// an ordinary `+` reach a keypad binding, which is how the suite presses one
+/// on a keyboard that may have no numeric block.
+#[cfg(test)]
+pub const UI_KEY_SPELLINGS: [(gtk::gdk::Key, &str); 6] = [
+    (gtk::gdk::Key::Page_Down, "Next"),
+    (gtk::gdk::Key::Page_Up, "Prior"),
+    (gtk::gdk::Key::KP_Add, "plus"),
+    (gtk::gdk::Key::KP_Subtract, "minus"),
+    (gtk::gdk::Key::KP_Multiply, "asterisk"),
+    (gtk::gdk::Key::KP_Divide, "slash"),
+];
+
+/// Bindings no end-to-end test presses, each with the reason it need not.
+///
+/// The suite drives the real binary through a real X server, and it is where
+/// every bug in this project has lived — so "which keys does it actually
+/// press" is worth a test rather than a paragraph. It was a paragraph until
+/// 2026-08-30, and the paragraph was missing `Num −`, which read as covered
+/// because its twin had a test and nothing counted.
+///
+/// **An alias earns a place here; a command does not.** A key that resolves to
+/// the same action as one that *is* pressed adds only the lookup, which the
+/// keymap's own tests cover exhaustively. A key that reaches an action nothing
+/// else reaches does not belong here — it belongs in the suite.
+#[cfg(test)]
+pub const UI_UNPRESSED: [(&str, &str); 8] = [
+    (
+        "ctrl+F3",
+        "sorting is covered headlessly; ctrl+F6 is pressed for the wiring",
+    ),
+    ("ctrl+F4", "as ctrl+F3"),
+    ("ctrl+F5", "as ctrl+F3"),
+    ("KP_Enter", "an alias for Return, which is pressed"),
+    (
+        "ctrl+KP_Enter",
+        "an alias for ctrl+Return, which is pressed",
+    ),
+    (
+        "shift+alt+KP_Enter",
+        "an alias for shift+alt+Return, which is pressed",
+    ),
+    ("ctrl+KP_Add", "an alias for ctrl+a, which is pressed"),
+    ("shift+F8", "an alias for shift+Delete, which is pressed"),
+];
+
 /// Where the hand-written bindings table lives, and the heading above it.
 ///
 /// That table stays prose — what `Insert` *means* is not derivable from the

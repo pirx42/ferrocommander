@@ -644,18 +644,32 @@ the real binary and the checks are on the filesystem afterwards. The cursor
 keys and Tab are used by every test to get anywhere at all, and `Ctrl+Q` is
 how the harness closes the app.
 
-**What is deliberately not exercised end to end**, and why:
+**What is deliberately not exercised end to end** is no longer a paragraph.
+It is `UI_UNPRESSED` in `constants.rs`, eight entries with a reason each, and
+`every_binding_is_pressed_end_to_end_or_says_why_not` holds it: a binding
+nothing presses and nothing excuses fails the gate, and so does an excuse for
+a key that has since been given a test. Two reasons stand behind the eight:
 
-- `Ctrl+F3`/`F4`/`F5` — covered headlessly, and reaching them through a real
-  window would say nothing the unit tests do not. (Plain `F3` and `F4` left
-  this list in phase 4, when they stopped being unbound; `Backspace` left it
-  when three tests started pressing it.)
-- The **second** drive key: `Alt+F1` and `Alt+F2` differ only in which pane
-  they name, and the test that presses `Alt+F2` covers exactly that.
-- The **aliases**: `Ctrl+Num +` for `Ctrl+A`, keypad `Enter` for `Enter`,
-  `Delete` for `F8`. They resolve to the same action as a key that *is*
-  pressed for real, so the second press only tests the lookup, which the
-  keymap's own tests cover exhaustively.
+- `Ctrl+F3`/`F4`/`F5` — sorting is covered headlessly, and `Ctrl+F6` is
+  pressed for the wiring, so a real window would say nothing the unit tests do
+  not.
+- The **aliases** — `Num Enter`, `Ctrl+Num Enter`, `Alt+Shift+Num Enter`,
+  `Ctrl+Num +`, `Shift+F8`. Each resolves to the same action as a key that
+  *is* pressed for real, so pressing it too would only test the lookup, which
+  the keymap's own tests cover exhaustively.
+
+**It was a paragraph until 2026-08-30, and the paragraph was wrong.** It
+listed `Backspace`, which three tests press; it claimed the second drive key
+was skipped when `Alt+F2` is the one pressed; and it did not mention `Num −`,
+which no test pressed at all. That one read as covered because its twin
+`Num +` has a test and `Ctrl+Num −` has three — and nothing was counting.
+`Num −` has a test now; the counting is the part that lasts.
+
+**A pressed key is not a proven key.** The check says a binding reaches the
+program in some test, not that its own behaviour is asserted there — `Tab` and
+the cursor keys are pressed by nearly every test just to get somewhere. It is
+the half that can be checked mechanically, and the half whose absence is
+otherwise silent.
 
 Everything a physical press could get wrong on its own — a binding that
 matches nothing, a modifier that arrives uninvited, a dialog with no focused
