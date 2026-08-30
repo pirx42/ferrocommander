@@ -242,3 +242,24 @@ serde on the enum. Renaming a variant would otherwise silently change the file
 format under everybody's existing settings. The round-trip test iterates that
 table, so a new sort key nobody added to it fails the tests rather than being
 written out as a default.
+
+## Column widths
+
+`[columns]` holds the width of the Ext, Size, Date and Attr columns, in
+pixels. The Name column is not there: it takes whatever is left over, so a
+window of any width is filled and nothing is cut off when the window is
+resized.
+
+**One set for both panes.** The panes are meant to line up with each other —
+that is why the widths were constants before they were settings — so dragging
+a column in either pane moves it in both and writes one number. Two panes that
+disagreed about where the Size column starts would be harder to read than two
+that could not be adjusted at all.
+
+The widths are the app's own, so unlike `[keys]` they are written back; and
+like every other setting the shell owns, the live value lives in a field of
+`Shell` rather than in its copy of what the file says. That distinction is not
+bookkeeping: `remember` decides whether to write by comparing the two, so a
+setting written straight into the loaded copy makes them equal and is silently
+never saved. That is exactly what happened here, and it looked like a drag GTK
+had failed to report.

@@ -52,6 +52,8 @@ pub const CONFIG_TEMP_FILE: &str = "config.toml.new";
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub window: WindowSettings,
+    /// Column widths, shared by both panes.
+    pub columns: ColumnSettings,
     /// One per pane, in pane order. A file with the wrong number of them is
     /// padded or trimmed on load rather than rejected — see [`Settings::pane`].
     pub panes: Vec<PaneSettings>,
@@ -176,6 +178,23 @@ pub struct WindowSettings {
     pub height: i32,
 }
 
+/// How wide each column is, in pixels.
+///
+/// One set for both panes, not one each: the panes are meant to line up with
+/// each other, which is the whole reason the widths were constants before
+/// they were settings. Dragging a column in either pane moves it in both.
+///
+/// The name column is not here — it takes whatever is left over, so a window
+/// of any width is filled and nothing is cut off by resizing the window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ColumnSettings {
+    pub ext: i32,
+    pub size: i32,
+    pub date: i32,
+    pub attributes: i32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PaneSettings {
@@ -226,11 +245,33 @@ const DEFAULT_SORT_KEY_NAME: &str = "name";
 const DEFAULT_WINDOW_WIDTH: i32 = 1200;
 const DEFAULT_WINDOW_HEIGHT: i32 = 700;
 
+/// What a column is wide before anybody drags it.
+///
+/// The values the shell carried as constants before the widths became
+/// settings, so a first run looks exactly as it always did: wide enough for
+/// `rwxr-xr-x`, the longest attribute either platform produces, and for a
+/// date written to the minute.
+const DEFAULT_COLUMN_EXT: i32 = 70;
+const DEFAULT_COLUMN_SIZE: i32 = 120;
+const DEFAULT_COLUMN_DATE: i32 = 140;
+const DEFAULT_COLUMN_ATTRIBUTES: i32 = 90;
+
 impl Default for WindowSettings {
     fn default() -> Self {
         WindowSettings {
             width: DEFAULT_WINDOW_WIDTH,
             height: DEFAULT_WINDOW_HEIGHT,
+        }
+    }
+}
+
+impl Default for ColumnSettings {
+    fn default() -> Self {
+        ColumnSettings {
+            ext: DEFAULT_COLUMN_EXT,
+            size: DEFAULT_COLUMN_SIZE,
+            date: DEFAULT_COLUMN_DATE,
+            attributes: DEFAULT_COLUMN_ATTRIBUTES,
         }
     }
 }

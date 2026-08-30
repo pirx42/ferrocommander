@@ -54,6 +54,11 @@ const DIALOG_PACK: &str = "Pack";
 /// are: a test that asks the code where it saves can only agree with it.
 const SETTINGS_FILE: &str = ".config/ferrocommander/config.toml";
 
+/// Where the header band sits, and what the Ext column starts out wide.
+/// Spelled out rather than imported, like every other expectation here.
+const EXT_DIVIDER_Y: i32 = 70;
+const DEFAULT_EXT_WIDTH: i32 = 70;
+
 /// What the app prints when GTK will not parse a rule. Spelled out rather
 /// than imported, like every other string these tests look for.
 const STYLESHEET_REJECTED: &str = "stylesheet rule rejected";
@@ -3328,6 +3333,64 @@ fn ctrl_down_offers_a_command_that_was_run_before() {
     app.key("Return");
 
     app.await_exists("src/first-again");
+}
+
+#[test]
+fn a_dragged_column_width_reaches_the_settings_file() {
+    // What this can see is the file: whether the *other* pane followed is not
+    // readable from outside — a column width is not a window title or a file
+    // on disk — so the mirroring is checked by eye and by the shared field
+    // both panes are set from, not here.
+    //
+    // The panes are meant to line up with each other, which is why the widths
+    // were constants before they became settings.
+    let app = in_src_and_dst(arrange);
+
+    // The divider at the right edge of Ext, in the left pane's header: the
+    // name column is 260 wide and Ext 70, and the header is the band under
+    // the path bar.
+    app.drag((330, EXT_DIVIDER_Y), (430, EXT_DIVIDER_Y));
+
+    let widths = await_column_widths(&app);
+    assert!(
+        widths.ext > DEFAULT_EXT_WIDTH,
+        "the drag did not reach the settings: {widths:?}"
+    );
+}
+
+/// The column widths the settings file currently records.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct ColumnWidths {
+    ext: i32,
+}
+
+/// Polls the settings file until it holds a column table, and reads it.
+///
+/// Block extraction rather than a grep for `ext =`: the file has other tables
+/// with short keys in them, and a test that matched the wrong line would pass
+/// for the wrong reason (skill 58).
+fn await_column_widths(app: &App) -> ColumnWidths {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let written = std::fs::read_to_string(app.path(SETTINGS_FILE)).unwrap_or_default();
+        let table = written
+            .split("[columns]")
+            .nth(1)
+            .map(|rest| rest.split("\n[").next().unwrap_or_default().to_string())
+            .unwrap_or_default();
+        let ext = table
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("ext = ")?.parse::<i32>().ok())
+            .unwrap_or_default();
+        if ext > DEFAULT_EXT_WIDTH {
+            return ColumnWidths { ext };
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the settings never recorded a wider Ext column: {table}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
 }
 
 #[test]

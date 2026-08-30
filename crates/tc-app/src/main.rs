@@ -149,6 +149,7 @@ fn build_window(app: &gtk::Application) {
     wire_command_line(&shell);
     for index in 0..PANE_COUNT {
         wire_inline_rename(&shell, index);
+        wire_column_widths(&shell, index);
         watch_pane(&shell, index);
     }
     remember_on_close(&window, &shell);
@@ -268,6 +269,44 @@ fn wire_inline_rename(shell: &Rc<RefCell<Shell>>, index: usize) {
         );
     };
     shell.borrow().panes[index].on_rename(accept);
+}
+
+/// Keeps the two panes' column widths equal to each other and to the file.
+///
+/// Shared rather than per pane, which is the whole reason the widths were
+/// constants before they were settings: the panes are meant to line up, and a
+/// dual-pane manager whose two halves disagree about where the Size column
+/// starts is harder to read than one that cannot be adjusted at all.
+///
+/// So a drag in either pane is applied to the other and written down. The
+/// write is the same debounced save every other setting uses, which matters
+/// here more than elsewhere: dragging a column emits a notification per pixel.
+fn wire_column_widths(shell: &Rc<RefCell<Shell>>, index: usize) {
+    // What the last run left, before anybody can drag anything.
+    let widths = shell.borrow().columns;
+    shell.borrow().panes[index].set_column_widths(&widths);
+
+    let hooked = shell.clone();
+    shell.borrow().panes[index].on_column_resized(move || {
+        // Guarded against the loop this would otherwise be: setting the other
+        // pane's width notifies its columns too, which would set this one's
+        // back, and neither drag would ever settle.
+        let Ok(mut state) = hooked.try_borrow_mut() else {
+            return;
+        };
+        let widths = state.panes[index].column_widths();
+        if widths == state.columns {
+            return;
+        }
+        state.columns = widths;
+        drop(state);
+        for other in 0..PANE_COUNT {
+            if other != index {
+                hooked.borrow().panes[other].set_column_widths(&widths);
+            }
+        }
+        remember(&hooked);
+    });
 }
 
 /// Connects the command line: Enter runs, Escape hands the keyboard back.

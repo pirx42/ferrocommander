@@ -102,6 +102,10 @@ pub const PRIVATE_BIN: &str = ".local/bin";
 /// the wait is to notice one that did not.
 const RESIZE_SETTLE: Duration = Duration::from_millis(500);
 
+/// How many motion events one drag is made of. Enough that GTK sees a
+/// pointer that travelled rather than one that teleported.
+const DRAG_STEPS: i32 = 8;
+
 /// How many times a launch is retried when it could not reach the display.
 ///
 /// See the retry in [`App::start`] for what it is for. Three rather than one,
@@ -240,6 +244,41 @@ impl App {
 
     pub fn home(&self) -> &Path {
         self.home.path()
+    }
+
+    /// Drags the mouse from one point to another, in window coordinates.
+    ///
+    /// The one thing in this harness that is not a key press, and it exists
+    /// for the one feature that is not reachable from the keyboard: a column
+    /// is resized by dragging its header divider. There is no window manager,
+    /// so the app's window is at the origin and window coordinates are screen
+    /// coordinates.
+    ///
+    /// Moved in steps rather than in one jump, because a pointer that arrives
+    /// without having travelled is not a drag: GTK follows motion events, and
+    /// a single teleport between press and release moves nothing.
+    pub fn drag(&self, from: (i32, i32), to: (i32, i32)) {
+        self.pointer(&["mousemove", &from.0.to_string(), &from.1.to_string()]);
+        self.pointer(&["mousedown", "1"]);
+        for step in 1..=DRAG_STEPS {
+            let at = |start: i32, end: i32| start + (end - start) * step / DRAG_STEPS;
+            self.pointer(&[
+                "mousemove",
+                &at(from.0, to.0).to_string(),
+                &at(from.1, to.1).to_string(),
+            ]);
+            std::thread::sleep(POLL);
+        }
+        self.pointer(&["mouseup", "1"]);
+        self.settle();
+    }
+
+    fn pointer(&self, args: &[&str]) {
+        Command::new("xdotool")
+            .env("DISPLAY", &self.display)
+            .args(args)
+            .status()
+            .expect("xdotool moves the pointer");
     }
 
     /// Everything the app has written to stdout and stderr so far.

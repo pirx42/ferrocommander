@@ -10,6 +10,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use tc_core::branch;
+use tc_core::config;
 use tc_core::listing::{split_name, Arrival, Listing, Loading, Sort, SortKey, SortOrder};
 use tc_core::ops::CancelToken;
 use tc_core::sizes::{self, Sizes};
@@ -87,6 +88,31 @@ impl Column {
     /// two panes line up with each other.
     fn expands(self) -> bool {
         matches!(self, Column::Name)
+    }
+
+    /// This column's width in the settings, if it has one there.
+    ///
+    /// `None` for the name column, which has no stored width because it takes
+    /// whatever is left.
+    fn width_in(self, widths: &config::ColumnSettings) -> Option<i32> {
+        Some(match self {
+            Column::Name => return None,
+            Column::Ext => widths.ext,
+            Column::Size => widths.size,
+            Column::Modified => widths.date,
+            Column::Attributes => widths.attributes,
+        })
+    }
+
+    /// Writes this column's width back into the settings.
+    fn set_width_in(self, widths: &mut config::ColumnSettings, width: i32) {
+        match self {
+            Column::Name => {}
+            Column::Ext => widths.ext = width,
+            Column::Size => widths.size = width,
+            Column::Modified => widths.date = width,
+            Column::Attributes => widths.attributes = width,
+        }
     }
 
     /// Sizes are right-aligned so digits line up by magnitude.
@@ -214,6 +240,8 @@ pub struct PaneView {
     filter_bar: gtk::Entry,
     status: gtk::Label,
     space: gtk::Label,
+    /// The view columns, so their widths can be read and written.
+    columns: Vec<(Column, gtk::ColumnViewColumn)>,
     store: gio::ListStore,
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
@@ -296,10 +324,13 @@ impl PaneView {
         let column_view = gtk::ColumnView::new(Some(selection.clone()));
 
         let rename_hook: RenameHook = Rc::new(RefCell::new(None));
+        let mut columns = Vec::new();
         for column in Column::ALL {
             // Only the name column is editable, so only it is handed the hook.
             let hook = (column == Column::Name).then(|| rename_hook.clone());
-            column_view.append_column(&build_column(column, hook));
+            let built = build_column(column, hook);
+            columns.push((column, built.clone()));
+            column_view.append_column(&built);
         }
 
         let scroller = gtk::ScrolledWindow::builder()
@@ -354,6 +385,7 @@ impl PaneView {
             filter_bar,
             status,
             space,
+            columns,
             store,
             selection,
             column_view,
@@ -1284,6 +1316,39 @@ impl PaneView {
         self.wanted = Some(dir);
     }
 
+    /// Applies the widths from the settings to this pane's columns.
+    ///
+    /// The name column is left alone: it expands into what is left over, so
+    /// it has no width of its own to set.
+    pub fn set_column_widths(&self, widths: &config::ColumnSettings) {
+        for (column, view_column) in &self.columns {
+            if let Some(width) = column.width_in(widths) {
+                view_column.set_fixed_width(width);
+            }
+        }
+    }
+
+    /// What this pane's columns are currently wide.
+    pub fn column_widths(&self) -> config::ColumnSettings {
+        let mut widths = config::ColumnSettings::default();
+        for (column, view_column) in &self.columns {
+            column.set_width_in(&mut widths, view_column.fixed_width());
+        }
+        widths
+    }
+
+    /// Runs `changed` whenever a column is dragged to a new width.
+    pub fn on_column_resized(&self, changed: impl Fn() + 'static) {
+        let changed = Rc::new(changed);
+        for (column, view_column) in &self.columns {
+            if column.expands() {
+                continue;
+            }
+            let changed = changed.clone();
+            view_column.connect_fixed_width_notify(move |_| changed());
+        }
+    }
+
     /// Puts how much room is left on the disk at the end of the status line.
     ///
     /// Asked of the *backend*, so an archive — which has no free space of its
@@ -1540,6 +1605,10 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
     let view_column = gtk::ColumnViewColumn::new(Some(column.title()), Some(factory));
     view_column.set_fixed_width(column.width());
     view_column.set_expand(column.expands());
+    // Draggable, except the name column, which takes the leftover width: a
+    // column that both expands and has a dragged width is two answers to how
+    // wide it is, and GTK picks the one nobody asked for.
+    view_column.set_resizable(!column.expands());
     view_column
 }
 

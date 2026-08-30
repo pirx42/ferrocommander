@@ -56,6 +56,15 @@ pub(crate) struct Shell {
     /// Beside `saved` rather than in it — see
     /// [`remember_command`](Self::remember_command).
     pub(crate) command_history: Vec<String>,
+    /// The column widths as they are right now, shared by both panes.
+    ///
+    /// A field of its own rather than a write into `saved`, like every other
+    /// setting the shell owns: `saved` means "what the file says", and
+    /// `remember` compares the two to decide whether there is anything to
+    /// write. Mutating `saved` directly makes them equal and the save is
+    /// skipped — which is exactly what happened, and looked like a drag that
+    /// GTK never reported.
+    pub(crate) columns: config::ColumnSettings,
     /// The command line across the bottom, which follows the active pane.
     pub(crate) command_line: command_line::CommandLine,
     /// Where each mount point was last showing, keyed by mount path.
@@ -99,6 +108,7 @@ impl Shell {
             drives: saved.drives.clone(),
             favourites: saved.favourites.clone(),
             command_history: saved.command_history.clone(),
+            columns: saved.columns,
             renamed: Vec::new(),
             saved,
             keymap,
@@ -196,6 +206,7 @@ impl Shell {
             drives: self.drives.clone(),
             favourites: self.favourites.clone(),
             command_history: self.command_history.clone(),
+            columns: self.columns,
             ..self.saved.clone()
         };
         settings.active_pane = self.active;

@@ -27,6 +27,14 @@ fn settings() -> Settings {
     settings.window.width = 1600;
     settings.window.height = 900;
     settings.active_pane = 1;
+    // Dragged widths, none of them a default, so the round trip says the
+    // numbers came back rather than that the defaults did.
+    settings.columns = config::ColumnSettings {
+        ext: 55,
+        size: 200,
+        date: 175,
+        attributes: 40,
+    };
     let mut left = PaneSettings {
         directory: "/home/pirx/projects".to_string(),
         show_hidden: true,
@@ -293,4 +301,28 @@ fn the_settings_file_is_never_written_in_place() {
         vec![(created[0].clone(), target)],
         "and it was renamed over the real one"
     );
+}
+
+#[test]
+fn a_column_width_reaches_the_file_as_a_number_a_person_can_edit() {
+    // The widths are the app's own, so unlike `[keys]` they are written back.
+    // Written as a table of plain integers because somebody who wants a wider
+    // Date column should be able to say so in the file without the app
+    // running — the same bar every other setting here is held to.
+    let (_dir, root) = root();
+
+    config::save(&LocalFs, &root, &settings()).unwrap();
+    let written =
+        std::fs::read_to_string(root.as_str().to_string() + "/ferrocommander/config.toml")
+            .expect("the settings file");
+
+    let block = written
+        .split("[columns]")
+        .nth(1)
+        .expect("a columns table")
+        .split("\n[")
+        .next()
+        .unwrap();
+    assert!(block.contains("date = 175"), "the date width: {block}");
+    assert!(block.contains("ext = 55"), "the ext width: {block}");
 }
