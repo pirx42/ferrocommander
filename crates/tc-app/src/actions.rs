@@ -870,18 +870,9 @@ fn put_on_clipboard(shell: &Rc<RefCell<Shell>>, cut: bool) {
         clipboard::URI_LIST,
         &glib::Bytes::from_owned(clipboard::encode_uri_list(&clipped.paths).into_bytes()),
     );
-    let text = gdk::ContentProvider::for_value(&paths_as_text(&clipped.paths).to_value());
+    let text = gdk::ContentProvider::for_value(&clipboard::encode_text(&clipped.paths).to_value());
     let union = gdk::ContentProvider::new_union(&[gnome, uris, text]);
     window.clipboard().set_content(Some(&union)).ok();
-}
-
-/// The paths one per line, for whatever pastes text rather than files.
-fn paths_as_text(paths: &[VfsPath]) -> String {
-    paths
-        .iter()
-        .map(|path| path.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// `Ctrl+V`: copy or move what is on the clipboard into the active pane.
@@ -922,7 +913,7 @@ fn paste_from_clipboard(shell: &Rc<RefCell<Shell>>) {
             let pasting = shell.clone();
             let into = into.clone();
             let gnome = mime == clipboard::GNOME_COPIED_FILES;
-            read_all(stream, move |payload| {
+            read_payload(stream, move |payload| {
                 let clipped = match gnome {
                     true => clipboard::decode_gnome(&payload),
                     // A list of URIs cannot say "cut", so it is a copy. Not a
@@ -979,8 +970,14 @@ fn submit_paste(shell: &Rc<RefCell<Shell>>, clipped: clipboard::Clipped, into: V
     });
 }
 
-/// Reads a clipboard stream to its end and hands over what it said.
-fn read_all(stream: gtk::gio::InputStream, done: impl FnOnce(String) + 'static) {
+/// Reads a clipboard payload and hands over what it said.
+///
+/// A read that comes back exactly full is **refused**, not used. The call
+/// reads *up to* the limit, so a full buffer and a truncated one look the
+/// same from here — and half a list is the worst thing to act on: a copy
+/// would silently miss files, and a cut would move a subset and then clear
+/// the clipboard that held the rest.
+fn read_payload(stream: gtk::gio::InputStream, done: impl FnOnce(String) + 'static) {
     stream.read_bytes_async(
         CLIPBOARD_READ_LIMIT,
         glib::Priority::DEFAULT,
@@ -989,6 +986,9 @@ fn read_all(stream: gtk::gio::InputStream, done: impl FnOnce(String) + 'static) 
             let Ok(bytes) = result else {
                 return;
             };
+            if bytes.len() >= CLIPBOARD_READ_LIMIT {
+                return;
+            }
             done(String::from_utf8_lossy(&bytes).into_owned());
         },
     );

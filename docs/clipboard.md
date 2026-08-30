@@ -60,6 +60,18 @@ which is what makes honouring another application's cut safe to do at all.
 Reading is asynchronous, because the clipboard's owner is another process and
 may take its time.
 
+## The read is bounded, and a full buffer is refused
+
+A clipboard is somebody else's data and its size is their choice, so the read
+stops at a megabyte — tens of thousands of paths, and a file manager pasting
+more than that has a different problem.
+
+**A read that comes back exactly full is refused rather than used.** The call
+reads *up to* the limit, so a payload that fits exactly and one that was cut
+short look identical from here, and half a list is the worst thing to act on:
+a copy would silently miss files, and a cut would move a subset and then clear
+the clipboard holding the rest.
+
 ## Where it is refused
 
 - **Inside an archive**, `Ctrl+C` and `Ctrl+X` say why: an entry has no

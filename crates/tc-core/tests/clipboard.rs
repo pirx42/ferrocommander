@@ -109,3 +109,12 @@ fn a_list_with_something_unreachable_in_it_keeps_the_rest() {
         paths(&["/home/pirx/a.txt", "/home/pirx/b.txt"])
     );
 }
+
+#[test]
+fn the_text_form_is_one_plain_path_per_line() {
+    // What a terminal or an editor pastes: no scheme, no encoding, because
+    // what they want is something to type, not something to parse.
+    let text = tc_core::clipboard::encode_text(&paths(&["/home/pirx/a.txt", "/home/pirx/b.txt"]));
+
+    assert_eq!(text, "/home/pirx/a.txt\n/home/pirx/b.txt");
+}

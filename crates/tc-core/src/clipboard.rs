@@ -92,6 +92,19 @@ pub fn decode_uri_list(payload: &str) -> Vec<VfsPath> {
         .collect()
 }
 
+/// The paths one per line, for whatever pastes text rather than files.
+///
+/// Here beside the other two rather than in the shell: three formats, three
+/// encoders, one module — and the one place to look when a fourth reader
+/// wants something else.
+pub fn encode_text(paths: &[VfsPath]) -> String {
+    paths
+        .iter()
+        .map(|path| path.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// One path as a `file://` URI.
 ///
 /// Encoded per component, because `/` is the one reserved character that has
