@@ -320,27 +320,19 @@ pub struct PaneView {
     error: Option<String>,
 }
 
-/// Of the folders `Space` asked to count, the ones no answer has arrived for.
+/// Records that a folder has answered, so `Space` is owed no further count.
 ///
-/// Split out of [`PaneView::owed`] so the rule can be checked without a
-/// display server, which is the only way to check it at all: whether a second
-/// `Space` preserves an unfinished scan is a race the end-to-end suite cannot
-/// stage, because a fixture small enough to be quick finishes before the next
-/// keystroke lands.
+/// The list of folders still owed is kept by **removing** from it rather than
+/// by asking the listing which rows carry a size. Asking cost a scan of the
+/// view per name: 100 marked folders in a directory of 50 000 took **18.7 ms**
+/// on the main loop, and 1000 took 179 ms — measured, after a first benchmark
+/// put the names at the front of the listing and reported a hundredth of that
+/// ([`docs/performance.md`]). This is O(names) and touches no rows.
 ///
-/// A name the listing no longer shows stays owed. A filter or the hidden-file
-/// flag can hide a row while a scan runs, and the answer is still wanted — it
-/// is the *count* that was asked for, not the row.
-fn owed_from(counting: &[String], listing: &Listing) -> Vec<String> {
-    counting
-        .iter()
-        .filter(|name| {
-            listing
-                .index_of(name)
-                .is_none_or(|index| !listing.is_measured(index))
-        })
-        .cloned()
-        .collect()
+/// A name whose row is not showing is forgotten just the same: a filter can
+/// hide a row while its scan runs, and the count still happened.
+fn forget_counted(counting: &mut Vec<String>, name: &str) {
+    counting.retain(|owed| owed != name);
 }
 
 /// How far a page key moves when `visible` rows fit on screen.
@@ -916,7 +908,7 @@ impl PaneView {
     /// counted before the last press is not walked twice and a folder somebody
     /// marked with `Insert` is not walked at all.
     fn owed(&self) -> Vec<String> {
-        owed_from(&self.counting, &self.shown.listing)
+        self.counting.clone()
     }
 
     pub fn toggle_mark(&mut self, step: isize) {
@@ -1383,6 +1375,7 @@ impl PaneView {
     /// exactly one folder, and re-deriving which rows differ would be work
     /// proportional to the listing for a change proportional to nothing.
     pub fn measured(&mut self, name: &str, bytes: u64, complete: bool) {
+        forget_counted(&mut self.counting, name);
         let Some(index) = self.shown.listing.set_measured(name, bytes, complete) else {
             return;
         };
@@ -1888,47 +1881,38 @@ enum Transition {
 mod tests {
     use super::*;
 
-    /// A folder already counted drops out; one still owed stays in.
+    /// An answer takes exactly its own folder off the owed list.
     ///
     /// This is the accumulation the feature turns on: a second `Space`
-    /// restarts the scan, and it must restart over the folders that have not
-    /// answered rather than over everything or over only the newest. The
-    /// end-to-end test cannot see it — the fixtures it can afford finish
-    /// counting before the next keystroke arrives, so it passes either way,
-    /// which a probe demonstrated.
+    /// restarts the scan over the folders that have not answered, so one that
+    /// has must drop out and the rest must not. The end-to-end test cannot see
+    /// it — the fixtures it can afford finish counting before the next
+    /// keystroke arrives, so it passes either way, which a probe showed.
     #[test]
-    fn a_counted_folder_is_no_longer_owed_and_an_uncounted_one_still_is() {
-        let entry = |name: &str| tc_core::vfs::Entry {
-            name: name.to_string(),
-            kind: tc_core::vfs::EntryKind::Dir,
-            size: 0,
-            modified: std::time::SystemTime::UNIX_EPOCH,
-            attributes: tc_core::vfs::Attributes::default(),
-            hidden: false,
-        };
-        let mut listing = Listing::new(
-            tc_core::vfs::VfsPath::new("/x"),
-            vec![entry("big"), entry("small")],
-        );
-        let counting = [String::from("big"), String::from("small")];
+    fn an_answer_stops_its_folder_being_owed_and_leaves_the_others() {
+        let mut counting = vec![
+            String::from("big"),
+            String::from("small"),
+            String::from("middling"),
+        ];
 
+        forget_counted(&mut counting, "small");
         assert_eq!(
-            owed_from(&counting, &listing),
             counting,
-            "nothing counted yet"
+            ["big", "middling"],
+            "the wrong folder was forgotten"
         );
 
-        listing.set_measured("big", 4096, true);
-        assert_eq!(
-            owed_from(&counting, &listing),
-            ["small"],
-            "a folder that answered is still being asked for"
-        );
+        // A folder nobody asked about changes nothing — an answer can arrive
+        // for a row `Alt+Shift+Enter` asked for rather than `Space`.
+        forget_counted(&mut counting, "elsewhere");
+        assert_eq!(counting, ["big", "middling"]);
 
-        listing.set_measured("small", 1, true);
+        forget_counted(&mut counting, "big");
+        forget_counted(&mut counting, "middling");
         assert!(
-            owed_from(&counting, &listing).is_empty(),
-            "both answered, and something is still owed"
+            counting.is_empty(),
+            "everything answered, something still owed"
         );
     }
 

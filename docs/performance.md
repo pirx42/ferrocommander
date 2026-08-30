@@ -144,6 +144,55 @@ today, and this row is what would say when it is.
 Reproduced with
 `cargo run --release -p tc-core --example bench_type_ahead`.
 
+## What a burst of `Space` presses costs
+
+`Space` counts the folder it marks, and a second press **restarts** the scan
+over the folders that have not answered yet ([keymap.md](keymap.md)). Anything
+already counted is filtered out, so the loss is bounded by the one folder being
+walked when the next press lands — which was a claim until it was measured.
+Release build, best of three, 10 folders of which the first holds 20 000 files:
+
+| | |
+|---|---|
+| The one large folder, 20 000 files | **16 ms** |
+| All ten folders, counted once each | 16 ms |
+| Every press re-walking what is unfinished — the worst case | 156 ms |
+
+**The ratio is 9.8× and it does not matter.** Two reasons, and the second is
+the one that settles it.
+
+**The worst case is a model, not something a person can provoke.** It assumes
+the large folder never finishes between two presses. It counts in **16 ms**,
+which is about 0.8 µs a file — so at thirty presses a second, a folder would
+need to hold something like forty thousand files before a keystroke could
+outrun it, and the folders after it are counted and filtered out on the way.
+
+**And the wasted work is on a worker.** The 156 ms is CPU on the scan thread,
+not on the main loop: the window stays live, the marks land immediately, and
+what is lost is time nobody is waiting on. A stall is what the prime directive
+is about, and there is none here.
+
+So the plan's fallback — a queue that never cancels, more mechanism and more
+states to get wrong — is **not built**, and this row is what would say when it
+should be: a directory of folders each large enough to outlast a keystroke,
+which is not a shape anybody has met.
+
+Reproduced with
+`cargo run --release -p tc-core --example bench_space_counts -- <dir>`.
+
+**The list of folders still owed is kept by removing, not by asking.** The
+first version asked the listing which of the marked folders already carried a
+size, which is a scan of the view per name — on the main loop, on every press.
+Measured over a directory of 50 000: **18.7 ms for 100 marked folders and
+179 ms for 1000**, which is a felt stall. An answer now takes its own folder
+off the list as it arrives, which is O(names) and touches no rows.
+
+**The first benchmark of that said 0.02 ms**, and was wrong by a hundredfold
+for a reason worth repeating: it drew its folder names from the *front* of the
+listing, where a forward scan finds them at once. Moving them to the end is
+what showed the cost. A benchmark that picks its own inputs will pick flattering
+ones unless somebody makes it not.
+
 ## Archives
 
 Release build, 10 000 entries plus an 8 MB member of pseudo-English (deflate

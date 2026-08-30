@@ -1,6 +1,6 @@
 # Space counts a folder
 
-Status: In Progress
+Status: Implemented
 
 `Space` marks the row under the cursor. In Total Commander it does one more
 thing when that row is a **folder**: it counts what the folder holds,
@@ -23,7 +23,7 @@ pub fn selection_summary(&self) -> Selection {
 }
 ```
 
-A directory's `size` is 0 until something counts it ([vfs.md](../vfs.md) — "a
+A directory's `size` is 0 until something counts it ([vfs.md](../../vfs.md) — "a
 directory's inode size tells the user nothing"). So marking three folders and
 reading the status line says **`3 of 12 selected — 0 B of 240 B`**, and the
 one question the line exists to answer is the one it gets wrong.
@@ -43,7 +43,7 @@ it.
 | `tc-core::sizes::measure` | the walk, over a queue, cancel checked per directory |
 | `sizes::spawn` | it on a worker, streaming one answer per folder |
 | `Listing::set_measured` | the answer into the entry's own `size`, so the status total and the sort pick it up for free |
-| the `+` suffix | a partial count says so ([keymap.md](../keymap.md)) |
+| the `+` suffix | a partial count says so ([keymap.md](../../keymap.md)) |
 | `Escape` | stops the rest, keeps what arrived |
 | `Listing::is_measured` | whether a row already has an answer |
 
@@ -91,7 +91,7 @@ set, because everything finished is filtered out — but it is a real cost and
 - **Unmarking counts nothing.** `Space` on a marked folder takes the mark off;
   there is nothing to make true.
 - **An already-counted folder is not re-counted.** The number stays until a
-  re-read forgets it ([listing.md](../listing.md)), and `Alt+Shift+Enter` is
+  re-read forgets it ([listing.md](../../listing.md)), and `Alt+Shift+Enter` is
   still how you ask for a fresh count.
 - **A file is untouched.** It knows its size.
 - **`..` cannot be marked**, so it cannot be counted.
@@ -127,7 +127,7 @@ real key.
 first draft of this phase proposed a test pinning that total. There can be no
 such test: the status line is a GTK label, and the end-to-end suite sees window
 titles and the filesystem and nothing else
-([future-improvements.md](../future-improvements.md)). The count is observable
+([future-improvements.md](../../future-improvements.md)). The count is observable
 only through the one thing that reacts to it — **sorting by size** — which is
 exactly how the `Alt+Shift+Enter` test above does it, and how phase 1's must.
 So this phase produces no commit of its own; it produced a correction.
@@ -159,12 +159,50 @@ That is the second time in two days a test has passed for a reason other than
 the one it was written for, and both times a probe was the only thing that
 said so.
 
-**Phase 2 — the measurement** (the prime directive: a speed decision carries a
-number). What a burst of marks costs, against the restart in § 3 — marking ten
-folders as fast as the key repeats, over a tree deep enough for one walk to
-outlive the next press. Into `performance.md`, and if it is bad, (b).
+**Phase 2 — the measurement. Done**, and it says (c) stands: the queue in (b)
+is not built.
 
-**Phase 3 — refactoring audit** (skill 49).
+Ten folders, the first holding 20 000 files. Counting all ten once costs
+**16 ms**; the modelled worst case, where every press re-walks everything
+unfinished, costs **156 ms** — a ratio of 9.8×, which turns out to be the
+wrong number to look at.
+
+The large folder counts in **16 ms on its own**, about 0.8 µs a file. So the
+worst case assumes something a person cannot provoke: at thirty presses a
+second a folder would need forty thousand files before a keystroke could
+outrun the walk. And the wasted work is on the scan thread, not the main
+loop — nothing stalls, which is what the prime directive is actually about.
+
+Recorded in [performance.md](../../performance.md) with the shape that would
+change the answer: a directory of folders each large enough to outlast a
+keystroke.
+
+**Phase 3 — refactoring audit** (skill 49). **Done**, and it found a stall.
+
+`owed` asked the listing which marked folders already carried a size, one
+`index_of` per name — a forward scan of the view, on the main loop, on every
+`Space`. **18.7 ms for 100 marked folders in a directory of 50 000, 179 ms for
+1000.** An answer now takes its own folder off the list as it arrives, which is
+O(names) and reads no rows; `Listing::index_of` went back to private, since
+nothing outside needed it after all.
+
+**The first benchmark said 0.02 ms.** It drew its names from the front of the
+listing, where a forward scan finds them immediately. Moving them to the end
+showed the real number — a hundred times larger. A benchmark that chooses its
+own inputs chooses flattering ones unless somebody stops it, which is the same
+lesson as the fixture that was too small to contend in phase 1, arriving twice
+in one plan.
+
+The unit test moved with the rule and is probed both ways. **Its wiring is
+not** pinned: removing the call from `measured` leaves the end-to-end test
+green, because a list that never shrinks is a superset — every folder is still
+counted, merely re-walked. The absence is a performance regression, and no test
+here can see one. Said rather than left looking covered.
+
+**Left alone.** `start_folder_sizes` and `toggle_mark_and_count` are two
+four-line functions that differ only in which folders they ask for and share
+`count_folders`. That is the shape the plan wanted: one scan driver, two
+questions.
 
 ## 7. Effort
 
