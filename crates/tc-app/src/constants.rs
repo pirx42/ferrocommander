@@ -99,6 +99,56 @@ pub const TEXT_FIELD_SHORTCUTS: [gtk::gdk::Key; 6] = [
 /// reading `keymap.rs`. It is generated from `ACTION_NAMES` and `BINDINGS`
 /// rather than typed, and a test compares the two — so the markers below are
 /// load-bearing, not decoration (skill 53).
+/// Where the hand-written bindings table lives, and the heading above it.
+///
+/// That table stays prose — what `Insert` *means* is not derivable from the
+/// code and a generated version would lose the rows that pair two keys. What
+/// is checked is the facts: a test parses the keys out of it and asserts they
+/// are exactly the keys in `BINDINGS`, so a binding added, removed or moved
+/// without the document following fails the gate.
+#[cfg(test)]
+pub const BINDINGS_TABLE_HEADING: &str = "## Bindings";
+
+/// How `docs/keymap.md` spells a key that GDK spells differently.
+///
+/// Only the irregular ones: a document writes `↑` where a keysym says `Up`,
+/// and `Num +` where it says `KP_Add`. Everything regular — the letters, the
+/// F-keys, `Home`, `Insert` — goes through `key_named`, which already knows
+/// how to read a name in whatever case it arrives.
+///
+/// **Longest match wins**, because `Num Enter` ends with `Enter`.
+#[cfg(test)]
+pub const DOC_KEY_NAMES: [(&str, gtk::gdk::Key); 14] = [
+    ("Num Enter", gtk::gdk::Key::KP_Enter),
+    ("Backspace", gtk::gdk::Key::BackSpace),
+    ("Enter", gtk::gdk::Key::Return),
+    ("Esc", gtk::gdk::Key::Escape),
+    ("PgUp", gtk::gdk::Key::Page_Up),
+    ("PgDn", gtk::gdk::Key::Page_Down),
+    ("Num +", gtk::gdk::Key::KP_Add),
+    // U+2212, the minus sign the table is written with — not a hyphen.
+    ("Num −", gtk::gdk::Key::KP_Subtract),
+    ("Num *", gtk::gdk::Key::KP_Multiply),
+    ("Num /", gtk::gdk::Key::KP_Divide),
+    ("↑", gtk::gdk::Key::Up),
+    ("↓", gtk::gdk::Key::Down),
+    ("←", gtk::gdk::Key::Left),
+    ("→", gtk::gdk::Key::Right),
+];
+
+/// What separates two keys that mean **the same command** in the table, and
+/// what separates the two halves of a row that is *about* a pair.
+///
+/// The table already used them that way throughout — `` `F8`, `Delete` `` is
+/// one command reachable two ways, `` `↑` / `↓` `` is two commands on one
+/// row — so the punctuation is load-bearing and a test reads it. That is why
+/// there is no list of exceptions here: the document says which rows are
+/// which, in the character it already used.
+#[cfg(test)]
+pub const SAME_ACTION_SEPARATOR: &str = ",";
+#[cfg(test)]
+pub const PAIRED_ROW_SEPARATOR: &str = " / ";
+
 ///
 /// Only the test that renders the table reads them, so they are `cfg(test)`.
 /// They live here rather than beside it because this is where every string

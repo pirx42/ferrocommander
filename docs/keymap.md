@@ -9,7 +9,7 @@
 | `Tab` | Switch to the other pane |
 | `↑` / `↓` | Move the cursor one row |
 | `Home` / `End` | Move the cursor to the first / last row |
-| `Enter`, keypad `Enter` | Enter the directory under the cursor, or open the file with the desktop's handler |
+| `Enter`, `Num Enter` | Enter the directory under the cursor, or open the file with the desktop's handler |
 | `Backspace` | Leave the current directory |
 | `F3` | Look inside the file under the cursor — see [viewer.md](viewer.md) |
 | `F4` | Hand it to the editor |
@@ -38,23 +38,39 @@
 | `→` | Put the keyboard in the command line |
 | `Ctrl+C` / `Ctrl+X` | Put what is marked on the system clipboard, to copy or to move |
 | `Ctrl+V` | Copy or move what is on the clipboard into this pane |
-| `Ctrl+Enter` | Put the name under the cursor into the command line |
+| `Ctrl+Enter`, `Ctrl+Num Enter` | Put the name under the cursor into the command line |
 | `Alt+F7` | Find files below the active pane — see [search.md](search.md) |
 | `Alt+F5` | Pack what is marked into a new archive, beside the other pane — see [archives.md](archives.md) |
 | `Ctrl+M` | Rename what is marked by a rule — see [multi-rename.md](multi-rename.md) |
 | `Ctrl+Z` | Put the last multi-rename back |
-| `Alt+Shift+Enter` | Count what the marked folders hold, recursively |
+| `Alt+Shift+Enter`, `Alt+Shift+Num Enter` | Count what the marked folders hold, recursively |
 | `Ctrl+B` | Every file below this pane, as one flat list |
 | `Ctrl+D` | The favourite directories, to pick one and go there |
 | `Alt+F1` / `Alt+F2` | Send the left / right pane to a drive |
 | `Ctrl+→` / `Ctrl+←` | Show the active pane's directory in the right / left pane |
 | `Ctrl+U` | Exchange the two panes |
 | `Ctrl+R` | Re-read the directory — see [watching.md](watching.md) |
-| `Ctrl+F3` … `Ctrl+F6` | Sort by name / ext / date / size |
+| `Ctrl+F3` / `Ctrl+F4` / `Ctrl+F5` / `Ctrl+F6` | Sort by name / ext / date / size |
 | `Ctrl+H` | Show or hide the dot-files |
 | `Ctrl+S` | Narrow the pane as you type |
 | `Esc` | Stop a running branch walk; otherwise stop narrowing |
 | `Ctrl+Q` | Quit |
+
+**This table is checked against the code, and its punctuation is what does
+the checking.** A comma joins keys that are **one command** reachable more
+than one way — `` `F8`, `Delete` ``; a slash separates the **two things a row
+is about** — `` `↑` / `↓` ``. Two tests read that:
+`the_bindings_table_names_exactly_the_keys_that_are_bound` fails when a
+binding is added, removed or moved without this table following, and
+`keys_a_row_joins_with_a_comma_are_the_same_command` fails when a comma stops
+being true. So the separator is not typography, and a new row picks the one
+that says what it means.
+
+The descriptions stay hand-written on purpose: what `Insert` *means* is not
+derivable from the code, and a generated table would lose the rows that pair
+two keys. The facts are checked; the prose is written. What **is** generated
+is the [action-name table](#action-names--what-a-keys-line-may-say-on-the-right)
+further down, which is a list rather than an explanation.
 
 Activating a *file* hands it to the desktop's own handler — `xdg-open`, the
 same thing a double-click in a file manager does. `F3` still views it and `F4`

@@ -22,6 +22,33 @@ forces the author to look at the docs. "Docs PR later" is in practice
    (conventional commit `docs(scope): ...`), but directly after the
    code commit, not "sometime later".
 
+**The grep in step 1 is necessary and not sufficient**, and the
+2026-08-30 documentation review is the evidence. It found thirty-six
+drifted claims, and the greppable ones were the minority. Three kinds
+get past a search for what you changed:
+
+- **A sentence about a rule you changed, in a file you did not touch.**
+  Binding `Ctrl+C` in `keymap.rs` made a sentence in `command-line.md`
+  false. Nothing in that file changed, and nobody was reading it.
+- **A feature described as future work.** "Phase D puts the reason in
+  the path bar" names no identifier at all, so no grep finds it — and
+  it stays grammatical and plausible forever. Four of these were found
+  at once, across three files.
+- **A number.** Test counts, timings, how many of a thing there are.
+  Every one of them in that review was stale, including one in a
+  sentence arguing that a dated measurement stays honest.
+
+So step 1 has two more parts, both cheap:
+
+5. `grep` for the *behaviour* as well as the identifier — the rule you
+   changed, in the words a document would use for it, across all of
+   `docs/`. That is what a search for the changed symbol cannot reach.
+6. If the change adds or removes an entry in a **table or a list** —
+   a binding, a module, a trait method, a suite — consider generating
+   the document's copy of it instead of editing it (skill
+   [53](53-generate-instead-of-duplicating.md)). A table checked by a
+   test cannot drift; a table you remembered to update this time can.
+
 **Example.**
 ```
 Commit: feat(damping): inverter as count-model with retention 0.9

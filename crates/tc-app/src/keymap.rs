@@ -860,8 +860,13 @@ fn normalize(key: Key, modifiers: ModifierType) -> (Key, ModifierType) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
-    use crate::constants::{ACTION_TABLE_BEGIN, ACTION_TABLE_DOC, ACTION_TABLE_END};
+    use crate::constants::{
+        ACTION_TABLE_BEGIN, ACTION_TABLE_DOC, ACTION_TABLE_END, BINDINGS_TABLE_HEADING,
+        DOC_KEY_NAMES, PAIRED_ROW_SEPARATOR, SAME_ACTION_SEPARATOR,
+    };
 
     /// What a keystroke does with nobody's settings laid over the defaults.
     fn bound(key: Key, modifiers: ModifierType) -> Option<Action> {
@@ -1155,6 +1160,160 @@ mod tests {
         // Every key in `BINDINGS` is a GDK keysym constant, so it has a name.
         spec.push_str(&key.name().expect("a keysym from BINDINGS has a name"));
         spec
+    }
+
+    /// The bindings table as `docs/keymap.md` holds it, one entry per **group**
+    /// of keys the table says are the same command.
+    ///
+    /// A row's first cell is split on [`PAIRED_ROW_SEPARATOR`] — the slash that
+    /// means "this row is about two things" — and what is left in each part is
+    /// the keys joined by [`SAME_ACTION_SEPARATOR`], which the table uses for
+    /// one command reachable more than one way. So `` `↑` / `↓` `` is two
+    /// groups of one and `` `F8`, `Delete` `` is one group of two, read out of
+    /// the punctuation rather than out of a list kept here.
+    ///
+    /// A part with no backticked key is prose — "a letter, digit or symbol" is
+    /// type-ahead, which is what happens when *no* binding matches and so has
+    /// none to check.
+    fn documented_groups() -> Vec<Vec<(String, (Key, ModifierType))>> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(ACTION_TABLE_DOC);
+        let document = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        let section = document
+            .split_once(BINDINGS_TABLE_HEADING)
+            .expect("docs/keymap.md has lost its bindings heading")
+            .1;
+
+        let mut groups = Vec::new();
+        for line in section.lines().skip_while(|line| !line.starts_with('|')) {
+            let Some(rest) = line.strip_prefix('|') else {
+                // The table ends at the first line that is not one.
+                break;
+            };
+            let cell = rest.split('|').next().expect("a row has a first cell");
+            for part in cell.split(PAIRED_ROW_SEPARATOR) {
+                let group: Vec<_> = part
+                    .split('`')
+                    // A backticked token sits at an odd index once the part is
+                    // split on the backtick, which is what tells a key from the
+                    // prose around it.
+                    .skip(1)
+                    .step_by(2)
+                    .map(|key| {
+                        let parsed = parse_doc_key(key)
+                            .unwrap_or_else(|| panic!("docs/keymap.md: `{key}` names no key"));
+                        (key.to_string(), parsed)
+                    })
+                    .collect();
+                if !group.is_empty() {
+                    groups.push(group);
+                }
+            }
+        }
+        assert!(!groups.is_empty(), "no bindings table found");
+        groups
+    }
+
+    /// A keystroke written the way the table writes one: `Alt+Num +`, `Ctrl+↓`.
+    ///
+    /// The irregular spellings are [`DOC_KEY_NAMES`], longest first because
+    /// `Num Enter` ends with `Enter`; everything else goes to `key_named`,
+    /// which is the same function a `[keys]` line goes through.
+    fn parse_doc_key(spec: &str) -> Option<(Key, ModifierType)> {
+        let (prefix, key) = DOC_KEY_NAMES
+            .iter()
+            .filter(|(name, _)| spec.ends_with(name))
+            .max_by_key(|(name, _)| name.len())
+            .map(|(name, key)| (&spec[..spec.len() - name.len()], *key))
+            .or_else(|| match spec.rsplit_once(KEY_SPEC_SEPARATOR) {
+                Some((prefix, name)) => Some((&spec[..prefix.len() + 1], key_named(name)?)),
+                None => Some(("", key_named(spec)?)),
+            })?;
+
+        let mut modifiers = ModifierType::empty();
+        for part in prefix
+            .split(KEY_SPEC_SEPARATOR)
+            .filter(|part| !part.is_empty())
+        {
+            let (_, modifier) = MODIFIER_NAMES
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(part))?;
+            modifiers |= *modifier;
+        }
+        Some(normalize(key, modifiers))
+    }
+
+    /// `docs/keymap.md`'s table names exactly the keys that are bound.
+    ///
+    /// The table stays prose — what `Insert` *means* is not in the code — so
+    /// what is checked is the half that is: every binding appears, and nothing
+    /// appears that is not a binding. That is the drift the 2026-08-30 review
+    /// found and could only find by reading.
+    #[test]
+    fn the_bindings_table_names_exactly_the_keys_that_are_bound() {
+        // A keystroke is `Hash` but not `Ord` — the keymap's own lookup is a
+        // hash map for the same reason — so the sets are hashed and only the
+        // rendered difference is sorted, which is what makes a failure read
+        // the same twice.
+        let documented: HashSet<_> = documented_groups()
+            .into_iter()
+            .flatten()
+            .map(|(_, stroke)| stroke)
+            .collect();
+        let bound: HashSet<_> = BINDINGS
+            .iter()
+            .map(|binding| normalize(binding.key, binding.modifiers))
+            .collect();
+
+        let mut undocumented: Vec<_> = bound
+            .difference(&documented)
+            .map(|(key, modifiers)| key_spec(*key, *modifiers))
+            .collect();
+        let mut invented: Vec<_> = documented
+            .difference(&bound)
+            .map(|(key, modifiers)| key_spec(*key, *modifiers))
+            .collect();
+        undocumented.sort();
+        invented.sort();
+
+        assert!(
+            undocumented.is_empty() && invented.is_empty(),
+            "docs/keymap.md and BINDINGS disagree.\n  \
+             bound but not in the table: {undocumented:?}\n  \
+             in the table but not bound: {invented:?}",
+        );
+    }
+
+    /// Keys a row joins with a comma are one command; a slash is a pair.
+    ///
+    /// The table already used the two that way everywhere, so the punctuation
+    /// is read rather than a list of exceptions kept beside it. It catches the
+    /// row that quietly stops being true: rebind `Delete` and
+    /// `` `F8`, `Delete` `` still reads as one command reachable two ways.
+    #[test]
+    fn keys_a_row_joins_with_a_comma_are_the_same_command() {
+        let keymap = Keymap::default();
+        for group in documented_groups() {
+            let actions: Vec<_> = group
+                .iter()
+                .map(|(spelling, (key, modifiers))| {
+                    let action = keymap
+                        .action_for(*key, *modifiers)
+                        .expect("every documented key is bound");
+                    (spelling, action)
+                })
+                .collect();
+            let (first, rest) = actions.split_first().expect("a group holds a key");
+            for (spelling, action) in rest {
+                assert_eq!(
+                    *action, first.1,
+                    "`{}` and `{spelling}` are joined by `{SAME_ACTION_SEPARATOR}` in \
+                     docs/keymap.md, which says they are one command — a row about two \
+                     separates them with `{PAIRED_ROW_SEPARATOR}`",
+                    first.0,
+                );
+            }
+        }
     }
 
     /// The generated key specs are specs this file can read back.
