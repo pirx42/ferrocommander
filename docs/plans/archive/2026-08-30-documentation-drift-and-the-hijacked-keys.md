@@ -1,6 +1,6 @@
 # Documentation drift — and the keys the command line lost
 
-Status: In Progress
+Status: Implemented
 
 The owner read `keymap.md` and found a row describing a key as doing
 something it stopped doing that morning. This is what came of pulling that
@@ -290,7 +290,7 @@ cost as well as correctness. And one non-ASCII name among 50 000 costs the
 other 49 999 nothing, because the fast path is chosen per comparison rather
 than per directory — which was the design and is now checked.
 
-**Phase 6 — refactoring audit** (skill 49).
+**Phase 6 — refactoring audit** (skill 49). **Done** — § 9.
 
 ## 7. Effort
 
@@ -332,3 +332,50 @@ than fixing an unknown number of things.
   well-formed prose naming nothing.
 - **Rewriting documents that are merely old.** A sentence written before a
   feature existed is not wrong; only claims the code contradicts are in scope.
+
+## 9. The closing audit
+
+Skill 49: the last phase reads what the other five left behind rather than
+adding to it. Five phases added 364 lines of Rust — a fix in `main.rs`, four
+end-to-end tests, a generator with two tests, and a benchmark — and rather less
+of it survived unchanged than the green gate would suggest.
+
+**Three things were changed by the audit.**
+
+- **Five `#[cfg(test)]` attributes across two files, for one feature.** The
+  action-table generator (`action_catalogue`, `key_spec`) was written beside
+  the code it reads, needing an attribute each plus a `#[cfg(test)] use` at the
+  top of the module — which `rustfmt` then had opinions about. Both functions
+  have exactly one caller and it is a test, so they moved into `mod tests` and
+  the attributes went with them. `keymap.rs` is back to the two `cfg(test)`s it
+  had before this plan. The three *string* constants stayed in `constants.rs`,
+  because that is the crate's own rule and a marker written into a document is
+  a string the shell owns.
+- **Three historical test counts read as present-tense claims.** `ui-shell.md`
+  recounts three incidents — a Wayland hang at 136 tests, a runner failure at
+  138, an outside report of 530 s — and each named the number flatly, which is
+  how "138" came to look current in a file that had just been corrected to 160.
+  Each now says which day's suite it means.
+- **A comment left ragged** by an edit, reflowed.
+
+**What the audit checked and left alone.** `owned_by_a_text_field` in
+`main.rs` is six lines with one caller and does not want extracting further.
+The benchmark duplicates nothing: `bench_branch` builds a real tree because it
+measures a walk, and `bench_type_ahead` builds none because it measures a
+comparison. No count of the action names survives anywhere outside this plan,
+which was checked by grep rather than by memory.
+
+**What this plan cost, against § 7.** Estimated six hours and revised to seven
+and a half after the sweep. The shape of the error is the interesting part: the
+sweep (2 h) landed exactly, because its cost is reading a known number of
+lines. Every phase whose cost was *fixing an unknown number of things* was
+under-estimated, and phase 4 most of all — the action table was scoped as "a
+list to write" and became a generator, two tests and four mutation probes,
+which is the right outcome and not the estimated one.
+
+**What it found that it was not looking for.** The owner's one row about
+"any unbound letter" led to a regression in shipped code, three more findings
+in the same file, and twenty-two elsewhere. Two of the review's own findings
+did not survive being acted on (§ 6, phase 3), and one of its counts was wrong
+in both directions before a generator settled it (§ 6, phase 4). A review that
+never contradicts itself has not been checked either.

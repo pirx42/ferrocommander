@@ -100,9 +100,11 @@ pub const TEXT_FIELD_SHORTCUTS: [gtk::gdk::Key; 6] = [
 /// rather than typed, and a test compares the two — so the markers below are
 /// load-bearing, not decoration (skill 53).
 ///
-/// Only the test reads them, so they are `cfg(test)` — but they live here
-/// rather than beside it, because this is where every string the shell owns
-/// lives and a marker written into a document is exactly that kind of string.
+/// Only the test that renders the table reads them, so they are `cfg(test)`.
+/// They live here rather than beside it because this is where every string
+/// the shell owns lives, and a marker written into a document is exactly
+/// that kind of string — the renderer itself is test code and sits with its
+/// caller in `keymap.rs`.
 #[cfg(test)]
 pub const ACTION_TABLE_DOC: &str = "../../docs/keymap.md";
 #[cfg(test)]

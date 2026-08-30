@@ -15,8 +15,6 @@ use std::collections::HashMap;
 use gtk::gdk::{Key, ModifierType};
 use tc_core::listing::SortKey;
 
-#[cfg(test)]
-use crate::constants::{ACTION_TABLE_BEGIN, ACTION_TABLE_DOC, ACTION_TABLE_END};
 use crate::constants::{
     KEYPAD_PREFIX, KEYPAD_PREFIX_TITLED, KEY_NAME_SEPARATOR, KEY_SPEC_SEPARATOR, MODIFIER_NAMES,
     UNKNOWN_ACTION, UNKNOWN_KEY,
@@ -759,51 +757,6 @@ impl Keymap {
     }
 }
 
-/// Every action name, with the keys bound to it by default.
-///
-/// Generated from [`ACTION_NAMES`] and [`BINDINGS`] rather than written down,
-/// because a list of names kept by hand beside the table it
-/// describes is a list that drifts — which is exactly what happened to
-/// `docs/keymap.md` before this existed (skill 53). A test renders this into
-/// the document and fails when the two disagree.
-///
-/// An action with no default binding still appears, with an empty key list:
-/// it is bindable, which is the question this answers.
-#[cfg(test)]
-pub(crate) fn action_catalogue() -> Vec<(&'static str, Vec<String>)> {
-    ACTION_NAMES
-        .iter()
-        .map(|(name, action)| {
-            let keys = BINDINGS
-                .iter()
-                .filter(|binding| binding.action == *action)
-                .map(|binding| key_spec(binding.key, binding.modifiers))
-                .collect();
-            (*name, keys)
-        })
-        .collect()
-}
-
-/// A keystroke written the way the `[keys]` table spells one.
-///
-/// The inverse of [`parse_key`], and only meaningful because it is: GDK's own
-/// keysym name is the first spelling `key_named` tries, so what this writes is
-/// always something that reads back. A test asserts the round trip over every
-/// default binding rather than trusting that sentence.
-#[cfg(test)]
-fn key_spec(key: Key, modifiers: ModifierType) -> String {
-    let mut spec = String::new();
-    for (name, modifier) in MODIFIER_NAMES {
-        if modifiers.contains(modifier) {
-            spec.push_str(name);
-            spec.push(KEY_SPEC_SEPARATOR);
-        }
-    }
-    // Every key in `BINDINGS` is a GDK keysym constant, so it has a name.
-    spec.push_str(&key.name().expect("a keysym from BINDINGS has a name"));
-    spec
-}
-
 /// The action written under `name`.
 fn action_named(name: &str) -> Option<Action> {
     ACTION_NAMES
@@ -908,6 +861,7 @@ fn normalize(key: Key, modifiers: ModifierType) -> (Key, ModifierType) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::{ACTION_TABLE_BEGIN, ACTION_TABLE_DOC, ACTION_TABLE_END};
 
     /// What a keystroke does with nobody's settings laid over the defaults.
     fn bound(key: Key, modifiers: ModifierType) -> Option<Action> {
@@ -1157,6 +1111,50 @@ mod tests {
         assert_eq!(keymap.action_for(Key::F8, PLAIN), None);
         // Delete is a separate binding for the same action and is untouched.
         assert_eq!(keymap.action_for(Key::Delete, PLAIN), Some(Action::Delete));
+    }
+
+    /// Every action name, with the keys bound to it by default.
+    ///
+    /// Generated from [`ACTION_NAMES`] and [`BINDINGS`] rather than written down,
+    /// because a list of names kept by hand beside the table it describes is a
+    /// list that drifts — which is exactly what happened to
+    /// `docs/keymap.md` before this existed (skill 53). The test below renders
+    /// it and fails when the document and the code disagree.
+    ///
+    /// An action with no default binding still appears, with an empty key list:
+    /// it is bindable, which is the question this answers.
+    fn action_catalogue() -> Vec<(&'static str, Vec<String>)> {
+        ACTION_NAMES
+            .iter()
+            .map(|(name, action)| {
+                let keys = BINDINGS
+                    .iter()
+                    .filter(|binding| binding.action == *action)
+                    .map(|binding| key_spec(binding.key, binding.modifiers))
+                    .collect();
+                (*name, keys)
+            })
+            .collect()
+    }
+
+    /// A keystroke written the way the `[keys]` table spells one.
+    ///
+    /// The inverse of [`parse_key`], and only meaningful because it is: GDK's
+    /// own keysym name is the first spelling `key_named` tries, so what this
+    /// writes is always something that reads back. The test below asserts that
+    /// round trip over every default binding rather than trusting this
+    /// sentence.
+    fn key_spec(key: Key, modifiers: ModifierType) -> String {
+        let mut spec = String::new();
+        for (name, modifier) in MODIFIER_NAMES {
+            if modifiers.contains(modifier) {
+                spec.push_str(name);
+                spec.push(KEY_SPEC_SEPARATOR);
+            }
+        }
+        // Every key in `BINDINGS` is a GDK keysym constant, so it has a name.
+        spec.push_str(&key.name().expect("a keysym from BINDINGS has a name"));
+        spec
     }
 
     /// The generated key specs are specs this file can read back.

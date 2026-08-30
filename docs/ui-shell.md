@@ -436,8 +436,8 @@ run is worse than no test.
 backend from the environment and prefers Wayland whenever `WAYLAND_DISPLAY` is
 set — so on any Wayland desktop the app under test connected to the
 developer's *real compositor* instead of the `Xvfb` the harness had just
-started. The window appeared, on a display `xdotool` cannot see, and all 136
-tests waited out their full thirty-second timeout: an hour-long run failing
+started. The window appeared, on a display `xdotool` cannot see, and every one
+of the 136 tests the suite then held waited out its full thirty-second timeout: an hour-long run failing
 for a reason that has nothing to do with the program. Reported from a stock
 Ubuntu 24.04 desktop, where it is 100% reproducible and looks like a hang.
 
@@ -466,8 +466,8 @@ fail, because the file the tests poll for a pane's directory never appears.
 Every such test then waits out its ten seconds and reports the panes as
 `["", ""]`.
 
-That is what a GitHub runner did to all 138 tests at once, at 11.3 seconds
-each — half an hour of red saying nothing about the program. It is
+That is what a GitHub runner did to the whole suite at once — 138 tests, as
+it stood that day — at 11.3 seconds each — half an hour of red saying nothing about the program. It is
 reproducible anywhere in one command: with `XDG_CONFIG_HOME` set, a test that
 passes in 3.0 s fails in 11.4 s with exactly that message.
 
@@ -498,8 +498,8 @@ randomly teaches people to ignore red, so a mutex makes them queue.
 The cost is the suite's whole runtime: **160 tests × about 3.3 s each,
 measured at 527 s here on 2026-08-30**. It was "about half a minute" when that
 sentence was written and the suite had a handful of tests; nobody updated it
-as the suite grew, and an outside reader measured 530 s for 138 tests before
-we did.
+as the suite grew, and an outside reader measured 530 s at 138 tests before we
+did.
 
 **Dating the measurement did not keep it true.** The 138 above stood while the
 suite reached 160, in this file and in two others, each with a different
