@@ -59,9 +59,24 @@ const DIALOG_PACK: &str = "Pack";
 /// are: a test that asks the code where it saves can only agree with it.
 const SETTINGS_FILE: &str = ".config/ferrocommander/config.toml";
 
+/// The settings file as it stands, or empty if it has not been written yet.
+///
+/// Three readers pull different shapes out of it — a repeated table, an
+/// inline array, a table of integers — and all three start here. Missing is
+/// not an error: a run that has changed nothing has nothing to write, and
+/// "not there yet" is what the polling readers are waiting out.
+fn settings_text(app: &App) -> String {
+    std::fs::read_to_string(app.path(SETTINGS_FILE)).unwrap_or_default()
+}
+
 /// Where the header band sits, and what the Ext column starts out wide.
 /// Spelled out rather than imported, like every other expectation here.
 const EXT_DIVIDER_Y: i32 = 70;
+/// The divider at the right edge of Ext: the name column is 260 wide and Ext
+/// 70. Dragged a hundred pixels right, which is far enough that no rounding
+/// could account for the difference.
+const EXT_DIVIDER_X: i32 = 330;
+const EXT_DIVIDER_DRAGGED_X: i32 = 430;
 const DEFAULT_EXT_WIDTH: i32 = 70;
 
 /// What the app prints when GTK will not parse a rule. Spelled out rather
@@ -140,7 +155,7 @@ fn in_src_and_dst(arrange: impl FnOnce(&Path)) -> App {
 /// Every one of these paths is also somewhere a *pane* has been, so "the file
 /// mentions src/nested" says nothing at all about whether it is a favourite.
 fn recorded_favourites(app: &App) -> Vec<String> {
-    let written = std::fs::read_to_string(app.path(SETTINGS_FILE)).unwrap_or_default();
+    let written = settings_text(app);
     let mut found = Vec::new();
     let mut inside = false;
     for line in written.lines() {
@@ -3423,7 +3438,10 @@ fn a_dragged_column_width_reaches_the_settings_file() {
     // The divider at the right edge of Ext, in the left pane's header: the
     // name column is 260 wide and Ext 70, and the header is the band under
     // the path bar.
-    app.drag((330, EXT_DIVIDER_Y), (430, EXT_DIVIDER_Y));
+    app.drag(
+        (EXT_DIVIDER_X, EXT_DIVIDER_Y),
+        (EXT_DIVIDER_DRAGGED_X, EXT_DIVIDER_Y),
+    );
 
     let widths = await_column_widths(&app);
     assert!(
@@ -3446,7 +3464,7 @@ struct ColumnWidths {
 fn await_column_widths(app: &App) -> ColumnWidths {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
-        let written = std::fs::read_to_string(app.path(SETTINGS_FILE)).unwrap_or_default();
+        let written = settings_text(app);
         let table = written
             .split("[columns]")
             .nth(1)
@@ -3593,7 +3611,7 @@ fn a_cd_is_remembered_the_way_a_command_is() {
 /// pane directory or a favourite just as happily, and a test that passes on
 /// the wrong line is worse than one that fails (skill 58).
 fn recorded_command_history(app: &App) -> Vec<String> {
-    let written = std::fs::read_to_string(app.path(SETTINGS_FILE)).unwrap_or_default();
+    let written = settings_text(app);
     let Some(start) = written.find("command_history = [") else {
         return Vec::new();
     };

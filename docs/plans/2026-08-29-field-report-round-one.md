@@ -226,3 +226,80 @@ existing tests wrong.
   which needs no cap and no settings-file growth.
 - **Multi-rename or search reached from the job manager.** The manager shows
   file operations; the other two have their own windows already.
+
+## 8. What was actually done
+
+Phases 0–6 are implemented and phase 7 is half of itself. Every fix carries a
+test that was run against the *unfixed* code first and seen to fail — the
+probe discipline, applied to eight changes in a row.
+
+| | Finding | Outcome |
+|---|---|---|
+| F1 | `cd` not in the history | fixed |
+| F2 | Space "measures instead of marking" | answered: it does not, and never did |
+| F3 | column widths fixed | fixed — draggable, shared, persisted |
+| F4 | no free space | fixed — free and total, Unix only |
+| F5 | archives read-only | withdrawn |
+| F6 | Enter on a file did nothing | fixed — the desktop's handler |
+| F7 | rows move when the first is marked | **did not reproduce** |
+| F8 | extension shown twice while renaming | fixed |
+| F9 | cursor jumps to the top after a rename | fixed |
+| F10 | the idle pane's cursor | fixed — an outline |
+| F11 | scroll position lost | fixed — per directory, per session |
+| F12 | `Ctrl+S` matching | withdrawn |
+| — | operations cannot go to the background | half fixed — Background works, nothing lists what is running |
+
+### F7 did not reproduce, and that is a finding
+
+Marking the first row moves nothing here. Screenshots before and after
+differ by 918 pixels, all of them the row's text turning red; the mark is
+colour only, deliberately, because bold was once wide enough to push the date
+out of its column. Marking and unmarking leaves the left pane
+pixel-identical.
+
+Three explanations were checked and dropped: the mark's style class changes
+no size, the status label is below the rows rather than above them, and it
+already holds text before anything is marked, so it never grows from empty.
+
+What would settle it is the reporter's own case: which row, how the list was
+sorted, and whether the pane was scrolled.
+
+### What the tests could not see, and what was done instead
+
+Two of these are invisible to the end-to-end suite, and both were checked
+another way rather than left on trust.
+
+A **scroll offset** is not a window title, a file on disk or a key press, so
+`xdotool` cannot read one. `scripts/check-scroll-memory.sh` is committed for
+it, and sets up the one case the cursor cannot explain.
+
+Whether the **other pane** followed a column drag is equally unreadable. The
+test asserts the file; the mirroring was checked by eye, and holds by
+construction because both panes are set from one field.
+
+### Three bugs the work found in itself
+
+* Marking a **`bin/` directory** into the test home made it a row in the
+  pane, and two fixtures that count rows counted it. The private `PATH` lives
+  in `.local/bin` now.
+* `focus_on_arrival` was set and **changed nothing**, because
+  `reload_after_job` never consulted it. Found by running the app, not by
+  reading it.
+* A column width written into the shell's copy of the settings file made
+  `current_settings() == saved` true, and `remember` skips the save when they
+  are equal — so every drag was silently dropped. It looked exactly like a
+  drag GTK had failed to report, and three screenshots said otherwise before
+  an `eprintln` said where it stopped.
+
+### What is left
+
+The **job manager window**. `Background` sends a job on, and nothing lists it
+afterwards, so it cannot be watched again or cancelled. The engine is ready
+— every job's progress, cancel and report hang off its own handle — and what
+is missing is a non-modal window over them.
+
+The queue still runs jobs **one at a time**. The owner asked for concurrent
+jobs; that was not done tonight and was not a slip. Two copies writing into
+one directory at once is a reliability question rather than a convenience
+one, and it should be decided on its own rather than arrive as a side effect
+of adding a window.
