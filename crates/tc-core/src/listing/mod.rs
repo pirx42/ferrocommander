@@ -381,6 +381,37 @@ impl Listing {
         self.path_at(self.cursor)
     }
 
+    /// The next visible row whose name contains `needle`, searching down
+    /// from `from` and wrapping once.
+    ///
+    /// The whole name, extension included, matched case-insensitively — the
+    /// same rule and the same function as the quick filter, so "does this
+    /// name match what was typed" has one answer in this program rather than
+    /// two that drift.
+    ///
+    /// `..` is never a result. It is not a name anybody types looking for,
+    /// and it is already the one row that cannot be marked or acted on.
+    ///
+    /// `None` when nothing matches, which the caller reads as "leave the
+    /// cursor where it is": a search that found nothing has no business
+    /// moving it.
+    pub fn find_from(&self, from: usize, needle: &str) -> Option<usize> {
+        if needle.is_empty() || self.is_empty() {
+            return None;
+        }
+        // Every row exactly once, starting at `from` and wrapping — so the
+        // row the cursor is on is the *last* candidate rather than skipped,
+        // and a needle that only matches where you already are still finds it.
+        (0..self.len())
+            .map(|step| (from + step) % self.len())
+            .find(|&index| {
+                !self.is_parent(index)
+                    && self
+                        .get(index)
+                        .is_some_and(|entry| name::contains_ignoring_case(&entry.name, needle))
+            })
+    }
+
     /// Puts the cursor on the entry called `name`.
     ///
     /// Does nothing when that entry is not visible — a hidden directory is

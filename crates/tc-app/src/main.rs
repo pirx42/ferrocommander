@@ -193,17 +193,19 @@ fn fill_drive_bar(bar: &gtk::Box, shell: &Rc<RefCell<Shell>>) {
     }
 }
 
-/// A key no binding claimed: if it is a character, it starts a command.
+/// A key no binding claimed: if it is a character, it searches the pane.
 ///
-/// Total Commander's feel, and the only way into the command line from the
-/// keyboard — without it a keyboard-first program has a command line nobody
-/// can reach. Plain `a` did nothing before this; now it types.
+/// This used to type into the command line — Total Commander's feel, and the
+/// only way in from the keyboard, which is exactly why the letters were not
+/// available for anything else. `→` is the way in now ([`Action::
+/// FocusCommandLine`]), so the letters are free for the thing a file manager
+/// wants them for: finding a row by typing its name.
 ///
-/// Only an unmodified character, though. `Ctrl+X` and `Alt+X` still report a
-/// letter, and a user reaching for a shortcut this program does not have
-/// meant a shortcut, not the letter — silently typing it would be a wrong
-/// answer rather than a missing one.
-fn typed_into_command_line(
+/// Only an unmodified character. `Ctrl+X` and `Alt+X` still report a letter,
+/// and a user reaching for a shortcut this program does not have meant a
+/// shortcut, not the letter — searching for it would be a wrong answer rather
+/// than a missing one.
+fn typed_into_the_pane(
     shell: &Rc<RefCell<Shell>>,
     key: gdk::Key,
     modifiers: gdk::ModifierType,
@@ -212,11 +214,11 @@ fn typed_into_command_line(
         return glib::Propagation::Proceed;
     }
     // Control characters are keys, not text: Backspace and the arrows all
-    // report one, and typing them into the line would be nonsense.
+    // report one, and searching for them would be nonsense.
     let Some(character) = key.to_unicode().filter(|typed| !typed.is_control()) else {
         return glib::Propagation::Proceed;
     };
-    shell.borrow().command_line.accept(character);
+    shell.borrow_mut().active_pane().type_ahead(character);
     glib::Propagation::Stop
 }
 
@@ -447,7 +449,7 @@ fn key_controller(
             // or Alt key, and those are the first thing the call below turns
             // away. A probe deleting the guard changed nothing, which is how
             // it was found.
-            return typed_into_command_line(&shell, key, modifiers);
+            return typed_into_the_pane(&shell, key, modifiers);
         };
         if action == Action::Quit {
             if let Some(window) = window.upgrade() {

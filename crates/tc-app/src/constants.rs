@@ -516,6 +516,14 @@ pub const BYTE_DECIMALS: usize = 1;
 /// Below this it would flash up and vanish, which is more distracting than no
 /// window at all. Measured from the job's start and checked as events arrive,
 /// so no timer is needed.
+/// How long a type-ahead search stays warm.
+///
+/// Long enough to type a name at speaking pace, short enough that a letter
+/// pressed after a pause starts a new search rather than continuing one
+/// nobody remembers beginning. The same order as every other program's
+/// list-search timeout.
+pub const TYPE_AHEAD_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1000);
+
 pub const PROGRESS_DELAY: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// How a single failure is written in the summary.

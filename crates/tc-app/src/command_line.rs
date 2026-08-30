@@ -154,22 +154,6 @@ impl CommandLine {
     pub fn clear(&self) {
         self.entry.set_text("");
     }
-
-    /// Adds one typed character and takes the keyboard.
-    ///
-    /// Total Commander's feel, and what makes the line usable at all: a
-    /// letter that no binding claims starts a command instead of being
-    /// dropped. Without it there is no way in from the keyboard, which for a
-    /// keyboard-first program is the same as no command line.
-    pub fn accept(&self, character: char) {
-        let mut text = self.text();
-        text.push(character);
-        self.entry.set_text(&text);
-        self.entry.grab_focus();
-        // After the grab, or the focus-in selects everything and the next
-        // character replaces the line.
-        self.entry.set_position(-1);
-    }
 }
 
 #[cfg(test)]

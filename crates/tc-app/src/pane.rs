@@ -22,8 +22,8 @@ use crate::constants::{
     CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME,
     COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
     COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER, PAGE_ROWS_FALLBACK, PANE_SPACING,
-    PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, XALIGN_LEFT,
-    XALIGN_RIGHT,
+    PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT,
+    XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
@@ -261,6 +261,12 @@ pub struct PaneView {
     /// Which entry to put the cursor on when that read arrives — the directory
     /// just left, when stepping up.
     focus_on_arrival: Option<String>,
+    /// What has been typed at the rows so far, and when the last key came.
+    ///
+    /// Per pane, because it is a position in *this* pane's list; dropped when
+    /// the pane changes directory, since a search is about what is on screen.
+    type_ahead: String,
+    type_ahead_at: std::time::Instant,
     /// Where each directory was scrolled to when this pane left it.
     ///
     /// A session's memory, not a saved one: it needs no cap and no settings
@@ -392,6 +398,8 @@ impl PaneView {
             scroller,
             wanted: None,
             focus_on_arrival: None,
+            type_ahead: String::new(),
+            type_ahead_at: std::time::Instant::now(),
             scrolled_to: std::collections::HashMap::new(),
             walking: None,
             measuring: None,
@@ -1303,6 +1311,9 @@ impl PaneView {
 
     /// Records that a move to `dir` is in flight, whatever backend answers it.
     fn start(&mut self, dir: VfsPath, focus: Option<String>) {
+        // A search is a position in the list on screen, and the list is about
+        // to be a different one.
+        self.forget_type_ahead();
         // Where this directory was left, so coming back to it lands where you
         // were rather than at the cursor's row. Recorded on the way out
         // because that is the last moment the offset is still the one the
@@ -1364,6 +1375,62 @@ impl PaneView {
                 .replace("{total}", &crate::format::human_bytes(space.total)),
             None => String::new(),
         });
+    }
+
+    /// Takes one typed character and moves the cursor to what it spells.
+    ///
+    /// Two rules, and they differ in one detail that matters more than it
+    /// looks. A **continuation** — a character typed while the buffer is
+    /// still warm — searches from the cursor *inclusive*, so typing more
+    /// letters narrows onto the row you are already on rather than jumping
+    /// off it. A **fresh** buffer searches from the row *after* the cursor,
+    /// so pressing the same letter again walks to the next match instead of
+    /// sitting still.
+    ///
+    /// A search that matches nothing leaves the cursor alone and keeps the
+    /// buffer, so one mistyped letter does not throw away what came before
+    /// it — the next character may well complete a name that exists.
+    pub fn type_ahead(&mut self, typed: char) {
+        let now = std::time::Instant::now();
+        let expired = now.duration_since(self.type_ahead_at) > TYPE_AHEAD_TIMEOUT;
+        if expired {
+            self.type_ahead.clear();
+        }
+        self.type_ahead_at = now;
+
+        // The same character again is "show me the next one", not a longer
+        // needle: `nn` matches nothing in most directories, so a second `n`
+        // would sit still exactly when somebody is pressing it to move on.
+        // The cost is that a name is not reachable by typing its doubled
+        // letter — `aa` walks the `a`s rather than finding `aardvark` — which
+        // is the trade every list-search in every file manager makes.
+        let repeated = !self.type_ahead.is_empty() && self.type_ahead.chars().all(|c| c == typed);
+        let fresh = self.type_ahead.is_empty();
+        match repeated {
+            true => self.type_ahead = typed.to_string(),
+            false => self.type_ahead.push(typed),
+        }
+
+        let cursor = self.shown.listing.cursor();
+        // A fresh needle, or the same one again, looks *past* the cursor, so
+        // the search moves. A needle being extended starts at the cursor, so
+        // typing more letters narrows onto the row already found.
+        let from = match fresh || repeated {
+            true => (cursor + 1) % self.shown.listing.len().max(1),
+            false => cursor,
+        };
+        if let Some(found) = self.shown.listing.find_from(from, &self.type_ahead) {
+            self.shown.listing.set_cursor(found);
+            self.sync_cursor();
+        }
+    }
+
+    /// Forgets what was typed at the rows.
+    ///
+    /// Called when the pane changes directory: the buffer is a position in a
+    /// list, and the list is gone.
+    pub fn forget_type_ahead(&mut self) {
+        self.type_ahead.clear();
     }
 
     /// Writes down where the directory on screen is scrolled to.

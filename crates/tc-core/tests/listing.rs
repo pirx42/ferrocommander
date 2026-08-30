@@ -1136,3 +1136,80 @@ mod quick_filter {
         assert_eq!(listing.selection_summary().count, 0);
     }
 }
+
+mod type_ahead {
+    use super::*;
+
+    /// Rows in view order. The listing offers `..` itself for a directory
+    /// that has a parent, so it is row 0 and everything else is one further
+    /// down than the fixture list suggests — which is what the first version
+    /// of these tests got wrong, five assertions at a time.
+    #[test]
+    fn the_order_this_module_assumes() {
+        assert_eq!(
+            rows(&listing()),
+            ["..", "Alpha_dir", "zeta_dir", "a.md", "b.txt", "c.zip"]
+        );
+    }
+
+    #[test]
+    fn a_search_finds_the_next_match_downwards() {
+        let listing = listing();
+        // `_dir`, not `d`: `a.md` has a d in it too, which is how the first
+        // version of this test managed to be wrong about its own fixture.
+        assert_eq!(listing.find_from(0, "_dir"), Some(1));
+        assert_eq!(listing.find_from(2, "_dir"), Some(2));
+        assert_eq!(listing.find_from(3, "_dir"), Some(1), "wrapped");
+    }
+
+    #[test]
+    fn a_search_wraps_once_and_can_return_where_it_started() {
+        let listing = listing();
+        // Only Alpha_dir holds "alpha", and searching from below it still
+        // finds it — a needle that matches only where you are is still a
+        // match, which is what makes typing more letters refine rather than
+        // jump away.
+        assert_eq!(listing.find_from(4, "alpha"), Some(1));
+        assert_eq!(listing.find_from(1, "alpha"), Some(1));
+    }
+
+    #[test]
+    fn matching_ignores_case_and_includes_the_extension() {
+        let listing = listing();
+        assert_eq!(listing.find_from(0, "ALPHA"), Some(1));
+        // The extension is part of the name being matched, which is the whole
+        // of what "considers the extension too" means.
+        assert_eq!(listing.find_from(0, ".zip"), Some(5));
+        assert_eq!(listing.find_from(0, "c.z"), Some(5));
+    }
+
+    #[test]
+    fn nothing_matching_is_none_rather_than_a_row() {
+        let listing = listing();
+        // The caller reads this as "leave the cursor alone": a search that
+        // found nothing has no business moving it.
+        assert_eq!(listing.find_from(0, "no-such-name"), None);
+        assert_eq!(listing.find_from(0, ""), None);
+    }
+
+    #[test]
+    fn the_parent_row_is_never_a_result() {
+        let listing = listing();
+        assert_eq!(rows(&listing)[0], "..");
+
+        // `..` contains a dot and would otherwise be the first hit for one.
+        // It is not a name anybody types looking for, and it is already the
+        // one row that cannot be marked or acted on.
+        assert_eq!(listing.find_from(0, "."), Some(3), "a.md, not ..");
+    }
+
+    #[test]
+    fn a_search_sees_what_is_shown_and_not_what_is_filtered_away() {
+        let mut listing = listing();
+        listing.set_filter("zip");
+        assert_eq!(rows(&listing), ["..", "c.zip"]);
+
+        assert_eq!(listing.find_from(0, "zip"), Some(1));
+        assert_eq!(listing.find_from(0, "alpha"), None, "filtered away");
+    }
+}

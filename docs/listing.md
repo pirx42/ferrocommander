@@ -286,3 +286,37 @@ The cursor follows its entry while that entry is still visible and clamps when
 it is not. Marks are untouched — narrowing the view is not a change of intent
 — but `select_all` afterwards takes only what is left, which is what makes the
 two safe together.
+
+## Type-ahead
+
+A letter no binding claims moves the cursor to the next row whose name
+contains it. The rule is `Listing::find_from`, which is in `tc-core` and
+tested there: **case-insensitive substring of the whole name, extension
+included**, searching downwards and wrapping once.
+
+It is the same function the quick filter matches with. "Does this name match
+what was typed" has one answer in this program rather than two that drift —
+which is also why `.txt` and `c.z` both find `c.zip`.
+
+Three details are what make it usable rather than merely correct:
+
+- **A fresh needle looks past the cursor; an extended one starts at it.** So
+  the first letter moves, and each letter after it narrows onto the row
+  already found rather than jumping off it.
+- **The same character again is "next", not a longer needle.** `nn` matches
+  nothing in most directories, so a second `n` would sit still exactly when
+  somebody is pressing it to move on. The cost is that a name is not
+  reachable by typing its doubled letter, which is the trade every list
+  search makes.
+- **A search that matches nothing leaves the cursor alone and keeps the
+  buffer.** One mistyped letter does not throw away what came before it; the
+  next character may well complete a name that exists.
+
+The buffer is per pane, expires after a second, and is dropped when the pane
+changes directory — it is a position in the list on screen, and that list is
+then a different one. `..` is never a result: it is not a name anybody types
+looking for, and it is already the one row that cannot be marked or acted on.
+
+**This took the letter keys from the command line**, which had them because
+it was otherwise unreachable from the keyboard. `→` is the way in now
+([command-line.md](command-line.md)), which is why that key landed first.

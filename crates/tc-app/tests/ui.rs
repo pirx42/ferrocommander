@@ -1107,6 +1107,8 @@ fn a_command_typed_inside_an_archive_is_refused_rather_than_run() {
     app.key("Return");
     await_panes_at(&app, "/src/bundle.zip", "/dst");
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("touch escaped.txt");
     app.key("Return");
 
@@ -1509,19 +1511,17 @@ fn the_parent_row_cannot_be_renamed() {
     app.key("Home");
 
     app.key("shift+F6");
-    app.type_text("definitely-not-a-command");
+    // Proof by where the typing went. With no editor open the letters reach
+    // the *rows* and search them, so `..` keeps its name and the cursor moves
+    // instead. (This used to prove the same thing through the command line,
+    // back when an unclaimed letter typed there.)
+    app.type_text("notes");
     app.key("Return");
 
-    // Proof by where the typing went: with no editor open it falls to the
-    // command line and Return runs it, so a command-output window appears for
-    // a command that does not exist.
-    //
-    // This pins the behaviour, not the guard that implements it — removing
-    // the guard leaves it green, because nothing else today opens an editor on
-    // `..` either. Said plainly rather than left to look like coverage it is
-    // not; the guard's own note in `pane.rs` says the same.
-    app.focus_dialog(DIALOG_OUTPUT);
-
+    // Still pins the behaviour rather than the guard that implements it:
+    // removing the guard leaves this green, because nothing else today opens
+    // an editor on `..` either. Said plainly rather than left to look like
+    // coverage it is not; the guard's own note in `pane.rs` says the same.
     assert!(app.path("src/nested").exists());
     assert!(app.path("src/notes.txt").exists());
 }
@@ -2223,15 +2223,13 @@ fn a_branch_row_cannot_be_renamed_in_the_list() {
     app.keys(&["Home", "Down", "Down"]);
 
     app.key("shift+F6");
-    app.type_text("definitely-not-a-command");
+    // Proof by where the typing went. With no editor open the letters reach
+    // the *rows* and search them, so the cursor moves — which a copy then
+    // shows. (This used to prove the same thing through the command line,
+    // back when an unclaimed letter typed there.)
+    app.type_text("inner");
     app.key("Return");
 
-    // Proof by where the typing went: with no editor open it falls to the
-    // command line, and Return runs it — so an output window appears for a
-    // command that does not exist.
-    app.focus_dialog(DIALOG_OUTPUT);
-    app.key("Return");
-    app.settle();
     assert!(
         app.path("src/nested/inner.txt").exists(),
         "the deep file was renamed out from under the tree"
@@ -3288,17 +3286,75 @@ fn the_right_arrow_puts_the_keyboard_in_the_command_line() {
 }
 
 #[test]
-fn typing_a_letter_starts_a_command_and_enter_runs_it() {
-    // Total Commander's feel, and the only way into the command line from the
-    // keyboard: a letter no binding claims types instead of being dropped.
-    // The command runs in the *active pane's* directory, which is the whole
-    // point — `src`, not wherever the process happens to have started.
+fn typing_a_name_moves_the_cursor_to_it() {
+    // **This test replaced one that said the opposite** (skill 24). Typing a
+    // letter used to put it in the command line, because that was the only
+    // way in from the keyboard; `→` is that way now, so the letters are free
+    // for what a file manager wants them for.
+    //
+    // What the cursor is on is asserted by copying it: F5 takes the row under
+    // the cursor when nothing is marked.
     let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt — the cursor starts on `..`.
+    app.type_text("not");
 
-    app.type_text("touch typed-here");
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
     app.key("Return");
 
-    app.await_exists("src/typed-here");
+    app.await_exists("dst/notes.txt");
+    app.settle();
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "the cursor went somewhere else"
+    );
+}
+
+#[test]
+fn type_ahead_matches_the_extension_too() {
+    // The whole name is what is matched, extension included — the same rule
+    // the quick filter uses, and the same function.
+    let app = in_src_and_dst(arrange);
+    app.type_text(".bin");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+}
+
+#[test]
+fn the_same_letter_again_walks_to_the_next_match() {
+    // `nested`, `data.bin` and `notes.txt` all hold an `n`. A second `n` is
+    // "show me the next one" rather than a longer needle, which would match
+    // nothing and sit still exactly when somebody is pressing it to move on.
+    let app = in_src_and_dst(arrange);
+
+    // First `n` finds nested; second walks past it to data.bin.
+    app.type_text("nn");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+}
+
+#[test]
+fn a_search_that_matches_nothing_leaves_the_cursor_alone() {
+    // One mistyped letter must not throw away what came before it, and must
+    // not move the cursor somewhere arbitrary either.
+    let app = in_src_and_dst(arrange);
+    app.type_text("not");
+    // `notq` matches nothing; the cursor stays on notes.txt.
+    app.type_text("q");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/notes.txt");
 }
 
 #[test]
@@ -3309,6 +3365,8 @@ fn a_command_runs_in_the_pane_that_has_the_keyboard() {
     let app = in_src_and_dst(arrange);
     app.key("Tab");
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("touch on-the-right");
     app.key("Return");
 
@@ -3324,6 +3382,8 @@ fn a_command_runs_in_the_pane_that_has_the_keyboard() {
 fn a_command_that_says_something_opens_a_window_saying_it() {
     let app = in_src_and_dst(arrange);
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("echo hello from the shell");
     app.key("Return");
 
@@ -3338,6 +3398,8 @@ fn a_silent_command_opens_no_window_at_all() {
     // that interrupts after every command is one nobody uses twice.
     let app = in_src_and_dst(arrange);
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("touch quietly");
     app.key("Return");
     app.await_exists("src/quietly");
@@ -3355,6 +3417,8 @@ fn a_failing_command_says_so_even_when_it_printed_nothing() {
     // "it worked".
     let app = in_src_and_dst(arrange);
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("false");
     app.key("Return");
 
@@ -3367,6 +3431,8 @@ fn cd_moves_the_pane_instead_of_being_run() {
     // line that spawned one would look broken.
     let app = in_src_and_dst(arrange);
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("cd nested");
     app.key("Return");
     app.settle();
@@ -3385,6 +3451,8 @@ fn escape_empties_the_command_line_and_hands_back_the_keyboard() {
     // A field with no way out but the mouse is a trap in a keyboard-first
     // program, and this one has no Cancel button.
     let app = in_src_and_dst(arrange);
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("touch never-run");
     app.key("Escape");
 
@@ -3409,6 +3477,8 @@ fn ctrl_down_offers_a_command_that_was_run_before() {
     // than running it, so it can be edited first — which is most of why
     // anybody opens a history — so this edits it before pressing Enter.
     let app = in_src_and_dst(arrange);
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("touch first");
     app.key("Return");
     app.await_exists("src/first");
@@ -3622,6 +3692,8 @@ fn a_cd_is_remembered_the_way_a_command_is() {
     // file is where the history lives between runs, so a `cd` that reaches it
     // is a `cd` the next run can offer too.
     let app = in_src_and_dst(arrange);
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("cd ..");
     app.key("Return");
     // The pane moved, which is the half that always worked.
@@ -3667,6 +3739,8 @@ fn recorded_command_history(app: &App) -> Vec<String> {
 fn alt_f8_opens_the_same_history() {
     // TC's other way to the same list, and both are muscle memory.
     let app = in_src_and_dst(arrange);
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("touch remembered");
     app.key("Return");
     app.await_exists("src/remembered");
@@ -3695,6 +3769,8 @@ fn the_history_survives_a_restart() {
     // A history that forgot everything when the app closed would be one in
     // name only.
     let first = in_src_and_dst(arrange);
+    // The command line is reached with the arrow now that letters search.
+    first.key("Right");
     first.type_text("touch before-restart");
     first.key("Return");
     first.await_exists("src/before-restart");
@@ -3705,6 +3781,8 @@ fn the_history_survives_a_restart() {
     app.focus_dialog(DIALOG_HISTORY);
     app.key("Return");
     app.await_dialog_closed(DIALOG_HISTORY);
+    // No arrow needed here: picking from the history puts the line back and
+    // the keyboard with it.
     app.type_text("-two");
     app.key("Return");
 
@@ -3719,6 +3797,8 @@ fn ctrl_enter_puts_the_name_under_the_cursor_into_the_command_line() {
     // `..`, nested, data.bin, notes.txt — cursor on notes.txt.
     app.keys(&["Home", "Down", "Down", "Down"]);
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("cp");
     app.key("ctrl+Return");
     app.type_text(" copied.txt");
@@ -3740,6 +3820,8 @@ fn the_inserted_name_comes_from_the_pane_that_has_the_keyboard() {
     // dst holds only notes.txt, so `..` then it.
     app.keys(&["Home", "Down"]);
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("cat");
     app.key("ctrl+Return");
     app.type_text(" > out.txt");
@@ -3760,6 +3842,8 @@ fn an_inserted_name_is_a_separate_word() {
     let app = in_src_and_dst(arrange);
     app.keys(&["Home", "Down", "Down", "Down"]);
 
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("cat");
     app.key("ctrl+Return");
     app.type_text(" > out.txt");
@@ -3779,6 +3863,8 @@ fn the_history_is_reachable_while_a_command_is_being_typed() {
     // without an exception for modified keys, Ctrl+Down would be unreachable
     // at the only time anybody reaches for it.
     let app = in_src_and_dst(arrange);
+    // The command line is reached with the arrow now that letters search.
+    app.key("Right");
     app.type_text("touch from-history");
     app.key("Return");
     app.await_exists("src/from-history");
