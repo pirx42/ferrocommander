@@ -82,6 +82,12 @@ cross-references instead of duplication.
   | [documentation drift and the hijacked keys](plans/archive/2026-08-30-documentation-drift-and-the-hijacked-keys.md) | what reading every document against the code found: thirty-six findings, three of them the code being wrong — including a regression that sent `Ctrl+V` in the command line to the file copier — plus the action-name table nobody could find, now generated, and the type-ahead measurement that was owed |
   | [page keys in the pane](plans/archive/2026-08-30-page-keys-in-the-pane.md) | `Page Up`/`Page Down` bound as ordinary cursor keys — the type-ahead bug that found the hole in `adopt_selection`'s contract, a design whose stated reason had expired, and a scroll reproduced by measuring the widget rather than guessing at it |
 
+  **Active:**
+  [adoption without remembering](plans/2026-08-30-adoption-without-remembering.md)
+  — making `adopt_selection` a signal rather than a call somebody has to know
+  to make. No live bug behind it; the case is that the rule has failed
+  silently twice in a week.
+
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
 
