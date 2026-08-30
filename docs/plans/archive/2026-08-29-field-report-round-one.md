@@ -1,6 +1,15 @@
 # Field report, round one — twelve findings from build 132
 
-Status: In Progress
+Status: Implemented — substance extracted to `keymap.md`, `ui-shell.md`,
+`config.md` and `future-improvements.md`
+(commits `14246ce`, `2852c2d`, `f73d35e`, `f223788`, `1f53ae2`, `cdcbaa6`,
+`7eebefe`, `85ca267`)
+
+Ten of the twelve findings are done and two were withdrawn by the owner. One
+piece of phase 7 — a window listing the running jobs, and the question of
+whether the queue should run them concurrently — was carved out rather than
+left half-built, and lives in
+[future-improvements.md](../../future-improvements.md) with the reason.
 
 The first report from somebody *using* the program rather than testing it.
 Build `0.1.0-132` on Ubuntu 24.04, installed from the published `.deb`.
