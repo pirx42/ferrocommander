@@ -257,6 +257,19 @@ impl App {
     /// Moved in steps rather than in one jump, because a pointer that arrives
     /// without having travelled is not a drag: GTK follows motion events, and
     /// a single teleport between press and release moves nothing.
+    /// Clicks once at a point in the window.
+    ///
+    /// The one selection move that is genuinely the user's: a click gives the
+    /// `ColumnView` a selection of its own without going through the keymap,
+    /// so it is the only way left to leave the model behind. A test using this
+    /// must not care *which* row it lands on — that depends on the row height
+    /// and the window — only that it is not the row the model was left on.
+    pub fn click(&self, at: (i32, i32)) {
+        self.pointer(&["mousemove", &at.0.to_string(), &at.1.to_string()]);
+        self.pointer(&["click", "1"]);
+        self.settle();
+    }
+
     pub fn drag(&self, from: (i32, i32), to: (i32, i32)) {
         self.pointer(&["mousemove", &from.0.to_string(), &from.1.to_string()]);
         self.pointer(&["mousedown", "1"]);

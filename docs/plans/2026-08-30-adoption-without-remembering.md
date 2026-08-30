@@ -1,6 +1,6 @@
 # Adoption without remembering — the selection signal
 
-Status: Proposed
+Status: In Progress
 
 `PaneView::adopt_selection` reads the widget's selection back into the model.
 Two places call it, and both call it because somebody remembered to. This is
@@ -136,6 +136,13 @@ the harness has no way to compute". That was wrong, and the probe in § 2
 disproved it by accident: a click at fixed coordinates in the pane landed on a
 row, and a test does not need to know **which** row — only that the cursor
 ended up somewhere the model had not put it.)*
+
+**Done.** `a_click_then_a_letter_searches_from_the_row_that_was_clicked`, on a
+`click` helper added to the harness beside `drag`. It passes today, because
+`typed_into_the_pane` adopts — and removing that adoption turns it red with
+the message it was written for, which is what makes it the probe phase 2's
+first removal will be measured against. The helper's own comment carries the
+rule the test has to obey: never assert *which* row a click lands on.
 
 **Phase 1 — the handler, beside the explicit calls.** Both paths live at once,
 the suite runs unchanged, and the click test from phase 0 is the one that has

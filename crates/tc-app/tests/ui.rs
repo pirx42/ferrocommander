@@ -2801,6 +2801,40 @@ fn page_down_lands_a_screenful_further_on_not_at_the_end() {
 }
 
 #[test]
+fn a_click_then_a_letter_searches_from_the_row_that_was_clicked() {
+    // A mouse click is the only thing left that moves the widget's selection
+    // without the model hearing: the keyboard routes all adopt, and the page
+    // keys stopped being the widget's on 2026-08-30. So this is the last
+    // instance of the class, and nothing covered it.
+    //
+    // `Home` parks the model on `..`. A click well down the pane moves the
+    // widget somewhere else entirely. Typing `r` then searches from one of
+    // the two, and F5 with nothing marked copies whatever the cursor found —
+    // so the filesystem says which cursor answered.
+    let app = in_src_and_dst(with_a_tall_directory);
+
+    app.key("Home");
+    // Left pane, low enough to be well past the first `row*.txt`. Which row
+    // this is does not matter and must not be asserted on.
+    app.click((200, 500));
+    app.key("r");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    let copied = await_any_copy(&app);
+    assert!(
+        copied.starts_with("row"),
+        "F5 copied {copied:?} rather than a row the search landed on"
+    );
+    assert_ne!(
+        copied, "row000.txt",
+        "type-ahead searched from the model's stale cursor, not from the clicked row"
+    );
+}
+
+#[test]
 fn page_down_then_a_letter_searches_from_the_row_on_screen() {
     // The same stale-cursor trap as the two tests above, on the one path that
     // is *not* a dispatched action: a key no binding claims goes straight to
