@@ -1124,6 +1124,19 @@ impl PaneView {
         self.sync_cursor();
     }
 
+    /// Moves the cursor one page, clamping at either end.
+    pub fn move_by_page(&mut self, direction: isize) {
+        let page = self.page_step() as isize;
+        self.move_cursor_by(direction * page);
+    }
+
+    /// Marks across one page and lands there.
+    pub fn extend_mark_by_page(&mut self, direction: isize) {
+        let page = self.page_step() as isize;
+        let target = (self.cursor() as isize + direction * page).max(0) as usize;
+        self.extend_mark_to(target);
+    }
+
     pub fn move_cursor_to_first(&mut self) {
         self.shown.listing.move_cursor_to_first();
         self.sync_cursor();

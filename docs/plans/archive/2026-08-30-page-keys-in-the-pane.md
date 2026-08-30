@@ -1,6 +1,6 @@
 # Page Up and Page Down — the keys the model never hears about
 
-Status: In Progress
+Status: Implemented
 
 `Page Up` and `Page Down` already move the cursor in a pane. They are the
 only cursor keys in this program that do it **without the model finding
@@ -112,7 +112,7 @@ Bind them, as the ordinary cursor keys they are:
 |---|---|
 | `Action::CursorPageUp` / `CursorPageDown` | two variants beside `CursorUp`/`CursorDown` |
 | `cursor_page_up` / `cursor_page_down` | the `[keys]` names, matching `extend_mark_page_up` next to them |
-| `page_rows()` | the same measurement `extend_by_page` already uses — one place decides what a page is (skill 44) |
+| `page_step()` | the same measurement the marking twins use — one place decides what a page is (skill 44) |
 
 The move is `move_cursor_by(±page_rows())`, which already **clamps at both
 ends rather than wrapping** — Total Commander's behaviour, and the same rule
@@ -228,7 +228,34 @@ cancel. So the arithmetic was split into a pure `page_step_for` and pinned by
 a unit test carrying the measured numbers, and the appearance is recorded in
 `keymap.md` as verified by hand — not as covered.
 
-**Phase 4 — refactoring audit** (skill 49).
+**Phase 4 — refactoring audit** (skill 49). **Done.**
+
+Three phases added 298 lines of Rust and a script. The audit changed one thing
+and it was worth the phase.
+
+**Two free functions in `actions.rs` were not free functions for the reason
+they claimed.** `extend_by_page` said it existed "because the page size has to
+be measured off the pane before the same pane is borrowed mutably to act on
+it", and `move_by_page` was written to match. The borrow it blames does not
+exist — measuring and acting are sequential uses of one `&mut`, which the
+compiler is perfectly happy with, and testing that took one build. Both are
+now `PaneView` methods (`move_by_page`, `extend_mark_by_page`) beside the
+other cursor moves, and the four dispatch arms read like the arms around them
+rather than calling out to a helper. A comment that was wrong about the
+compiler is gone with them.
+
+That the new code copied the old code's mistaken reason is the part worth
+recording: an explanation in a comment is load-bearing, and copying its
+*shape* without testing its *claim* is how a wrong reason outlives the code
+that first had it.
+
+**Left alone.** `page_rows` now has exactly one caller (`page_step`) and stays
+split from it, because the two answer different questions — how many rows fit,
+and how far a key moves — and collapsing them would put the measured overlap
+inside a function named for the measurement. `check-page-scroll.sh` duplicates
+the scroll-memory script's Xvfb preamble, which is real duplication and left
+deliberately: the two scripts are read one at a time by someone debugging, and
+a shared preamble would mean opening two files to understand either.
 
 ## 6. Effort
 
