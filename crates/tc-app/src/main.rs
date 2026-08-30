@@ -35,7 +35,7 @@ use tc_core::vfs::{LocalFs, VfsPath};
 use actions::{dispatch, go_to_drive, run_command};
 use constants::{
     APP_ID, APP_TITLE, CLASS_DRIVE_BAR, DRIVE_BAR_SPACING, PANE_COUNT, PANE_SPACING,
-    PANE_SPLIT_RATIO, SETTINGS_UNREADABLE, STYLESHEET, STYLESHEET_REJECTED,
+    PANE_SPLIT_RATIO, SETTINGS_UNREADABLE, STYLESHEET, STYLESHEET_REJECTED, TEXT_FIELD_SHORTCUTS,
 };
 use keymap::{Action, Keymap};
 use pane::PaneView;
@@ -191,6 +191,15 @@ fn fill_drive_bar(bar: &gtk::Box, shell: &Rc<RefCell<Shell>>) {
         });
         bar.append(&button);
     }
+}
+
+/// Whether this key belongs to whatever text field has the focus.
+///
+/// Ctrl and nothing else: `Ctrl+Shift+C` is not a text field's, and neither
+/// is `Alt+C`. The list itself is [`TEXT_FIELD_SHORTCUTS`], which names what a
+/// text field owns rather than what happens to collide today.
+fn owned_by_a_text_field(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+    modifiers == gdk::ModifierType::CONTROL_MASK && TEXT_FIELD_SHORTCUTS.contains(&key)
 }
 
 /// A key no binding claimed: if it is a character, it searches the pane.
@@ -437,10 +446,14 @@ fn key_controller(
         // which is exactly when the entry has the focus. Standing down there
         // would make them unreachable at the only moment they are wanted.
         //
-        // Only modified keys, and only ones the keymap claims: a plain letter
-        // is text, and `Ctrl+C` is the entry's own and stays hers.
+        // Only modified keys, only ones the keymap claims, and never one a
+        // text field owns. That last clause is the one that had to be added:
+        // without it the shell took `Ctrl+C`, `Ctrl+X` and `Ctrl+V` from the
+        // entry the moment the keymap claimed them, so pasting a path into a
+        // command started a file copy instead.
         let commanding = typing_a_command(controller, &shell)
-            && modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK);
+            && modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK)
+            && !owned_by_a_text_field(key, modifiers);
         if typing(controller) && !commanding {
             return glib::Propagation::Proceed;
         }

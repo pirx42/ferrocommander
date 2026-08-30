@@ -78,9 +78,20 @@ and they earn it: `Ctrl+Enter` and `Ctrl+↓` are for use **while typing a
 command**, which is exactly when the entry has the focus. Standing down there
 would make them unreachable at the only moment anybody wants them.
 
-Only modified keys, and only ones the keymap claims. A plain letter is text,
-and `Ctrl+C` is the entry's own — the keymap does not bind it, so it never
-leaves her.
+Only modified keys, only ones the keymap claims, and **never one a text field
+owns**. A plain letter is text; so are `Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Ctrl+X`,
+`Ctrl+Z` and `Ctrl+Y`, which select, copy, paste, cut, undo and redo *in the
+entry* whatever the keymap says about them.
+
+That last clause had to be added. The rule was once "only ones the keymap
+claims", which was safe for exactly as long as the keymap claimed nothing a
+text field wants — and then `Ctrl+C`, `Ctrl+X` and `Ctrl+V` were bound for the
+clipboard ([clipboard.md](clipboard.md)) and started reaching the panes from
+inside the entry. Pasting a path into a command began a file copy.
+
+The list names **what a text field owns**, not what collides today: `Ctrl+Y`
+is in it although nothing claims it. That is the difference between fixing
+this and meeting it again the next time somebody binds a key.
 
 ## The prompt says which directory
 

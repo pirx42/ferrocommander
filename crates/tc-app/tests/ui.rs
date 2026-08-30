@@ -3249,6 +3249,100 @@ fn the_title_names_the_build_it_is_running() {
 }
 
 #[test]
+fn ctrl_c_in_the_command_line_belongs_to_the_command_line() {
+    // A regression this suite caught after the fact: while a text field has
+    // the focus the shell used to dispatch any modified key the keymap
+    // claimed, so binding Ctrl+C took it from the entry.
+    //
+    // Proved by its absence — if the pane had seen it, notes.txt would be on
+    // the clipboard and the paste below would produce it.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("Right");
+    app.key("ctrl+c");
+    app.key("Escape");
+
+    app.key("Tab");
+    app.key("ctrl+v");
+    app.settle();
+
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "Ctrl+C in the command line reached the pane"
+    );
+}
+
+#[test]
+fn ctrl_x_in_the_command_line_does_not_move_a_file() {
+    // The same key with more at stake: a hijacked Ctrl+X followed by a paste
+    // moves somebody's file while they were typing a command.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("Right");
+    app.key("ctrl+x");
+    app.key("Escape");
+
+    app.key("Tab");
+    app.key("ctrl+v");
+    app.settle();
+
+    assert!(
+        app.path("src/notes.txt").exists(),
+        "Ctrl+X in the command line moved the file under the cursor"
+    );
+    assert!(!app.path("dst/notes.txt").exists());
+}
+
+#[test]
+fn ctrl_v_in_the_command_line_pastes_text_rather_than_files() {
+    // The one people meet first: pasting a path into a command used to start
+    // a file copy. The clipboard is deliberately loaded with a *file* here,
+    // so a hijacked Ctrl+V has something to copy.
+    let app = in_src_and_dst(arrange);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+    app.key("ctrl+c");
+
+    // The other pane, so a hijacked paste would land somewhere observable.
+    app.key("Tab");
+    app.key("Right");
+    app.key("ctrl+v");
+    app.settle();
+
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "Ctrl+V in the command line pasted files into the pane"
+    );
+}
+
+#[test]
+fn ctrl_a_in_the_command_line_does_not_mark_the_pane() {
+    // Not new, and not introduced by the clipboard work: Ctrl+A has meant
+    // "mark everything" since long before, so select-all has never worked in
+    // the command line. The same list fixes it.
+    let app = in_src_and_dst(arrange);
+    // Onto notes.txt, so a copy of the cursor row is one file.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("Right");
+    app.key("ctrl+a");
+    app.key("Escape");
+
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    app.await_exists("dst/notes.txt");
+    app.settle();
+
+    assert!(
+        !app.path("dst/data.bin").exists(),
+        "Ctrl+A in the command line marked the whole pane"
+    );
+}
+
+#[test]
 fn ctrl_c_then_ctrl_v_copies_into_the_other_pane() {
     // The system clipboard, not a buffer of our own — which is why this works
     // between the panes *and* with Nautilus, for the same code.

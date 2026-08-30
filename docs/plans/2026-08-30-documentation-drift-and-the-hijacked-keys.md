@@ -1,6 +1,6 @@
 # Documentation drift — and the keys the command line lost
 
-Status: Draft
+Status: In Progress
 
 The owner read `keymap.md` and found a row describing a key as doing
 something it stopped doing that morning. This is what came of pulling that

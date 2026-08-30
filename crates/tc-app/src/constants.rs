@@ -71,6 +71,28 @@ pub const MODIFIER_NAMES: [(&str, gtk::gdk::ModifierType); 3] = [
     ("alt", gtk::gdk::ModifierType::ALT_MASK),
 ];
 
+/// The shortcuts a text field owns, whatever the keymap says about them.
+///
+/// While the command line has the focus these belong to the *entry*: `Ctrl+V`
+/// pastes a path into a command, it does not start a copy. Without this list
+/// the shell dispatches any modified key the keymap claims, which was
+/// harmless only for as long as the keymap claimed nothing a text field
+/// wants — and then `Ctrl+C`, `Ctrl+X` and `Ctrl+V` were bound.
+///
+/// A **list of what a text field owns**, not a list of today's collisions.
+/// That is the difference between a fix and the same bug again the next time
+/// somebody binds a key: `Ctrl+Y` is here although nothing claims it.
+///
+/// All of them are Ctrl and nothing else, which the check relies on.
+pub const TEXT_FIELD_SHORTCUTS: [gtk::gdk::Key; 6] = [
+    gtk::gdk::Key::a, // select all
+    gtk::gdk::Key::c, // copy
+    gtk::gdk::Key::v, // paste
+    gtk::gdk::Key::x, // cut
+    gtk::gdk::Key::z, // undo
+    gtk::gdk::Key::y, // redo
+];
+
 /// What a settings file with a binding nobody can make sense of is told,
 /// once, on stderr. The rest of the table still applies.
 pub const UNKNOWN_KEY: &str = "no such key";
