@@ -296,7 +296,8 @@ included**, searching downwards and wrapping once.
 
 It is the same function the quick filter matches with. "Does this name match
 what was typed" has one answer in this program rather than two that drift —
-which is also why `.txt` and `c.z` both find `c.zip`.
+which is also why `.txt` and `c.z` both find `c.zip`. The two cost the same
+too, measured: [performance.md](performance.md).
 
 Three details are what make it usable rather than merely correct:
 

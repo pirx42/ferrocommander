@@ -97,6 +97,53 @@ filesystem. Marks cost nothing to carry because they are a `Vec<bool>` beside
 the entries, and the filter is folded into the pass that was already
 happening.
 
+## Type-ahead, and what a keystroke costs
+
+A letter no binding claims searches the rows ([listing.md](listing.md)), which
+is a case-insensitive substring match over **every visible row, on the main
+loop, on every keystroke**. At 50 000 entries that is the shape this document
+warns about, and it had no number until this was measured. Release build, best
+of twenty, four runs, no filesystem — a `Listing` built straight from entries,
+so the figure is the comparison rather than the disk.
+
+| | 50 000 entries |
+|---|---|
+| A hit a few rows down — the ordinary case | **0.2 µs** |
+| A miss: the whole view walked and wrapped | **1.2 ms** |
+| The same miss with one non-ASCII name among the 50 000 | 1.2 ms |
+| The quick filter, the same needle, for comparison | 1.1 ms |
+
+**The ordinary case is free and the worst case is affordable.** Type-ahead
+stops at the first match, so a letter that finds something costs a few
+comparisons rather than fifty thousand — three orders of magnitude between the
+two rows, and the top one is what happens when the search is working. The
+1.2 ms is what a letter matching *nothing* costs, and at a fast typist's ten
+keystrokes a second that is about 1% of the time, on a directory the document
+calls large.
+
+**The filter costs the same, which is the point.** Both run
+`contains_ignoring_case` over the same entries, and the ~0.1 ms between them is
+the filter rebuilding the view where type-ahead returns an index. "Does this
+name match what was typed" having one answer in this program is a claim about
+correctness in [listing.md](listing.md); it turns out to be a claim about cost
+too.
+
+**One non-ASCII name does not slow the other 49 999 down.** The fast path is
+chosen per comparison, not per directory, so an awkward name pays the full
+character rule and its neighbours do not. That was the design; this is the
+check.
+
+**Where it would stop being fine.** The cost is linear in the visible rows, so
+a directory ten times larger makes a fruitless keystroke 12 ms — felt. The fix
+if anybody ever meets that is to search from the cursor outwards and stop at
+the first match rather than filtering, which is already what it does; what
+would have to change is the *miss*, and the only honest way to make a miss
+cheaper is to not scan on every letter. Nothing about that is worth building
+today, and this row is what would say when it is.
+
+Reproduced with
+`cargo run --release -p tc-core --example bench_type_ahead`.
+
 ## Archives
 
 Release build, 10 000 entries plus an 8 MB member of pseudo-English (deflate

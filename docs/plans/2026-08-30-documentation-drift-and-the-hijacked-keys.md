@@ -273,8 +273,22 @@ Both new tests were probed. The drift test goes red on a stale row, a deleted
 row, and an action added in code with no row; the round trip goes red when
 `key_spec` drops its modifiers.
 
-**Phase 5 — the measurement.** Type-ahead over a large directory, into
-`performance.md`'s table, with whatever it turns out to be.
+**Phase 5 — the measurement.** **Done**, in a section of its own in
+`performance.md` and reproducible with
+`cargo run --release -p tc-core --example bench_type_ahead`.
+
+It turned out to be fine, which was the expectation and is not the point:
+**0.2 µs for a hit a few rows down, 1.2 ms for a letter that matches nothing**
+over 50 000 entries. Three orders of magnitude between the two, because the
+search stops at the first match — so the number the § 5 worry was about is the
+one that only happens when the search is failing, and at ten keystrokes a
+second it is about 1% of the time.
+
+Two things fell out that were not asked for. The quick filter costs **1.1 ms**
+on the same needle, so "one answer to *does this name match*" is a claim about
+cost as well as correctness. And one non-ASCII name among 50 000 costs the
+other 49 999 nothing, because the fast path is chosen per comparison rather
+than per directory — which was the design and is now checked.
 
 **Phase 6 — refactoring audit** (skill 49).
 
