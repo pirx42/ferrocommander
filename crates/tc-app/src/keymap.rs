@@ -236,7 +236,8 @@ const PLAIN: ModifierType = ModifierType::empty();
 /// find every key unbound.
 const RELEVANT_MODIFIERS: ModifierType = ModifierType::CONTROL_MASK
     .union(ModifierType::SHIFT_MASK)
-    .union(ModifierType::ALT_MASK);
+    .union(ModifierType::ALT_MASK)
+    .union(ModifierType::META_MASK);
 
 /// The keymap.
 static BINDINGS: &[Binding] = &[
@@ -1545,6 +1546,42 @@ mod tests {
             table.push_str(&format!("| `{name}` | {keys} |\n"));
         }
         table
+    }
+
+    #[test]
+    fn cmd_is_a_modifier_a_binding_can_carry() {
+        // The Command key, as a macOS keymap layer needs it. Before META
+        // joined RELEVANT_MODIFIERS this could parse and still never fire —
+        // the mask stripped it ahead of the lookup — so the assert on
+        // *firing* is the half that matters.
+        let (keymap, complaints) = overridden("cmd+j", "quit");
+        assert!(complaints.is_empty(), "{complaints:?}");
+        assert_eq!(
+            keymap.action_for(Key::j, ModifierType::META_MASK),
+            Some(Action::Quit),
+            "a cmd binding fires under META"
+        );
+        assert_eq!(
+            keymap.action_for(Key::j, ModifierType::CONTROL_MASK),
+            None,
+            "and not under Ctrl — cmd is not a spelling of ctrl"
+        );
+        assert_eq!(
+            keymap.action_for(Key::j, PLAIN),
+            None,
+            "nor bare — the wrong-modifier rule holds for META too"
+        );
+    }
+
+    #[test]
+    fn meta_on_an_unclaimed_key_is_still_irrelevant_noise() {
+        // META joining the relevant set must not break the other direction:
+        // a plain binding still fires when META arrives uninvited only if
+        // something *made* META relevant to that stroke — it did not, so the
+        // stroke is a different one and nothing fires. That is the same rule
+        // Ctrl already follows ("a bound key with the wrong modifier does
+        // nothing"), asserted here for the mask that just joined.
+        assert_eq!(bound(Key::F5, ModifierType::META_MASK), None);
     }
 
     #[test]

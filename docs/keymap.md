@@ -586,8 +586,10 @@ configurable keymap would otherwise make arbitrarily long
 
 **Unlisted modifiers are masked out before the lookup.** GTK reports Caps
 Lock, Num Lock and held mouse buttons alongside the real modifiers; without
-masking, a user with Caps Lock on would find every key unbound. Only Ctrl,
-Shift and Alt take part in a binding.
+masking, a user with Caps Lock on would find every key unbound. Ctrl, Shift,
+Alt and — written `cmd` in a `[keys]` line — the Command/META key take part in
+a binding; `cmd` exists for the macOS layer, and nothing binds it by default
+anywhere.
 
 **A bound key with the wrong modifier does nothing.** `Ctrl+↓` does not fall
 through to plain `↓`: it means the command history

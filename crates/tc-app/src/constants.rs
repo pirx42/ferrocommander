@@ -73,10 +73,18 @@ pub const KEYPAD_PREFIX_TITLED: &str = "Kp_";
 
 /// The modifier names a settings file may use, and the only place that
 /// mapping lives. Matched case-insensitively.
-pub const MODIFIER_NAMES: [(&str, gtk::gdk::ModifierType); 3] = [
+///
+/// `cmd` is the Command key: GTK on macOS reports it as `META_MASK`, which is
+/// why the name maps there rather than to Super. It exists so a macOS keymap
+/// layer is *expressible* — before it, `RELEVANT_MODIFIERS` masked META out
+/// ahead of the lookup and a Cmd binding could never fire, a gap found by the
+/// groundwork plan on a Linux box. On Linux the key that sends META (where
+/// any does) is a keyboard-layout question; nothing default binds it.
+pub const MODIFIER_NAMES: [(&str, gtk::gdk::ModifierType); 4] = [
     ("ctrl", gtk::gdk::ModifierType::CONTROL_MASK),
     ("shift", gtk::gdk::ModifierType::SHIFT_MASK),
     ("alt", gtk::gdk::ModifierType::ALT_MASK),
+    ("cmd", gtk::gdk::ModifierType::META_MASK),
 ];
 
 /// The shortcuts a text field owns, whatever the keymap says about them.
