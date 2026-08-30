@@ -673,6 +673,14 @@ impl PaneView {
         self.sync_cursor();
     }
 
+    /// The selection the widget keeps, so the shell can hear it move.
+    ///
+    /// Handed out for the same reason the filter bar is: the pane knows what
+    /// happened, and only the shell can reach the pane to act on it.
+    pub fn selection(&self) -> &gtk::SingleSelection {
+        &self.selection
+    }
+
     /// The field the quick filter is typed into, so the shell can wire its
     /// own key handling to it.
     pub fn filter_bar(&self) -> &gtk::Entry {

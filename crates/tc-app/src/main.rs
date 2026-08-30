@@ -144,6 +144,7 @@ fn build_window(app: &gtk::Application) {
     shell.borrow_mut().update_active();
     for index in 0..PANE_COUNT {
         wire_filter_bar(&shell, index);
+        wire_selection(&shell, index);
     }
     fill_drive_bar(&drives, &shell);
     wire_command_line(&shell);
@@ -354,6 +355,32 @@ fn wire_command_line(shell: &Rc<RefCell<Shell>>) {
         glib::Propagation::Stop
     });
     entry.add_controller(controller);
+}
+
+/// Tells the model when the *widget* moves a pane's selection.
+///
+/// A click gives the `ColumnView` a selection of its own without going
+/// through the keymap, and the model would go on believing the cursor it last
+/// set. Every other route in adopts explicitly; this is the one that cannot,
+/// because there is no route — the user simply clicked.
+///
+/// **The borrow is what tells a move of ours from a move of theirs.** The
+/// shell sets the selection itself in `sync_cursor` and churns it in
+/// `refresh`, and reading those back as intent is how a rebuild would eat the
+/// cursor. Both happen from inside a `borrow_mut`; a click does not. That was
+/// measured before it was relied on — seven model-driven emissions with the
+/// borrow held, and the click without it — and it is the same discrimination
+/// [`wire_filter_bar`] already makes for the same reason.
+fn wire_selection(shell: &Rc<RefCell<Shell>>, index: usize) {
+    let selection = shell.borrow().panes[index].selection().clone();
+    let moved = shell.clone();
+    selection.connect_selection_changed(move |_, _, _| {
+        let Ok(mut state) = moved.try_borrow_mut() else {
+            // Ours, and already in the model.
+            return;
+        };
+        state.panes[index].adopt_selection();
+    });
 }
 
 /// Connects one pane's quick-filter field: typing narrows, Escape stops,

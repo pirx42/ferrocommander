@@ -144,9 +144,15 @@ the message it was written for, which is what makes it the probe phase 2's
 first removal will be measured against. The helper's own comment carries the
 rule the test has to obey: never assert *which* row a click lands on.
 
-**Phase 1 — the handler, beside the explicit calls.** Both paths live at once,
-the suite runs unchanged, and the click test from phase 0 is the one that has
-to pass either way. Nothing is removed.
+**Phase 1 — the handler, beside the explicit calls. Done.** `wire_selection`
+sits where `wire_filter_bar` does, both paths live at once, nothing removed.
+
+**The § 4 risk did not materialise.** All 165 end-to-end tests passed
+unchanged with the handler installed — so no selection move GTK makes outside
+our borrows is being adopted as intent, at least not on any path the suite
+walks. That is the evidence phase 2 needs before it starts taking the safety
+net away, and it is worth more than the seven-row table in § 2 because it
+exercises every route rather than the five a probe happened to press.
 
 **Phase 2 — take the explicit calls out, one per commit.** `dispatch` first
 (the larger blast radius, so it gets its own gate run), then
