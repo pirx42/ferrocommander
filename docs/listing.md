@@ -255,8 +255,10 @@ size already compares it.
 **"Measured" is a flag beside the marks, not a size of zero.** An empty folder
 holds nothing, and zero is its real answer; deriving "counted" from the number
 would make the one case this feature exists to get right the one it got
-wrong. So `measured` is a `Vec<bool>` parallel to the entries, exactly as
-`selected` is.
+wrong. So `measured` is a `Vec<Option<bool>>` parallel to the entries, as
+`selected` is a `Vec<bool>` — and the two layers are both load-bearing: the
+`Option` is *whether* it was counted, and the `bool` inside is whether the
+count reached everything under it, which is what the `+` suffix reads.
 
 **A re-read forgets the sizes and keeps the marks.** The two travel together
 through `reload` and are entitled to different things: a mark is the user's

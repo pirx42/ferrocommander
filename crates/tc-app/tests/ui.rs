@@ -2050,6 +2050,87 @@ fn alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it() {
 }
 
 #[test]
+fn space_counts_the_folder_it_marks_and_the_second_does_not_cost_the_first() {
+    // Total Commander counts a folder as `Space` marks it, which is what
+    // makes the status line's marked-bytes total true — a directory's size is
+    // zero until something counts it, so marking folders reports `0 B`.
+    //
+    // The size column is not something this suite can read, so the count is
+    // observed the way the `Alt+Shift+Enter` test above observes it: through
+    // sorting by size. Uncounted, both folders are zero and tie, so the name
+    // breaks it and `big` leads. Counted, `small` is genuinely smaller.
+    //
+    // **Two folders, not one**, and that is the point: marking the second
+    // must not cancel the first one's scan, which is what the shared
+    // `abandon_background` would have done.
+    let app = App::launch(with_two_folders);
+    app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
+    await_panes_at(&app, "/src", "/dst");
+
+    // src is `..`, big, small. `Space` does not advance, so step between them.
+    app.keys(&["Home", "Down"]);
+    app.key("space");
+    app.key("Down");
+    app.key("space");
+    app.settle();
+
+    // Unmark, or F5 would act on the marks rather than on the cursor row.
+    app.key("ctrl+KP_Subtract");
+    app.key("ctrl+F6");
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.settle();
+    let landed: Vec<String> = std::fs::read_dir(app.path("dst"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        landed,
+        ["small"],
+        "the sort could not tell the folders apart, so at least one went uncounted"
+    );
+}
+
+#[test]
+fn insert_marks_a_folder_without_counting_it() {
+    // The owner's split, and Total Commander's: `Space` counts, `Insert` and
+    // `Shift+Down` only mark. `Insert` is the key you hold to sweep a run of
+    // rows, and holding it down a list of folders would start a walk per row.
+    //
+    // Read against the test above, which is the same sequence with the same
+    // assertion inverted: uncounted, the two folders tie at zero and the name
+    // breaks it, so `big` leads.
+    let app = App::launch(with_two_folders);
+    app.keys(&["Tab", "Down", "Return", "Tab", "Down", "Down", "Return"]);
+    await_panes_at(&app, "/src", "/dst");
+
+    app.keys(&["Home", "Down"]);
+    app.keys(&["Insert", "Insert"]);
+    app.settle();
+
+    app.key("ctrl+KP_Subtract");
+    app.key("ctrl+F6");
+    app.keys(&["Home", "Down"]);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.settle();
+    let landed: Vec<String> = std::fs::read_dir(app.path("dst"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        landed,
+        ["big"],
+        "Insert counted a folder; only Space is meant to"
+    );
+}
+
+#[test]
 fn a_re_read_forgets_the_counted_sizes() {
     // A re-read is a fresh answer from the filesystem, and a count carried
     // over from before it could be stale in a way nothing on screen admits.

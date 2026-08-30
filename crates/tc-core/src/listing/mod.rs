@@ -662,7 +662,12 @@ impl Listing {
     }
 
     /// The visible row holding `name`, if it is visible at all.
-    fn index_of(&self, name: &str) -> Option<usize> {
+    /// The visible row a name is on, or `None` when it is not showing.
+    ///
+    /// Public because a caller that remembers rows **by name** — the only form
+    /// that survives a sort or a re-read ([`docs/listing.md`]) — needs to ask
+    /// the listing where one is now.
+    pub fn index_of(&self, name: &str) -> Option<usize> {
         (0..self.len()).find(|&index| self.get(index).is_some_and(|entry| entry.name == name))
     }
 

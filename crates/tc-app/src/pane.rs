@@ -298,6 +298,18 @@ pub struct PaneView {
     walking: Option<CancelToken>,
     /// Stops the folder-size scan in flight, when there is one.
     measuring: Option<CancelToken>,
+    /// Folder names `Space` has asked to count, in the order it asked.
+    ///
+    /// `Space` counts the folder it marks; `Insert` and `Shift+↓` only mark
+    /// ([`docs/keymap.md`]). So the set a scan should cover is **not**
+    /// "everything marked" — it is what this one key asked for, and nothing
+    /// else in the model records that.
+    ///
+    /// Kept because a second `Space` restarts the scan: the folders already
+    /// counted are filtered out by [`Listing::is_measured`], and the ones
+    /// still owed are these. Cleared with the listing in [`Self::adopt`], a
+    /// name meaning nothing in a directory it was not typed in.
+    counting: Vec<String>,
     /// What the read in flight will do to that stack when it lands.
     ///
     /// Applied on arrival rather than when the key was pressed: opening an
@@ -306,6 +318,29 @@ pub struct PaneView {
     transition: Transition,
     /// Why the last navigation attempt failed, shown beside the path.
     error: Option<String>,
+}
+
+/// Of the folders `Space` asked to count, the ones no answer has arrived for.
+///
+/// Split out of [`PaneView::owed`] so the rule can be checked without a
+/// display server, which is the only way to check it at all: whether a second
+/// `Space` preserves an unfinished scan is a race the end-to-end suite cannot
+/// stage, because a fixture small enough to be quick finishes before the next
+/// keystroke lands.
+///
+/// A name the listing no longer shows stays owed. A filter or the hidden-file
+/// flag can hide a row while a scan runs, and the answer is still wanted — it
+/// is the *count* that was asked for, not the row.
+fn owed_from(counting: &[String], listing: &Listing) -> Vec<String> {
+    counting
+        .iter()
+        .filter(|name| {
+            listing
+                .index_of(name)
+                .is_none_or(|index| !listing.is_measured(index))
+        })
+        .cloned()
+        .collect()
 }
 
 /// How far a page key moves when `visible` rows fit on screen.
@@ -413,6 +448,7 @@ impl PaneView {
             scrolled_to: std::collections::HashMap::new(),
             walking: None,
             measuring: None,
+            counting: Vec::new(),
             transition: Transition::Stay,
             watch: None,
             watched: None,
@@ -800,7 +836,10 @@ impl PaneView {
 
     /// Puts this pane's ordering, hidden-file flag and filter onto a listing
     /// that has just been read.
-    fn adopt(&self, listing: &mut Listing) {
+    fn adopt(&mut self, listing: &mut Listing) {
+        // A different directory: the names `Space` asked to count are not in
+        // it, and `measured` is being replaced along with them.
+        self.counting.clear();
         listing.set_sort(self.shown.sort);
         if listing.show_hidden() != self.shown.show_hidden {
             listing.toggle_hidden();
@@ -842,6 +881,44 @@ impl PaneView {
     /// upwards. Marking the row being *left* rather than the one arrived at
     /// is TC's own rule, and it is what makes running back over a row take
     /// its mark off again.
+    /// `Space`: mark the row under the cursor, and count it if it is a folder.
+    ///
+    /// Total Commander's behaviour, and it is what makes the status line's
+    /// marked-bytes total true — a directory's size is zero until something
+    /// counts it, so marking folders otherwise reports `0 B`.
+    ///
+    /// Returns the folders a scan should now cover, or `None` when there is
+    /// nothing new to count: a file, the `..` row, a folder already counted,
+    /// or a press that took a mark *off* — none of which makes a total truer.
+    pub fn toggle_mark_counting(&mut self) -> Option<Vec<String>> {
+        let cursor = self.shown.listing.cursor();
+        self.toggle_mark(0);
+
+        let listing = &self.shown.listing;
+        let counts = listing.is_selected(cursor)
+            && !listing.is_parent(cursor)
+            && !listing.is_measured(cursor)
+            && listing.get(cursor).is_some_and(|entry| entry.is_dir());
+        if !counts {
+            return None;
+        }
+        let name = listing.get(cursor)?.name.clone();
+        if !self.counting.contains(&name) {
+            self.counting.push(name);
+        }
+        let owed = self.owed();
+        Some(owed)
+    }
+
+    /// The folders `Space` asked for that no answer has arrived for yet.
+    ///
+    /// A restart covers these rather than everything marked, so a folder
+    /// counted before the last press is not walked twice and a folder somebody
+    /// marked with `Insert` is not walked at all.
+    fn owed(&self) -> Vec<String> {
+        owed_from(&self.counting, &self.shown.listing)
+    }
+
     pub fn toggle_mark(&mut self, step: isize) {
         self.marking(|listing| {
             listing.toggle_selected(listing.cursor());
@@ -1283,8 +1360,7 @@ impl PaneView {
     /// they do, unlike a directory read, because nothing about the rows is in
     /// doubt — each folder simply gains a number it did not have.
     #[must_use = "the caller has to await the answers, or no size ever appears"]
-    pub fn measure_folders(&mut self) -> Option<Sizes> {
-        let folders = crate::jobs::folders_to_measure(&self.shown.listing);
+    pub fn measure_folders(&mut self, folders: Vec<String>) -> Option<Sizes> {
         if folders.is_empty() {
             return None;
         }
@@ -1811,6 +1887,50 @@ enum Transition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A folder already counted drops out; one still owed stays in.
+    ///
+    /// This is the accumulation the feature turns on: a second `Space`
+    /// restarts the scan, and it must restart over the folders that have not
+    /// answered rather than over everything or over only the newest. The
+    /// end-to-end test cannot see it — the fixtures it can afford finish
+    /// counting before the next keystroke arrives, so it passes either way,
+    /// which a probe demonstrated.
+    #[test]
+    fn a_counted_folder_is_no_longer_owed_and_an_uncounted_one_still_is() {
+        let entry = |name: &str| tc_core::vfs::Entry {
+            name: name.to_string(),
+            kind: tc_core::vfs::EntryKind::Dir,
+            size: 0,
+            modified: std::time::SystemTime::UNIX_EPOCH,
+            attributes: tc_core::vfs::Attributes::default(),
+            hidden: false,
+        };
+        let mut listing = Listing::new(
+            tc_core::vfs::VfsPath::new("/x"),
+            vec![entry("big"), entry("small")],
+        );
+        let counting = [String::from("big"), String::from("small")];
+
+        assert_eq!(
+            owed_from(&counting, &listing),
+            counting,
+            "nothing counted yet"
+        );
+
+        listing.set_measured("big", 4096, true);
+        assert_eq!(
+            owed_from(&counting, &listing),
+            ["small"],
+            "a folder that answered is still being asked for"
+        );
+
+        listing.set_measured("small", 1, true);
+        assert!(
+            owed_from(&counting, &listing).is_empty(),
+            "both answered, and something is still owed"
+        );
+    }
 
     /// A page moves a screenful less the row that carries the reader over.
     ///

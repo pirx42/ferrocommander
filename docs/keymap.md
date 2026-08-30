@@ -21,7 +21,7 @@
 | `Shift+F4` | Create a file and open it in the editor |
 | `F8`, `Delete` | Delete what is marked, to the trash |
 | `Shift+F8`, `Shift+Delete` | The same, permanently |
-| `Space` | Mark the row under the cursor |
+| `Space` | Mark the row under the cursor — and count it, if it is a folder |
 | `Insert`, `Shift+↓` | Mark it and step down |
 | `Shift+↑` | Mark it and step up |
 | `Shift+Home` / `Shift+End` | Mark from the cursor to the first / last row |
@@ -105,6 +105,25 @@ there is no third thing to learn.
 `Insert` steps down after marking so it can be held, which is how a run of
 files gets selected; `Space` leaves the cursor where it is, for picking one
 out of a list.
+
+**`Space` also counts a folder as it marks it**, and the marking keys do not.
+That split is Total Commander's and it follows from the one above: `Insert` is
+the key you *hold*, and a walk started per row while somebody sweeps a list of
+folders is work nobody asked for. `Space` is the deliberate one.
+
+The reason it counts at all is the status line. Its marked-bytes half is the
+number a person checks before pressing F5, and a directory's size is zero
+until something counts it ([vfs.md](vfs.md)) — so marking three folders used
+to report `0 B` for them, and the one question the line exists to answer was
+the one it got wrong. Counting on the way in is what makes the total true.
+
+It is the same scan `Alt+Shift+Enter` runs, with the same worker, the same
+streaming answer per folder, the same `+` for a count that was cut short and
+the same `Escape` to stop the rest. What differs is only which folders are
+asked for: `Alt+Shift+Enter` re-counts everything marked, and `Space` asks for
+the folders *it* marked that have not answered yet. A folder already counted
+is left alone — its number stands until a re-read forgets it, and
+`Alt+Shift+Enter` is still how you ask for a fresh one.
 
 **`Shift`+cursor is the same behaviour under another key.** Total Commander
 marks the row being *left* and then moves, so `Shift+↓` is `Insert` by another

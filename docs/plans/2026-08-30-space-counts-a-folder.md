@@ -1,6 +1,6 @@
 # Space counts a folder
 
-Status: Proposed
+Status: In Progress
 
 `Space` marks the row under the cursor. In Total Commander it does one more
 thing when that row is a **folder**: it counts what the folder holds,
@@ -101,13 +101,10 @@ set, because everything finished is filtered out — but it is a real cost and
 
 ## 5. Questions to answer before starting
 
-1. **Do `Insert` and `Shift+↓` count too, or only `Space`?** They mark as
-   `Space` does, and the argument in § 1 applies to them equally — the total
-   is just as wrong. Against: `Insert` is the key you *hold* to sweep a run of
-   rows, and holding it down a list of folders is exactly the burst § 3 makes
-   expensive. My understanding is that Total Commander counts on `Space` only,
-   but I have no way to check that here and will not assert it — this needs
-   somebody who can look.
+1. **Do `Insert` and `Shift+↓` count too, or only `Space`?**
+   **Answered by the owner: only `Space`.** `Insert` and `Shift+↓` mark and
+   nothing more, which is Total Commander's split and also removes the worst
+   case in § 3 — the key you *hold* is no longer the key that starts walks.
 2. **Does the count follow the cursor or the mark?** `Space` marks and counts
    the same row, so the two agree. They stop agreeing if (1) says the marking
    keys count too and somebody marks a folder while a scan is running.
@@ -122,17 +119,45 @@ set, because everything finished is filtered out — but it is a real cost and
 
 **Phase 0 — coverage pre-check** (skill 43). What holds the scan today:
 `crates/tc-core/tests/sizes.rs` pins the walk, the partial answer and the
-cancel; end to end, `alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it`
-drives the real key. **Nothing pins the status-line total for a marked
-folder**, which is the claim § 1 rests on — so that test comes first, asserting
-the lie before the fix removes it.
+cancel; end to end,
+`alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it` drives the
+real key.
+
+**The pre-check corrected the plan.** § 1 argues from the status line, and the
+first draft of this phase proposed a test pinning that total. There can be no
+such test: the status line is a GTK label, and the end-to-end suite sees window
+titles and the filesystem and nothing else
+([future-improvements.md](../future-improvements.md)). The count is observable
+only through the one thing that reacts to it — **sorting by size** — which is
+exactly how the `Alt+Shift+Enter` test above does it, and how phase 1's must.
+So this phase produces no commit of its own; it produced a correction.
 
 **Phase 1 — `Space` counts what it marks**, with (c) from § 3, and the
 documentation in the same commit (skill 28): `keymap.md`'s `Space` row and its
 folder-sizes section, and `listing.md` where the measured flag is described.
-Tests: a folder marked with `Space` reaches the status total; a second `Space`
-on another folder does not cost the first its answer; a file is unaffected;
-unmarking counts nothing.
+Tests, all observed through the sort: two folders marked with `Space` are both
+counted, which is the accumulation § 3 is about; `Insert` marks without
+counting, which is the owner's split.
+
+**Done — and the probes found that two of the three tests could not fail.**
+Removing the counting from `Space` turns the first test red, as it should. But
+*restricting the restart to only the newest folder* — the exact bug (c) exists
+to avoid — left it green, because the fixture's folders are 4 KB and 1 byte and
+the first scan finishes long before the second keystroke lands. The
+accumulation is never contended, so the end-to-end test passes either way. The
+same went for the guard that stops an *unmarking* press counting: no
+end-to-end test can see a scan that should not have started.
+
+So the rule moved where it can be checked: `owed_from` is a pure function over
+the counting list and the listing, and
+`a_counted_folder_is_no_longer_owed_and_an_uncounted_one_still_is` pins it
+headlessly. Both probes bite there — returning everything, and returning only
+the newest. The end-to-end pair keeps the user-visible outcome; the unit test
+keeps the mechanism.
+
+That is the second time in two days a test has passed for a reason other than
+the one it was written for, and both times a probe was the only thing that
+said so.
 
 **Phase 2 — the measurement** (the prime directive: a speed decision carries a
 number). What a burst of marks costs, against the restart in § 3 — marking ten

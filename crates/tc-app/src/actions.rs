@@ -82,7 +82,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::ClipboardCopy => put_on_clipboard(shell, false),
         Action::ClipboardCut => put_on_clipboard(shell, true),
         Action::ClipboardPaste => paste_from_clipboard(shell),
-        Action::ToggleMark => shell.borrow_mut().active_pane().toggle_mark(0),
+        Action::ToggleMark => toggle_mark_and_count(shell),
         Action::ToggleMarkAndAdvance => shell.borrow_mut().active_pane().toggle_mark(1),
         Action::ToggleMarkAndRetreat => shell.borrow_mut().active_pane().toggle_mark(-1),
         Action::ExtendMarkToFirst => shell.borrow_mut().active_pane().extend_mark_to(0),
@@ -351,8 +351,29 @@ pub(crate) fn start_branch_view(shell: &Rc<RefCell<Shell>>) {
 /// they finish rather than all at the pace of the slowest
 /// (`docs/listing.md`).
 pub(crate) fn start_folder_sizes(shell: &Rc<RefCell<Shell>>) {
+    let folders = {
+        let mut state = shell.borrow_mut();
+        crate::jobs::folders_to_measure(state.active_pane().listing())
+    };
+    count_folders(shell, folders);
+}
+
+/// `Space`: mark the row, and count it when it is a folder.
+///
+/// Total Commander's behaviour. `Insert` and `Shift+↓` mark without counting —
+/// they are the keys you *hold* to sweep a run of rows, and a walk per row is
+/// not what somebody sweeping wants ([`docs/keymap.md`]).
+pub(crate) fn toggle_mark_and_count(shell: &Rc<RefCell<Shell>>) {
+    let Some(folders) = shell.borrow_mut().active_pane().toggle_mark_counting() else {
+        return;
+    };
+    count_folders(shell, folders);
+}
+
+/// Starts the scan and streams its answers into the pane, one folder at a time.
+fn count_folders(shell: &Rc<RefCell<Shell>>, folders: Vec<String>) {
     let index = shell.borrow().active;
-    let Some(answers) = shell.borrow_mut().panes[index].measure_folders() else {
+    let Some(answers) = shell.borrow_mut().panes[index].measure_folders(folders) else {
         return;
     };
 
