@@ -12,6 +12,7 @@ pub trait VirtualFs: Send + Sync {
     // what this backend is
     fn store(&self) -> Store;
     fn read_only(&self) -> bool { false }
+    fn space(&self, _path: &VfsPath) -> Option<Space> { None }
     // reading
     fn read_dir(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError>;
     fn stat(&self, path: &VfsPath) -> Result<Entry, VfsError>;
@@ -33,6 +34,12 @@ pub trait VirtualFs: Send + Sync {
 reader is a promise not every backend can keep: an entry inside a compressed
 [archive](archives.md) has no cheap seek. It is what the [viewer](viewer.md)
 is built on.
+
+`space` is the free-and-total figure under each pane's status line
+([ui-shell.md](ui-shell.md)). It is asked of the **backend** rather than of a
+path, and defaults to `None`: an archive has no free space of its own, and
+reporting the disk the archive file happens to sit on would answer a question
+nobody asked.
 
 Object-safe on purpose: a pane holds a `dyn VirtualFs` and swaps it when the
 user steps into an archive, without knowing which backend answers.
@@ -66,8 +73,9 @@ second existence check in the backend would be a second answer to the same
 question.
 
 **`trash` sits on the trait rather than in the engine**, because only a
-backend knows whether its storage has such a thing. Phase 6's archives will
-not.
+backend knows whether its storage has such a thing. [Archives](archives.md)
+do not: `trash` reports `ReadOnly` there like every other mutating call, which
+is what the trait had already predicted an archive would need.
 
 ## `VfsPath`
 

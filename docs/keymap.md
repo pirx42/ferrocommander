@@ -55,7 +55,6 @@
 | `Ctrl+S` | Narrow the pane as you type |
 | `Esc` | Stop narrowing |
 | `Ctrl+Q` | Quit |
-| any unbound letter | Starts a command — see [command-line.md](command-line.md) |
 
 Activating a *file* hands it to the desktop's own handler — `xdg-open`, the
 same thing a double-click in a file manager does. `F3` still views it and `F4`
@@ -414,8 +413,9 @@ masking, a user with Caps Lock on would find every key unbound. Only Ctrl,
 Shift and Alt take part in a binding.
 
 **A bound key with the wrong modifier does nothing.** `Ctrl+↓` does not fall
-through to plain `↓` — in phase 3 it will mean something else entirely, and a
-binding that silently ignores its modifiers would make that impossible.
+through to plain `↓`: it means the command history
+([command-line.md](command-line.md)), which a binding that silently ignored
+its modifiers would have made impossible.
 
 ## Sorting
 
@@ -476,9 +476,13 @@ the pane cursor.
 `navigation.rs` answers that as pure functions over a `Listing`, so the
 decisions are testable without a window:
 
-- `activation_target` — the directory the cursor row leads into, or `None` for
-  a file. The `..` row needs no special case: it is a directory like any
-  other, and `VfsPath` normalization makes its target the parent.
+- `activation_step` — what Enter on the cursor row means, or `None` when it
+  means nothing. Three answers rather than a path: `Into` a directory on the
+  backend the pane already has, `Enter` an archive, which needs a backend of
+  its own opened over it, or `Out` of one ([archives.md](archives.md)). An
+  ordinary file is `None` — opening one is F3 or F4. The `..` row needs no
+  special case: it is a directory like any other, and `VfsPath` normalization
+  makes its target the parent.
 - `parent_target` — where `Backspace` leads, `None` at the root.
 - `focus_after_move` — which entry the cursor lands on afterwards.
 
@@ -524,9 +528,10 @@ how the harness closes the app.
 
 **What is deliberately not exercised end to end**, and why:
 
-- `Backspace`, and `Ctrl+F3`/`F4`/`F5` — covered headlessly, and reaching them
-  through a real window would say nothing the unit tests do not. (Plain `F3`
-  and `F4` left this list in phase 4, when they stopped being unbound.)
+- `Ctrl+F3`/`F4`/`F5` — covered headlessly, and reaching them through a real
+  window would say nothing the unit tests do not. (Plain `F3` and `F4` left
+  this list in phase 4, when they stopped being unbound; `Backspace` left it
+  when three tests started pressing it.)
 - The **second** drive key: `Alt+F1` and `Alt+F2` differ only in which pane
   they name, and the test that presses `Alt+F2` covers exactly that.
 - The **aliases**: `Ctrl+Num +` for `Ctrl+A`, keypad `Enter` for `Enter`,

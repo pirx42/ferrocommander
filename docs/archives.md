@@ -225,15 +225,22 @@ as no date rather than as a wrong one.
   and registering an inotify watch on one that happens to look like a real path
   would be worse than not watching. `Ctrl+R` still re-reads — from the index,
   so it will not notice the archive being replaced underneath.
-- **The command line refuses**, and so does `F4`. A path inside an archive is
-  not somewhere a process can run, and it is not a path an editor can be handed
-  either: running either against whatever that path means on the real
-  filesystem is how something meant for an archive acts on a home directory
-  instead — or creates a file on the disk when the editor saves. `F3` reads
-  through the backend and works.
+- **Everything that needs an operating-system path refuses**, with the reason
+  in a window rather than silently. There are five, and they are all the same
+  refusal: the command line, `F4`, `Enter` on an ordinary file (the desktop's
+  handler), `Ctrl+D` (a favourite is a place on the real filesystem), and
+  `Ctrl+C`/`Ctrl+X` (a `file://` URI naming an entry inside an archive would
+  name a file on the disk that merely shares the spelling —
+  [clipboard.md](clipboard.md)). Running any of them against whatever that
+  path means on the real filesystem is how something meant for an archive acts
+  on a home directory instead. `F3` reads through the backend and works, and
+  `Enter` on a *nested* archive walks into it, because neither leaves the
+  backend.
 - **Everything that writes is refused with `ReadOnly`**: `F7`, `F8`,
-  `Shift+F6`, and the target side of `F5`, `F6` or `Alt+F5`. Refused **once**,
-  before the scan, rather than once per file — a copy of a large tree into an
+  `Shift+F6`, and the target side of `F5`, `F6` or `Alt+F5`. `Ctrl+V` is
+  refused earlier still — before the clipboard is even read, since there is
+  nothing a paste into a read-only backend could turn out to be. Refused
+  **once**, before the scan, rather than once per file — a copy of a large tree into an
   archive would otherwise be a failure list with a thousand identical lines,
   which is the same as no failure list at all. The exception is a move *out
   of* an archive, whose copy half works and whose delete half is reported per

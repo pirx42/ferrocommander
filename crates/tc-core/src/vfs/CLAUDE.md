@@ -16,9 +16,13 @@ The one interface everything that touches a filesystem goes through.
 
 ## Rules that hold here
 
-- **`platform` stays private.** Only `to_std_path`, `mount_points`,
-  `render_attributes` and the two `unix_mode` bridges escape it, so no caller
-  reinvents what a separator or a permission bit is.
+- **`platform` stays private, and nothing outside `vfs/` names it.** Every
+  Linux/Windows difference — paths, attributes, hidden-ness, mounts, free
+  space, the config directory, trash errors — is reached through a function
+  here, so no caller reinvents what a separator or a permission bit is. That
+  the module has grown to fourteen such functions is the rule working, not
+  leaking: each one is a difference that would otherwise be a `cfg` somewhere
+  else.
 - **A `VfsPath` cannot be invalid.** `..` beyond the root, `.`, and empty
   components collapse in the constructor, which is what makes an archive
   unable to name a path outside itself.

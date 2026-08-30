@@ -238,10 +238,21 @@ test per key that fails without it. Ships alone.
 anything is edited, so the list is a record rather than a diff. **Done** —
 § 4a, twenty-two more findings.
 
-**Phase 3 — the contradictions.** B1–B23. Big enough now to be worth an order:
+**Phase 3 — the contradictions.** B1–B23. **Done.** Big enough to be worth an
+order:
 the four shipped-as-future sentences (B14–B17) first, since they are one edit
 each and one class; then the three stale counts (B19–B21), which want the
 measurement phase 5 takes anyway; then the rest, file by file.
+
+Two notes from doing it. **B3 needed no edit**: phase 1 had already rewritten
+that section correctly, and a paragraph explaining the old sentence was drafted
+before anybody checked whether the sentence was still there. It was removed —
+a documentation review can invent drift as easily as it finds it. And **the
+first attempt at B15 was wrong in the same direction as the bug it fixed**: the
+sentence is in the *Startup* section, where "the pane stays where it was" means
+nothing, since there is no previous directory to stay in. Startup falls back to
+the nearest readable ancestor; only navigation stays put. Both halves are now
+in the file, and the difference between them named.
 
 **Phase 4 — the gaps.** C1–C12. The action-name list is still the substantial
 one: **fifty-eight** names, and it should be **generated from `ACTION_NAMES`

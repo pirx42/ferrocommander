@@ -16,6 +16,7 @@ a script.
 | `Move { sources, destination }` | F6 | the same, and each source is removed once it has arrived |
 | `Delete { paths, mode }` | F8 / Del | `DeleteMode::Trash` or `Permanent` |
 | `CreateDir { path }` | F7 | one directory |
+| `CreateFile { path }` | Shift+F4 | one empty file, refused if the name is taken — see [keymap.md](keymap.md) |
 
 A `Destination` is either `Into(dir)` — every source keeps its own name — or
 `Exact(path)`, where one source lands at one path.
@@ -275,7 +276,7 @@ confirm the test goes red:
 | Mutation | Test that must fail |
 |---|---|
 | rollback on cancel removed | `a_cancel_never_leaves_a_truncated_file` |
-| rename fast path removed | `a_move_within_one_filesystem_reads_no_bytes` |
+| rename fast path removed | `a_move_within_one_filesystem_neither_reads_nor_walks` |
 | skip tracking removed | `a_move_that_skipped_a_file_does_not_delete_it` |
 | modification time not stamped | `a_copied_file_keeps_the_original_date` |
 | no answer means skip, not abort | `a_conflict_question_dropped_unanswered_aborts_instead_of_hanging` |

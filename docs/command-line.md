@@ -14,11 +14,16 @@ was showing"** is the one claim a command line is useless without, and the one
 no amount of looking at the screen can check. `rm *.txt` has to mean the
 pane's files.
 
-## Typing goes there on its own
+## Getting the keyboard into it
 
-A printable key that **no binding claims** starts a command instead of being
-dropped — Total Commander's feel, and the only way in from the keyboard.
-Before this, plain `a` did nothing.
+`→` from a pane, and that is the only way in from the keyboard — see
+[the section below](#getting-into-it-from-the-keyboard) for why it is a key
+rather than a letter.
+
+**Letters used to be the way in**, which is the shape the rest of this file
+was written around: a printable key no binding claimed started a command
+rather than being dropped. Type-ahead took them ([listing.md](listing.md)),
+and `→` landed first so that it could.
 
 **A modified key does not type.** `Ctrl+J` and `Alt+J` still report the letter
 J, and somebody reaching for a shortcut this program does not have meant a

@@ -180,8 +180,9 @@ it replaces is not either — same exposure, on a list of the same size
 *From:* [listing.md](listing.md).
 
 **One `stat` per entry is unavoidable** as long as the pane shows size and
-date, which is the whole point of the columns. The 12 ms floor in the table
-is names only.
+date, which is the whole point of the columns. That is what the **67 ms** of
+"reading the directory" in the table above is: one `stat` each, and it is the
+part no amount of work on this side removes.
 
 ## Marking a row does not rebuild the pane
 

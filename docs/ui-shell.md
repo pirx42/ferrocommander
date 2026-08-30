@@ -10,13 +10,26 @@ holds — those are [vfs.md](vfs.md) and [listing.md](listing.md).
 
 ```
 ApplicationWindow
-└── Paned (horizontal, 50/50)
-    ├── PaneView.root : Box(vertical)      ← left
-    │   ├── Label            .path-bar
-    │   └── ScrolledWindow
-    │       └── ColumnView   Name | Ext | Size | Date | Attr
-    └── PaneView.root : Box(vertical)      ← right
+└── Box (vertical)
+    ├── Box (horizontal)                   ← the drive bar, one button per mount
+    ├── Paned (horizontal, 50/50)
+    │   ├── PaneView.root : Box(vertical)  ← left
+    │   │   ├── Label            .path-bar
+    │   │   ├── Entry            .filter-bar   (hidden until Ctrl+S)
+    │   │   ├── ScrolledWindow
+    │   │   │   └── ColumnView   Name | Ext | Size | Date | Attr
+    │   │   └── Box (horizontal)               ← the status line
+    │   │       ├── Label        n of m selected
+    │   │       └── Label        free of total
+    │   └── PaneView.root : Box(vertical)  ← right
+    └── Box (horizontal)                   ← the command line
+        ├── Label               the prompt
+        └── Entry
 ```
+
+The window's child is the outer `Box`, not the `Paned`: the drive bar and the
+command line are siblings of the panes, so neither is squeezed by the divider
+and both span the full width.
 
 A `PaneView` owns a `Listing` and a `gio::ListStore` of `PaneEntry` objects.
 `PaneEntry` is a minimal GObject wrapping a rendered [`Row`] — GObject only
@@ -53,7 +66,7 @@ while one is open.
 | favourites | Ctrl+D | one row — and it is edited in place, see [keymap.md](keymap.md) |
 | failures | a job that could not finish everything | nothing; it reports |
 | output | a command that printed something, and the refusals inside an archive | nothing; it reports |
-| progress | a job that outlives `PROGRESS_DELAY` | cancel |
+| progress | a job that outlives `PROGRESS_DELAY` | cancel, or Background — which closes the window and leaves the job running |
 | viewer | F3 | its own keys — see [viewer.md](viewer.md) |
 | search | Alt+F7 | a result to go to — see [search.md](search.md) |
 | multi-rename | Ctrl+M | rules, and a preview of them — see [multi-rename.md](multi-rename.md) |
@@ -270,12 +283,17 @@ where a copy would land.
 
 ## Startup
 
-Both panes open at the user's home directory (`LocalFs::home_dir()`).
-Remembering the last directory is config persistence — phase 3.
+Both panes open where they were left, from the `[[panes]]` entries in
+[config.md](config.md); a pane with nothing remembered — a first run — opens
+at the user's home directory (`LocalFs::home_dir()`).
 
-A directory that cannot be read yields an **empty pane** rather than a failed
-window: one broken pane still leaves a usable program. Phase D puts the reason
-in the path bar.
+A remembered directory that cannot be read opens the **nearest ancestor that
+can** rather than failing the window — `Listing::load_nearest`, the same
+fallback a finished job uses ([listing.md](listing.md)). A pane that opened
+showing an error would strand the user on the one screen where they have not
+done anything yet. That is startup only: a directory that cannot be entered
+*while navigating* leaves the pane where it is and puts the reason in the path
+bar ([keymap.md](keymap.md)), because there the pane has somewhere to stay.
 
 ## GTK version floor
 
@@ -384,7 +402,7 @@ which opens a second window *there* and exits 0 here. A smoke run that exits
 alongside one that is already running:
 
 ```bash
-DBUS_SESSION_BUS_ADDRESS="unix:path=/nope" ./target/release/tc-app
+DBUS_SESSION_BUS_ADDRESS="unix:path=/nope" ./target/release/ferrocommander
 ```
 
 Registration fails, the app falls back to a private instance, and the only
@@ -477,12 +495,18 @@ suite went from all-green to eight failures and back between runs, always with
 apps dying at startup on a display that had just answered. A suite that fails
 randomly teaches people to ignore red, so a mutex makes them queue.
 
-The cost is the suite's whole runtime: 138 tests × about 3.2 s each, measured
-at 442 s here and 530 s on a reporter's Ubuntu desktop over four runs. It was
-"about half a minute" when that sentence was written and the suite had a
-handful of tests; nobody updated it as the suite grew fifteen-fold, and an
-outside reader measured it before we did. A number in a document is a claim
-like any other — this one is dated by its measurement now.
+The cost is the suite's whole runtime: **160 tests × about 3.3 s each,
+measured at 527 s here on 2026-08-30**. It was "about half a minute" when that
+sentence was written and the suite had a handful of tests; nobody updated it
+as the suite grew, and an outside reader measured 530 s for 138 tests before
+we did.
+
+**Dating the measurement did not keep it true.** The 138 above stood while the
+suite reached 160, in this file and in two others, each with a different
+number — which is the whole of what a documentation review is for. The
+per-test cost is the figure that holds across all of them: 3.20 s at 138,
+3.30 s at 160. Multiply it by whatever `cargo test -p tc-app --test ui`
+reports today rather than trusting the total here.
 
 Four things the harness learned the hard way, each now a check rather than a
 sleep:

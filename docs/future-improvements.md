@@ -116,12 +116,17 @@ already built with `macos_kqueue`. Three functions assume Linux specifically —
 so the macOS version is a different reader against the same filter and the
 same fixture tests.
 
-The keymap is a second *default*, not new machinery: 55 F-key bindings on a
-platform that gives F1–F12 to hardware unless the user says otherwise, and 53
-`Ctrl` bindings where a Mac user reaches for `Cmd`. The `[keys]` table
-([config.md](config.md)) already carries exactly this shape.
+The keymap is a second *default*, not new machinery. Of the **67 bindings** in
+the table, **18 use an F-key** on a platform that gives F1–F12 to hardware
+unless the user says otherwise, and **24 carry `Ctrl`** where a Mac user
+reaches for `Cmd`. The `[keys]` table ([config.md](config.md)) already carries
+exactly this shape.
 
-**The test suite is the part that decides whether this is honest.** The 117
+(The figures here were 55 and 53 until this was checked — two numbers that add
+to more than the whole keymap, under a half-day estimate resting on them. The
+estimate survives: fewer keys to re-map, not more.)
+
+**The test suite is the part that decides whether this is honest.** The 160
 end-to-end tests are this project's main defence — six of the defects in
 [reliability.md](reliability.md) were caught by them and by nothing else — and
 they drive a real binary through `Xvfb` and `xdotool`, both X11-only. macOS has
@@ -147,11 +152,18 @@ it on, and the harness number is the one to distrust.
 
 ## Testing
 
-**Two bindings have no end-to-end coverage.**
-`crates/tc-app/tests/ui.rs` drives the real binary with real key events and
-covers every binding except `Ctrl+Q` and `Backspace` — quitting would end the
-app the test is driving, and going up a directory has no filesystem effect to
-assert on. Both were verified by hand.
+**Every binding is now exercised end to end.**
+Kept as a record of a gap that closed rather than deleted, because the entry
+outlived it in both directions. `Backspace` was listed here as uncoverable —
+"going up a directory has no filesystem effect to assert on" — and it is
+pressed in three tests today, which reach the effect through what happens
+*next* in the parent directory. `Ctrl+Q` was listed as uncoverable because
+quitting would end the app under test; it is how the harness closes every one
+of the 160.
+
+Neither entry was wrong when written and both stopped being true without
+anybody noticing, which is the argument for reading the documents against the
+code rather than only writing them.
 
 *(The Page Up/Down selection-adoption path used to be listed here as needing
 "an assertion about which row the cursor is on, which the filesystem cannot

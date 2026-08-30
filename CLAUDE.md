@@ -62,10 +62,11 @@ its own shebang with `/usr/bin/env: 'bash\r'` — a failure that says nothing
 about what it is really about.
 
 The end-to-end suite (`cargo test -p tc-app --test ui`) drives the real
-binary with real key presses on a private X server and takes **about seven
-and a half minutes**: 138 tests that each start an X server and an app, one at
-a time on purpose. Measured 442 s here and 530 s on a reporter's desktop, four
-runs. Budget for it before running the gate. See
+binary with real key presses on a private X server and takes **about nine
+minutes**: 160 tests that each start an X server and an app, one at a time on
+purpose. Measured 527 s here on 2026-08-30; it costs about 3.3 s per test, so
+scale that by whatever the suite holds when you read this rather than trusting
+the total. Budget for it before running the gate. See
 [docs/ui-shell.md](docs/ui-shell.md).
 
 The full sequence must be green before every commit — see

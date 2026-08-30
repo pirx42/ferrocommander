@@ -20,6 +20,7 @@ with a plain `cargo test`.
 | `config.rs` | the settings file, read once and written as it changes |
 | `watch.rs` | noticing what another program did to a directory |
 | `glob.rs` | `*` and `?`, for the filter, the marks and the search |
+| `clipboard.rs` | the freedesktop clipboard formats — encoding and decoding only, no I/O |
 
 ## Rules that hold here
 

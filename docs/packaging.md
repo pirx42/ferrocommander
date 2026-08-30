@@ -106,9 +106,14 @@ on its own display numbers — so the outer server would have been one nothing
 connects to.
 
 **What is left unchecked** is everything that needs GitHub: whether the runner
-image has what the `apt-get` line assumes, whether `gh release delete` and
-`create` in sequence are reliable, and whether `fetch-depth: 0` really gives
-`build.rs` the commit count. Those are watched on the first real run.
+image has what the `apt-get` line assumes, and whether `fetch-depth: 0` really
+gives `build.rs` the commit count. Those were watched on the first real runs.
+
+The release step itself is no longer a question, because it stopped being a
+delete. It is `gh release create … || gh release edit …`, then
+`gh release upload --clobber`: the release is *moved* to the new commit rather
+than destroyed and rebuilt, so there is no window in which the download URL
+in the README points at nothing.
 
 ## The tag is called `rolling`, not `main`
 
