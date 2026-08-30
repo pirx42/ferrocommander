@@ -81,6 +81,11 @@ cross-references instead of duplication.
   | [field report, round one](plans/archive/2026-08-29-field-report-round-one.md) | twelve findings from the first person to *use* build 132 rather than test it: ten fixed, two withdrawn, one that did not reproduce and is recorded as not reproducing — plus the three bugs the work found in itself |
   | [documentation drift and the hijacked keys](plans/archive/2026-08-30-documentation-drift-and-the-hijacked-keys.md) | what reading every document against the code found: thirty-six findings, three of them the code being wrong — including a regression that sent `Ctrl+V` in the command line to the file copier — plus the action-name table nobody could find, now generated, and the type-ahead measurement that was owed |
 
+  **Active:**
+  [page keys in the pane](plans/2026-08-30-page-keys-in-the-pane.md) — binding
+  `Page Up`/`Page Down` as ordinary cursor keys, and the type-ahead bug that
+  found the hole in `adopt_selection`'s contract.
+
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
 
