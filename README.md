@@ -1,7 +1,7 @@
 # Ferrocommander
 
-A keyboard-centric dual-pane file manager for Linux and Windows, in the style
-of [Total Commander](https://www.ghisler.com/). Two directories side by side,
+A keyboard-centric dual-pane file manager for Linux, Windows and macOS, in
+the style of [Total Commander](https://www.ghisler.com/). Two directories side by side,
 every operation on a key, and no waiting.
 
 Built from scratch in Rust and GTK4.
@@ -65,6 +65,26 @@ line runs nothing, and the status line shows no free-space figure — and both
 are written down with the rest of it in
 [docs/windows.md](docs/windows.md).
 
+## Run on macOS (Apple Silicon)
+
+The same commit, as a zip holding an `.app`:
+
+```
+https://github.com/pirx42/ferrocommander/releases/download/rolling/ferrocommander-macos-arm64.zip
+```
+
+Unpack it, put **FerroCommander.app** wherever you like, and start it with a
+right-click (Control-click) and *Open* the first time: the app is not
+notarized with Apple, so a plain double-click on a downloaded copy is refused
+by Gatekeeper with a message that does not mention this way around it. Once
+opened that way, it opens normally ever after.
+
+Everything the app needs is inside the bundle, and deleting it removes the
+program. Honesty about the state of it: the bundle is built and
+smoke-started on a real Mac on every commit, but no person has used the app
+on macOS yet — what a first real session should look at is written down in
+[docs/future-improvements.md](docs/future-improvements.md).
+
 ## What it does
 
 | | |
@@ -107,7 +127,8 @@ with real key presses. They are not optional: without them
 is worse than no UI test.
 
 Before committing anything, `scripts/green-gate.sh` — format, lint, the
-Windows lint branch, every test, the release build, the documentation links.
+Windows and macOS lint branches, every test, the release build, the
+documentation links.
 
 ## Layout
 

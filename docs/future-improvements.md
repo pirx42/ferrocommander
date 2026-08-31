@@ -122,24 +122,24 @@ Windows rather than two.
 *From:* the first Windows test run, 2026-08-30.
 
 **macOS is wanted, to the standard a Mac user would accept.**
-Decided 2026-08-29; the groundwork done 2026-08-30
-([the plan](plans/archive/2026-08-30-macos-groundwork.md) is the record). Everything
-a Linux box could do and check is done: the gate cross-checks
-`aarch64-apple-darwin`, `platform.rs` carries the macOS branches
-(`getfsstat` mounts, `~/Library/Application Support`, `UF_HIDDEN`) with their
-rules fixture-tested here, `cmd` is an expressible modifier and the Cmd layer
-ships dormant as data, and the engine tests are target-honest. None of it has
-ever *run* on a Mac — compile-checked and fixture-tested is the same level
-the Windows branch had before its first real day, which found two gaps and a
-renderer crash no cross-check had seen.
+Decided 2026-08-29; groundwork 2026-08-30
+([plan](plans/archive/2026-08-30-macos-groundwork.md)), packaging 2026-08-31:
+the gate cross-checks `aarch64-apple-darwin`, `platform.rs` carries the macOS
+branches (`getfsstat` mounts, `~/Library/Application Support`, `UF_HIDDEN`),
+`cmd` is an expressible modifier with the Cmd layer shipped dormant as data —
+and since CI run #24 the program *runs* there: every commit builds a signed
+relocatable `.app` on an arm64 runner and starts it for twenty seconds under
+GTK's default renderer ([packaging.md](packaging.md)). What no one has done
+yet is *use* it: twenty smoke-tested seconds prove startup, mounts read and
+a window presented, not that a file manager behaves.
 
-What genuinely remains, and each needs a Mac in hand:
+What genuinely remains, and each needs a person at a Mac:
 
 | | What it is | Why it waits |
 |---|---|---|
-| the first run | review `platform.rs`'s macOS lists, the `getfsstat` reader, the `remove_file` error branch — the plan's § 5 list | asserted from documentation; only a running system confirms them |
+| the first session | review `platform.rs`'s macOS lists, the `getfsstat` reader against real external disks, the `remove_file` error branch — the groundwork plan's § 5 list | the smoke test executed this code without killing the app; only a person confirms the *answers* are right |
 | the keymap's feel | whether Cmd bindings should *move* rather than add, and what the text-field shortcuts mean under Cmd | taste, unjudgeable from here |
-| packaging | an `.app` bundle: `Contents/MacOS` layout, the GTK dylibs carried inside, the codesigning/notarization question | a bundler nobody can run is a sequence nobody can check |
+| notarization | ad-hoc signing ships today, with the right-click sentence in the bundle's README; the double-click costs an Apple Developer account and `notarytool` plumbing | not worth 99 USD/yr before real Mac users appear |
 | **the end-to-end driver** | the suite drives a real binary through `Xvfb` and `xdotool`, both X11-only; macOS wants the Accessibility API against a real GUI session | the part that decides whether a macOS release is honest, and the least certain effort here |
 
 **The open question is still GTK4 itself**, and it is a product question:
@@ -149,9 +149,11 @@ front end over the same `tc-core`, which is the one thing the crate split
 makes possible ([archives.md](archives.md) keeps the score on what the split
 is worth).
 
-*Home:* the groundwork is in; the rest starts the day a Mac does.
+*Home:* groundwork and packaging are in; the rest starts the day a person
+sits at a Mac.
 *From:* the phase 7 discussion, against the v1 scope's Linux-and-Windows
-line; groundwork per the 2026-08-30 plan.
+line; groundwork per the 2026-08-30 plan, the package per the 2026-08-31
+plan.
 
 ## Testing
 

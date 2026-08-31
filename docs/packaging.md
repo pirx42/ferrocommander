@@ -1,18 +1,18 @@
-# Packaging — the Ubuntu `.deb` and the Windows zip
+# Packaging — the Ubuntu `.deb`, the Windows zip, and the macOS app
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
 Something somebody can download and run, rebuilt on every commit to `main`.
 The audience stops being "a developer with `cargo`" and becomes "somebody with
-Ubuntu" or "somebody with Windows", which is what everything here follows
-from — including the two halves being shaped so differently, because those two
-people expect completely different things.
+Ubuntu", "somebody with Windows" or "somebody with a Mac", which is what
+everything here follows from — including the three being shaped so
+differently, because those people expect completely different things.
 
 ## The logic is in a script, not in the workflow
 
-`scripts/package-deb.sh` and `scripts/package-windows.sh` build a package each
-and check it. `.github/workflows/main.yml` installs the build dependencies and
-calls them.
+`scripts/package-deb.sh`, `scripts/package-windows.sh` and
+`scripts/package-macos.sh` build a package each and check it.
+`.github/workflows/main.yml` installs the build dependencies and calls them.
 
 **That split is the point.** A GitHub workflow can only be tested by pushing
 it — there is no local run, no probe, no green gate. So the workflow holds as
@@ -190,6 +190,78 @@ reaped still answers signal 0, so the check meant to catch the app dying would
 have reported a corpse as alive. The verdict is a number now — 124, `timeout`
 saying it had to stop the app itself — and there is nothing subtle left in it.
 
+## The macOS app: a bundle that stands alone
+
+macOS (Apple Silicon) gets a zip holding a minimal `.app` — what lands in
+`/Applications` and what Finder treats as a program — built natively on
+GitHub's arm64 runners, which are real Macs. That sentence carries more than
+it looks like: the smoke test inside `package-macos.sh` was **the first time
+ferrocommander ever ran on macOS at all** (CI run #24, 2026-08-31; the
+[plan](plans/2026-08-31-macos-package.md) is the record).
+
+| | |
+|---|---|
+| `Contents/MacOS/ferrocommander` | the launcher, and what `Info.plist` names as the executable. Its own section, below. |
+| `Contents/MacOS/ferrocommander-bin` | the binary, native `aarch64-apple-darwin`. Not stripped, for the Windows zip's reason: a first platform's crash reports are worth something only with symbols in them. |
+| `Contents/Frameworks/*.dylib` | the GTK4 runtime — forty dylibs today — found and *rewritten*, the section below. |
+| `Contents/Resources/glib-2.0/schemas/gschemas.compiled` | compiled by the script, for the same GTK-aborts-without-it reason as on Windows. |
+| `Contents/Info.plist` | the minimum Finder needs: what to run, what to call it, who it is — versioned so "Get Info" agrees with the title bar. |
+| `README.txt` | beside the `.app` in the zip: the one Gatekeeper sentence, below. |
+
+## The dylibs are derived, not written — and rewriting them is half the job
+
+The walk is the Windows one with `otool -L` for `objdump`: copy every library
+the binary imports from the Homebrew prefix, repeat over each copy's imports,
+and treat whatever falls outside the prefix as a system library every Mac has.
+An `@rpath` or `@loader_path` reference is resolved beside its referencing
+dylib and then in brew's lib directory — the real case arrived on the first
+build: libwebp naming its sibling libsharpyuv through the rpath Homebrew
+points at the package's own lib dir — and one that resolves nowhere fails the
+build loudly.
+
+Copying is only half of it, and this is where macOS differs from Windows in
+kind rather than spelling. A Windows binary imports DLLs *by name* and finds
+them beside itself; a Mach-O file records each dependency's **absolute
+path**. A bundle of copied dylibs still pointing at `/opt/homebrew/...` works
+on the machine that built it and on no other — silently, the same
+stale-bundle failure the DLL section describes, arriving through a different
+door. So every reference is rewritten to
+`@executable_path/../Frameworks/<name>` with `install_name_tool`, in the
+binary and in every copied dylib, and the standalone check re-walks the
+finished bundle and fails on any reference that still names the Homebrew
+prefix — the one miss the smoke test cannot catch, because on the build
+machine the absolute path still resolves.
+
+## The launcher, the signature, and the Gatekeeper sentence
+
+The launcher exists for the `.cmd`'s reason with a macOS cause: GLib finds
+its compiled GSettings schemas through the prefix it was built for — the
+build machine's Homebrew, not this bundle — so
+`Contents/MacOS/ferrocommander` exports `GSETTINGS_SCHEMA_DIR` into the
+bundle and `exec`s the binary. Without it, GTK aborts at startup on every
+Mac except the one that built the zip.
+
+Signing is not optional on Apple Silicon: the OS refuses unsigned Mach-O
+outright, and `install_name_tool` invalidates the ad-hoc signatures the
+linker left. So the script re-signs everything it rewrote (`codesign -s -`)
+— free, no account, and enough to *run*. What ad-hoc does not buy is
+Gatekeeper's blessing on a downloaded zip: the first start needs
+right-click → Open, which is the one sentence `README.txt` exists to say.
+Notarization (an Apple Developer account, certificate secrets, `notarytool`)
+buys the double-click and is deliberately not spent yet.
+
+## What the macOS script checks
+
+The same three as the other two, in this platform's forms: **nothing
+declared** — the re-walk above, whose FAIL means a missed rewrite, not a
+missing file; **everything is in there** — binary, launcher, plist, schemas,
+notes, by path; **it starts, and stays started** — the same
+twenty-second `timeout` verdict as Windows, through coreutils' `gtimeout`
+because stock macOS ships no `timeout` at all. Run #24 answered the one
+question nothing could answer from a distance: a GitHub macOS runner *can*
+start a GTK4 window, under GTK's default renderer — no macOS analogue of the
+`GSK_RENDERER=cairo` workaround was needed.
+
 ## The workflow, and what could be checked about it before it ran
 
 `.github/workflows/main.yml`: on a push to `main` (or by hand), Ubuntu 24.04,
@@ -270,6 +342,28 @@ delete. It is `gh release create … || gh release edit …`, then
 `gh release upload --clobber`: the release is *moved* to the new commit rather
 than destroyed and rebuilt, so there is no window in which the download URL
 in the README points at nothing.
+
+## The macOS job, and what its first four runs each taught
+
+A third job on `macos-15` — pinned, and arm64, so the build is native. After
+the gate for the Windows job's reason: the end-to-end suite is X11-only, so
+the Linux job is the only thing that verifies the commit any package is built
+from. `brew install gtk4 coreutils`, `rustup update stable`,
+`scripts/package-macos.sh`, an upload — and every line of that install step
+is a scar, not a guess:
+
+- **`rustup update stable`** because the image's installed stable lags the
+  channel, and `rust-toolchain.toml`'s `stable` resolves to what is
+  *installed* (run #19: "rustc 1.97.1 is not supported"). The third variation
+  on one lesson in three runner setups: the toolchain a job gets is decided
+  by the image, not by the toolchain file's word.
+- **`coreutils`** because it is not on the image and stock macOS has no
+  `timeout` (run #23) — caught by the script's own resolve-early guard at
+  second three rather than minute twenty.
+- The `@rpath` resolution (run #21) and a missing `mkdir` for the schemas
+  (run #22) were the script's two rounds; runs #21–#24 were iterated with
+  the workflow temporarily cut down to this one job, at the owner's
+  direction, and the cut reverted the moment it went green.
 
 ## The tag is called `rolling`, not `main`
 
