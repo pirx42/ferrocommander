@@ -34,6 +34,10 @@ cross-references instead of duplication.
 - [command-line.md](command-line.md) — the command line at the bottom: how a
   typed line is run, why `cd` is read rather than spawned, and when output is
   shown.
+- [compare.md](compare.md) — `Ctrl+Shift+C`: two files side by side with
+  the differences marked, which two files that means, the byte verdict for
+  binary and huge pairs, and the `compare_tool` setting that replaces the
+  view with a real diff tool.
 - [clipboard.md](clipboard.md) — `Ctrl+C`/`X`/`V`: why it is the system
   clipboard and never a buffer of our own, what the three formats carry, and
   what the encoding has to get right.

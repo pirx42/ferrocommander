@@ -123,6 +123,25 @@ pub fn compare(
     Ok(Comparison::Rows(rows(&left_text, &right_text)))
 }
 
+/// [`compare`] on a worker thread, answered through a channel.
+///
+/// The row path reads both files whole — up to twice the ceiling — and the
+/// prime directive does not let the main loop wait on that
+/// (`docs/performance.md`). Threads and channels live in this crate rather
+/// than the shell, per the standing rule: the shell only awaits.
+pub fn spawn(
+    left_fs: std::sync::Arc<dyn VirtualFs>,
+    left: VfsPath,
+    right_fs: std::sync::Arc<dyn VirtualFs>,
+    right: VfsPath,
+) -> async_channel::Receiver<Result<Comparison, VfsError>> {
+    let (sender, receiver) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let _ = sender.send_blocking(compare(left_fs.as_ref(), &left, right_fs.as_ref(), &right));
+    });
+    receiver
+}
+
 fn sniffs_binary(fs: &dyn VirtualFs, path: &VfsPath) -> Result<bool, VfsError> {
     Ok(fs.read_at(path, 0, SNIFF_BYTES)?.contains(&0))
 }

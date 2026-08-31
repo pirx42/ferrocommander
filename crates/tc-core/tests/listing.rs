@@ -1213,3 +1213,34 @@ mod type_ahead {
         assert_eq!(listing.find_from(0, "alpha"), None, "filtered away");
     }
 }
+
+#[test]
+fn marked_directories_do_not_count_as_files_for_a_compare_pair() {
+    let mut listing = listing();
+    // Rows: `..`, Alpha_dir, zeta_dir, a.md, b.txt, c.zip. Mark a
+    // directory and two files; only the files answer.
+    listing.set_selected(1, true); // Alpha_dir
+    listing.set_selected(3, true); // a.md
+    listing.set_selected(4, true); // b.txt
+    let files = listing.selected_file_paths();
+    assert_eq!(
+        files,
+        [
+            VfsPath::new("/home/pirx/a.md"),
+            VfsPath::new("/home/pirx/b.txt")
+        ]
+    );
+}
+
+#[test]
+fn a_namesake_is_found_only_when_it_is_a_file() {
+    let listing = listing();
+    assert_eq!(
+        listing.file_named("b.txt"),
+        Some(VfsPath::new("/home/pirx/b.txt"))
+    );
+    // A directory of the asked name is not a namesake file, and a name the
+    // listing does not show at all is nothing.
+    assert_eq!(listing.file_named("zeta_dir"), None);
+    assert_eq!(listing.file_named("missing.txt"), None);
+}

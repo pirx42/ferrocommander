@@ -53,6 +53,7 @@
 | `Ctrl+R` | Re-read the directory — see [watching.md](watching.md) |
 | `Ctrl+F3` / `Ctrl+F4` / `Ctrl+F5` / `Ctrl+F6` | Sort by name / ext / date / size |
 | `Ctrl+H` | Show or hide the dot-files |
+| `Ctrl+Shift+C` | Compare two files by content — see [compare.md](compare.md) |
 | `Ctrl+S` | Narrow the pane as you type |
 | `Esc` | Stop a running branch walk; otherwise stop narrowing |
 | `Ctrl+Q` | Quit |
@@ -584,6 +585,7 @@ the keystroke it was written from. Case and modifier order do not matter when
 | `clone_to_left` | `ctrl+Left` |
 | `exchange_panes` | `ctrl+u` |
 | `toggle_hidden` | `ctrl+h` |
+| `compare` | `ctrl+shift+c` |
 | `quit` | `ctrl+q` |
 
 <!-- /generated: action names -->

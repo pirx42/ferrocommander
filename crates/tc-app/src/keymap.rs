@@ -136,6 +136,8 @@ pub enum Action {
     ExchangePanes,
     /// Ctrl+H — show or hide the dot-files.
     ToggleHidden,
+    /// Ctrl+Shift+C — the two files side by side, or the configured tool.
+    Compare,
     Quit,
 }
 impl Action {
@@ -155,7 +157,7 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 61] = [
+    const ALL: [Action; 62] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
@@ -216,6 +218,7 @@ impl Action {
         Action::CloneToLeft,
         Action::ExchangePanes,
         Action::ToggleHidden,
+        Action::Compare,
         Action::Quit,
     ];
 }
@@ -567,6 +570,17 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::ALT_MASK,
         action: Action::SelectDriveRight,
     },
+    // The lowercase keysym, though Shift makes `C` of the pressed key:
+    // `normalize` lowercases letters on the way in for exactly this binding's
+    // sake, so the stored key is the one a user would write in `[keys]` and
+    // the round-trip through a spec string holds. One modifier above the
+    // Ctrl+C clipboard family on purpose — compare is what somebody reaching
+    // for the marked pair means next (`docs/compare.md`).
+    Binding {
+        key: Key::c,
+        modifiers: ModifierType::CONTROL_MASK.union(ModifierType::SHIFT_MASK),
+        action: Action::Compare,
+    },
     // Relative to the active pane, as in Total Commander: the arrow points at
     // the pane being *written*, so pressing it toward the pane the keyboard is
     // already in does nothing rather than guessing.
@@ -711,6 +725,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("clone_to_left", Action::CloneToLeft),
     ("exchange_panes", Action::ExchangePanes),
     ("toggle_hidden", Action::ToggleHidden),
+    ("compare", Action::Compare),
     ("quit", Action::Quit),
 ];
 
@@ -919,10 +934,16 @@ fn title_case(name: &str) -> String {
 /// only. That is a limitation of layouts on which `*` cannot be typed without
 /// Shift, not a choice — and a plain `*` that does nothing would be worse.
 fn normalize(key: Key, modifiers: ModifierType) -> (Key, ModifierType) {
-    match KEYPAD_TWINS.iter().find(|(twin, _)| *twin == key) {
-        Some((_, keypad)) => (*keypad, modifiers - ModifierType::SHIFT_MASK),
-        None => (key, modifiers),
+    if let Some((_, keypad)) = KEYPAD_TWINS.iter().find(|(twin, _)| *twin == key) {
+        return (*keypad, modifiers - ModifierType::SHIFT_MASK);
     }
+    // Shift makes `C` of a pressed `c` the way it makes `+` of `=`, and the
+    // same rule applies: the case is a fact about the keyboard, so the
+    // lookup happens on the lowercase twin — which is also the spelling a
+    // user writes in `[keys]`, so bindings and specs round-trip. The Shift
+    // itself stays, unlike the keypad's: here it is the deliberate half of
+    // `ctrl+shift+c`, not the price of typing the character.
+    (key.to_lower(), modifiers)
 }
 
 #[cfg(test)]
@@ -1081,6 +1102,11 @@ mod tests {
             (Key::u, ModifierType::CONTROL_MASK, Action::ExchangePanes),
             (Key::r, ModifierType::CONTROL_MASK, Action::Reread),
             (Key::h, ModifierType::CONTROL_MASK, Action::ToggleHidden),
+            (
+                Key::c,
+                ModifierType::CONTROL_MASK.union(ModifierType::SHIFT_MASK),
+                Action::Compare,
+            ),
             (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
             (Key::Right, PLAIN, Action::FocusCommandLine),
             (Key::c, ModifierType::CONTROL_MASK, Action::ClipboardCopy),

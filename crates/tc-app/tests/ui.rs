@@ -4495,3 +4495,105 @@ fn a_key_pressed_before_a_listing_lands_still_means_the_new_directory() {
         "it was made in the directory the pane was leaving"
     );
 }
+
+/// `arrange`, plus a namesake `notes.txt` in dst that differs in its text —
+/// the pair the compare cascade's middle arm finds.
+fn with_a_namesake(home: &Path) {
+    arrange(home);
+    std::fs::write(home.join("dst/notes.txt"), "hello from the other side").unwrap();
+}
+
+/// A home whose settings name a compare tool that records what it was given.
+///
+/// A real diff tool would open a window this suite cannot drive; a script
+/// that writes both arguments proves the tool ran, that the cascade picked
+/// the right pair, and that the `%1`/`%2` substitution put each path where
+/// its placeholder stood.
+fn with_recording_compare_tool(home: &Path) {
+    with_a_namesake(home);
+
+    let script = home.join("record-compare.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nprintf '%s|%s' \"$1\" \"$2\" > \"$(dirname \"$0\")/compared.log\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+
+    let settings = home.join(SETTINGS_FILE);
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(
+        settings,
+        format!("compare_tool = \"{} %1 %2\"\n", script.display()),
+    )
+    .unwrap();
+}
+
+#[test]
+fn ctrl_shift_c_compares_the_cursor_file_with_its_namesake() {
+    // The window is titled with both names, which is how the test finds it
+    // and how a person with several compares open tells them apart.
+    let app = in_src_and_dst(with_a_namesake);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("ctrl+shift+c");
+
+    app.focus_dialog("notes.txt ↔ notes.txt");
+    app.key("Escape");
+    app.await_dialog_closed("notes.txt ↔ notes.txt");
+    // And the keyboard is back on the rows.
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+}
+
+#[test]
+fn two_marked_files_outrank_the_namesake_as_the_pair() {
+    let app = in_src_and_dst(with_a_namesake);
+    // Mark data.bin and notes.txt; the cursor's namesake in dst must lose
+    // to the marked pair, so the title names two files from *this* pane.
+    app.keys(&["Home", "Down", "Down"]);
+    app.key("Insert");
+    app.key("Insert");
+
+    app.key("ctrl+shift+c");
+
+    app.focus_dialog("data.bin ↔ notes.txt");
+    app.key("Escape");
+    app.await_dialog_closed("data.bin ↔ notes.txt");
+}
+
+#[test]
+fn a_compare_with_nothing_to_compare_says_so() {
+    // The cursor on a directory and nothing marked names no pair. Unlike F3
+    // on a directory, silence here would read as breakage — the gesture
+    // asked about two things — so one line says what was missing.
+    let app = in_src_and_dst(arrange);
+    // `..`, then nested.
+    app.keys(&["Home", "Down"]);
+
+    app.key("ctrl+shift+c");
+
+    app.focus_dialog("Compare");
+    app.key("Escape");
+    app.await_dialog_closed("Compare");
+}
+
+#[test]
+fn a_configured_compare_tool_gets_both_paths_where_its_placeholders_stood() {
+    // The whole external contract in one press: the cascade picks the
+    // cursor file and its namesake, the settings line is read, and %1/%2
+    // become the two paths in order.
+    let app = in_src_and_dst(with_recording_compare_tool);
+    app.keys(&["Home", "Down", "Down", "Down"]);
+
+    app.key("ctrl+shift+c");
+
+    app.await_contents(
+        "compared.log",
+        &format!(
+            "{home}/src/notes.txt|{home}/dst/notes.txt",
+            home = app.home().display()
+        ),
+    );
+}

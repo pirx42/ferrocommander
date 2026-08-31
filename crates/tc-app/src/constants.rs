@@ -516,6 +516,46 @@ pub const VIEWER_HEIGHT: i32 = 700;
 /// like it failed to load.
 pub const VIEWER_EMPTY: &str = "(empty file)";
 
+/// The compare window's title: both files, so a person with several open
+/// knows which pair is which — and how the end-to-end suite finds it.
+pub const TITLE_COMPARE: &str = "{left} \u{2194} {right}";
+
+/// Sized like the viewer, for the viewer's reason: it is there to be read.
+pub const COMPARE_WIDTH: i32 = 900;
+pub const COMPARE_HEIGHT: i32 = 700;
+
+/// What the byte verdict says when the row view does not apply
+/// ([`docs/compare.md`]): the files were binary or over the engine's
+/// ceiling, and only their bytes were compared.
+pub const TITLE_COMPARE_VERDICT: &str = "Compare";
+pub const COMPARE_IDENTICAL: &str = "The two files are identical.";
+pub const COMPARE_DIFFER_AT: &str =
+    "The two files differ. The first difference is at byte {offset}.";
+
+/// What the compare key says when a pair cannot be picked: nothing under
+/// the cursor to compare, and no marked pair to fall back on.
+pub const COMPARE_NOTHING: &str = "Nothing to compare: mark two files, or put the cursor on one.";
+
+/// Why a configured compare tool refuses inside an archive — the editor's
+/// reason, one key over: the tool takes operating-system paths, and an
+/// archive entry has none.
+pub const COMPARE_IN_ARCHIVE: &str =
+    "A file in this pair is inside an archive. The compare tool needs real paths; unpack it first.";
+
+/// The tints of the compare view, one per row kind and one stronger mark
+/// for the characters inside a changed pair that actually differ.
+/// Translucent, so they read as background under either theme's text.
+pub const COMPARE_TINT_LEFT_ONLY: &str = "rgba(192, 28, 40, 0.18)";
+pub const COMPARE_TINT_RIGHT_ONLY: &str = "rgba(38, 162, 105, 0.18)";
+pub const COMPARE_TINT_CHANGED: &str = "rgba(229, 165, 10, 0.18)";
+pub const COMPARE_TINT_SPAN: &str = "rgba(229, 165, 10, 0.45)";
+
+/// The tag names inside the compare view's buffers.
+pub const TAG_LEFT_ONLY: &str = "left-only";
+pub const TAG_RIGHT_ONLY: &str = "right-only";
+pub const TAG_CHANGED: &str = "changed";
+pub const TAG_SPAN: &str = "span";
+
 /// The search dialog: what it is called, what it asks, and how it reports.
 pub const TITLE_SEARCH: &str = "Find files";
 pub const PROMPT_SEARCH_NAME: &str = "File name:";

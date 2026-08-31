@@ -23,12 +23,13 @@ use tc_core::ops::{DeleteMode, Destination, Job};
 use tc_core::vfs::{LocalFs, VfsError, VfsPath};
 
 use crate::constants::{
-    CLIPBOARD_IN_ARCHIVE, CLIPBOARD_READ_LIMIT, COMMAND_IN_ARCHIVE, EDIT_IN_ARCHIVE,
-    FAVOURITE_IN_ARCHIVE, LEFT_PANE, NEW_FILE_DEFAULT, OPEN_IN_ARCHIVE, PASTE_INTO_ARCHIVE,
-    PATTERN_DEFAULT, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK,
-    PROMPT_PATTERN, RIGHT_PANE, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE,
-    TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK,
-    TITLE_UNMARK_PATTERN,
+    CLIPBOARD_IN_ARCHIVE, CLIPBOARD_READ_LIMIT, COMMAND_IN_ARCHIVE, COMPARE_DIFFER_AT,
+    COMPARE_IDENTICAL, COMPARE_IN_ARCHIVE, COMPARE_NOTHING, EDIT_IN_ARCHIVE, FAVOURITE_IN_ARCHIVE,
+    LEFT_PANE, NEW_FILE_DEFAULT, OPEN_IN_ARCHIVE, PASTE_INTO_ARCHIVE, PATTERN_DEFAULT, PROMPT_COPY,
+    PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK, PROMPT_PATTERN, RIGHT_PANE,
+    TITLE_COMPARE, TITLE_COMPARE_VERDICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE,
+    TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT,
+    TITLE_PACK, TITLE_UNMARK_PATTERN,
 };
 use crate::jobs::Packing;
 use crate::keymap::Action;
@@ -147,6 +148,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::MultiRename => start_multi_rename(shell),
         Action::UndoRename => undo_rename(shell),
         Action::View => start_viewing(shell),
+        Action::Compare => start_compare(shell),
         Action::Edit => start_editing(shell),
         Action::CreateFile => start_create_file(shell),
         Action::Reread => shell.borrow_mut().active_pane().reread(),
@@ -826,6 +828,119 @@ pub(crate) fn start_viewing(shell: &Rc<RefCell<Shell>>) {
     dialogs::Viewer::open(&window, fs, view);
 }
 
+/// Which two files `Ctrl+Shift+C` means (`docs/compare.md`).
+///
+/// Total Commander's cascade: exactly two marked files in the active pane
+/// are the pair; otherwise the cursor file against its namesake in the
+/// other pane; otherwise cursor against cursor. Pure over paths, so every
+/// arm is a unit test rather than a fixture.
+enum ComparePair {
+    /// Both files from the active pane.
+    Marked(VfsPath, VfsPath),
+    /// Left from the active pane, right from the other.
+    AcrossPanes(VfsPath, VfsPath),
+}
+
+fn compare_pair(
+    marked: Vec<VfsPath>,
+    cursor: Option<VfsPath>,
+    namesake: Option<VfsPath>,
+    other_cursor: Option<VfsPath>,
+) -> Option<ComparePair> {
+    if let [a, b] = marked.as_slice() {
+        return Some(ComparePair::Marked(a.clone(), b.clone()));
+    }
+    let left = cursor?;
+    let right = namesake.or(other_cursor)?;
+    Some(ComparePair::AcrossPanes(left, right))
+}
+
+/// `Ctrl+Shift+C`: the pair side by side, or handed to the configured tool.
+///
+/// The setting decides the mechanism (`docs/compare.md`): a non-empty
+/// `compare_tool` *is* the compare command, and the built-in view is what
+/// an empty one means. The engine runs on a worker either way it is needed —
+/// the row path reads both files whole, and the main loop does not wait on
+/// that (`docs/performance.md`).
+pub(crate) fn start_compare(shell: &Rc<RefCell<Shell>>) {
+    let (window, left_fs, left, right_fs, right, tool, in_archive) = {
+        let state = shell.borrow();
+        let Some(window) = state.window() else {
+            return;
+        };
+        let active = &state.panes[state.active];
+        let other = &state.panes[1 - state.active];
+        let namesake = active
+            .listing()
+            .current()
+            .filter(|entry| !entry.is_dir())
+            .and_then(|entry| other.listing().file_named(&entry.name));
+        let pair = compare_pair(
+            active.listing().selected_file_paths(),
+            active.current_file(),
+            namesake,
+            other.current_file(),
+        );
+        let Some(pair) = pair else {
+            drop(state);
+            dialogs::show_output(&window, TITLE_COMPARE_VERDICT, COMPARE_NOTHING);
+            return;
+        };
+        let (left_fs, left, right_fs, right, in_archive) = match pair {
+            ComparePair::Marked(a, b) => (active.fs(), a, active.fs(), b, active.in_archive()),
+            ComparePair::AcrossPanes(l, r) => (
+                active.fs(),
+                l,
+                other.fs(),
+                r,
+                active.in_archive() || other.in_archive(),
+            ),
+        };
+        let tool = state.saved.compare_tool().map(str::to_string);
+        (window, left_fs, left, right_fs, right, tool, in_archive)
+    };
+
+    if let Some(tool) = tool {
+        // The tool takes operating-system paths, the editor's rule one key
+        // over: an archive entry has none, and a path of the same spelling
+        // would name a file on the disk that merely shares it.
+        if in_archive {
+            dialogs::show_output(&window, TITLE_COMPARE_VERDICT, COMPARE_IN_ARCHIVE);
+            return;
+        }
+        tc_core::command::run_with_paths(&tool, &left, &right);
+        return;
+    }
+
+    let title = TITLE_COMPARE
+        .replace("{left}", left.file_name().unwrap_or_default())
+        .replace("{right}", right.file_name().unwrap_or_default());
+    let receiver = tc_core::compare::spawn(left_fs, left, right_fs, right);
+    glib::spawn_future_local(async move {
+        let Ok(answer) = receiver.recv().await else {
+            return;
+        };
+        match answer {
+            Ok(tc_core::compare::Comparison::Rows(rows)) => {
+                dialogs::open_compare(&window, &title, &rows);
+            }
+            Ok(tc_core::compare::Comparison::Verdict(verdict)) => {
+                let text = match verdict {
+                    tc_core::compare::Verdict::Identical => COMPARE_IDENTICAL.to_string(),
+                    tc_core::compare::Verdict::Differ { first_difference } => {
+                        COMPARE_DIFFER_AT.replace("{offset}", &first_difference.to_string())
+                    }
+                };
+                dialogs::show_output(&window, TITLE_COMPARE_VERDICT, &text);
+            }
+            // The refusal a person understands is the one the viewer gives:
+            // the file could not be read, and the pane already said why when
+            // it happened. A second window would say it worse.
+            Err(_) => {}
+        }
+    });
+}
+
 /// `Ctrl+C` and `Ctrl+X`: put what is marked on the system clipboard.
 ///
 /// The *system* clipboard rather than a buffer of our own, and that is the
@@ -1094,4 +1209,71 @@ pub(crate) fn start_create_file(shell: &Rc<RefCell<Shell>>) {
             );
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compare_pair, ComparePair};
+    use tc_core::vfs::VfsPath;
+
+    fn p(path: &str) -> VfsPath {
+        VfsPath::new(path)
+    }
+
+    // One test per cascade arm (docs/compare.md), and one per hole a wrong
+    // priority would fall through.
+
+    #[test]
+    fn exactly_two_marked_files_are_the_pair_and_outrank_everything() {
+        let pair = compare_pair(
+            vec![p("/a"), p("/b")],
+            Some(p("/cursor")),
+            Some(p("/namesake")),
+            Some(p("/other")),
+        );
+        assert!(matches!(
+            pair,
+            Some(ComparePair::Marked(a, b)) if a == p("/a") && b == p("/b")
+        ));
+    }
+
+    #[test]
+    fn one_or_three_marked_files_are_not_a_pair_and_fall_through() {
+        for marked in [vec![p("/a")], vec![p("/a"), p("/b"), p("/c")]] {
+            let pair = compare_pair(marked, Some(p("/cursor")), Some(p("/namesake")), None);
+            assert!(matches!(
+                pair,
+                Some(ComparePair::AcrossPanes(l, r)) if l == p("/cursor") && r == p("/namesake")
+            ));
+        }
+    }
+
+    #[test]
+    fn the_namesake_outranks_the_other_panes_cursor() {
+        let pair = compare_pair(
+            Vec::new(),
+            Some(p("/cursor")),
+            Some(p("/namesake")),
+            Some(p("/other")),
+        );
+        assert!(matches!(
+            pair,
+            Some(ComparePair::AcrossPanes(_, r)) if r == p("/namesake")
+        ));
+    }
+
+    #[test]
+    fn without_a_namesake_the_other_cursor_is_the_pair() {
+        let pair = compare_pair(Vec::new(), Some(p("/cursor")), None, Some(p("/other")));
+        assert!(matches!(
+            pair,
+            Some(ComparePair::AcrossPanes(_, r)) if r == p("/other")
+        ));
+    }
+
+    #[test]
+    fn no_cursor_file_or_no_partner_is_no_pair() {
+        assert!(compare_pair(Vec::new(), None, Some(p("/namesake")), None).is_none());
+        assert!(compare_pair(Vec::new(), Some(p("/cursor")), None, None).is_none());
+    }
 }

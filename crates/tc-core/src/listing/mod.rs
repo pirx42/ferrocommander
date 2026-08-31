@@ -584,6 +584,34 @@ impl Listing {
             .collect()
     }
 
+    /// The marked entries that are files, as paths.
+    ///
+    /// What Compare by Content's marked-pair rule reads: a directory has no
+    /// content to compare, so a marked one does not count toward the pair —
+    /// and quietly narrowing to files here beats refusing the whole gesture
+    /// over a directory somebody marked for a copy earlier.
+    pub fn selected_file_paths(&self) -> Vec<VfsPath> {
+        self.view
+            .iter()
+            .filter(|&&position| self.selected[position] && !self.entries[position].is_dir())
+            .map(|&position| self.dir.child(&self.entries[position].name))
+            .collect()
+    }
+
+    /// The path of the *file* called `name`, when the listing shows one.
+    ///
+    /// A directory of that name answers `None` on purpose: the caller is
+    /// pairing files for a compare, and a namesake directory is not a
+    /// namesake file.
+    pub fn file_named(&self, name: &str) -> Option<VfsPath> {
+        self.view
+            .iter()
+            .find(|&&position| {
+                self.entries[position].name == name && !self.entries[position].is_dir()
+            })
+            .map(|&position| self.dir.child(&self.entries[position].name))
+    }
+
     /// How many rows are marked, and how many bytes they hold.
     ///
     /// What the status line under a pane shows, and what a person checks

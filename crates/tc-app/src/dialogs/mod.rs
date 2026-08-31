@@ -14,6 +14,7 @@
 //! rename redrawing a preview — are each a file, because each is a thing with
 //! a lifetime rather than a function that opens a window.
 
+mod compare;
 mod favourites;
 mod multi_rename;
 mod progress_view;
@@ -36,6 +37,7 @@ use crate::constants::{
 };
 use crate::format::failure_lines;
 
+pub use compare::open_compare;
 pub use favourites::{open as open_favourites, Hooks as FavouriteHooks};
 pub use multi_rename::MultiRename;
 pub use progress_view::ProgressView;

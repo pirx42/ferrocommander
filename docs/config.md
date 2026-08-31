@@ -108,6 +108,25 @@ registered for it — the only answer that can be right without being told, sinc
 fails in the common case rather than the rare one. Somebody wanting `vim`
 writes `x-terminal-emulator -e vim`.
 
+## `compare_tool` — what `Ctrl+Shift+C` runs instead of its own view
+
+A command line with `%1` and `%2` standing for the two files, each replaced
+by a quoted path and run the way a typed command is:
+
+```toml
+compare_tool = "meld %1 %2"
+```
+
+**Non-empty means this is the compare command**; empty means the built-in
+side-by-side view ([compare.md](compare.md)). The setting is the whole
+decision — one key, one meaning — which is why there is no second binding
+for "the other kind of compare".
+
+Placeholders rather than an appended path, unlike `editor` one section up,
+because two paths have to land in positions only the user's tool knows.
+`%1` twice is filled twice; a placeholder left out is left out; anything
+else after `%` passes through as written.
+
 ## `[columns]` — how wide each column is
 
 It holds the width of the Ext, Size, Date and Attr columns, in

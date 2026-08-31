@@ -195,7 +195,7 @@ ones unless somebody makes it not.
 
 ## What a compare by content costs
 
-The diff engine ([the compare plan](plans/2026-08-31-compare-by-content.md); its own doc arrives with the feature) was measured before anything was
+The diff engine ([compare.md](compare.md)) was measured before anything was
 built on it, on inputs chosen to be unflattering rather than typical
 (`crates/tc-core/examples/bench_compare.rs` states the layouts as part of
 the claim). Release build, 10 000 lines per side, best of five,
