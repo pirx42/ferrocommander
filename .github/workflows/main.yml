@@ -26,169 +26,12 @@ concurrency:
   group: main
   cancel-in-progress: true
 
+# TEMPORARY (owner, 2026-08-31): the gate, the Linux packaging and the
+# Windows job are removed while the macos job iterates — each of its rounds
+# was paying ~16 minutes of green gate to reach a step that fails in
+# seconds. Restore by reverting this commit once the macos job is green;
+# the macOS package plan's phase 3 tracks it.
 jobs:
-  build:
-    # Pinned, not `ubuntu-latest`. 24.04 is the oldest Ubuntu with GTK 4.14,
-    # and this needs 4.12; `latest` moves, and the day it does, the package
-    # quietly stops installing on the oldest release it supports.
-    runs-on: ubuntu-24.04
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # `build.rs` and the package version both count commits, so a
-          # shallow clone would report a build number of one.
-          fetch-depth: 0
-
-      - name: Install what the gate and the package need
-        # xvfb and xdotool are not optional garnish: without them the
-        # end-to-end suite fails by design, because a UI test that quietly
-        # skips is worse than no UI test.
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            libgtk-4-dev xvfb xdotool desktop-file-utils
-          rustup target add x86_64-pc-windows-gnu aarch64-apple-darwin
-          cargo install cargo-deb --locked
-
-      - name: Green gate
-        # fmt, clippy, the Windows and macOS clippy branches, every test including the
-        # end-to-end suite, the release build, the documentation links. A
-        # package built from an unverified commit is a package of unknown
-        # quality.
-        # No `xvfb-run` around it: the end-to-end harness starts an `Xvfb` of
-        # its own per test, on its own display numbers, so an outer server
-        # would be one nothing connects to.
-        run: ./scripts/green-gate.sh
-
-      - name: Package
-        run: ./scripts/package-deb.sh
-
-      - name: Publish the rolling build
-        env:
-          GH_TOKEN: ${{ github.token }}
-          # **Not `main`.** A tag of the same name as a branch makes every
-          # `git push origin main` fail with "src refspec main matches more
-          # than one", because git cannot tell which ref is meant. That is a
-          # foot-gun on every push for the life of the repository, in exchange
-          # for a tag name nobody reads — the URL below is what people see.
-          ROLLING_TAG: rolling
-        # One release, replaced every time, so the download URL is stable and
-        # yesterday's builds do not accumulate.
-        #
-        # **Never deleted first.** The obvious way to replace a release is to
-        # delete it and create it again, and it leaves a window — a second or
-        # two, at the very end of a long job — in which there is no release at
-        # all. `cancel-in-progress` above can fire exactly there, and then the
-        # URL in the README is a 404 until somebody commits again. Creating or
-        # editing, then clobbering the asset, is never absent; `edit --target`
-        # is what moves the tag onto this commit, which is the one thing
-        # `--clobber` alone would have left stale.
-        run: |
-          notes="Built from ${GITHUB_SHA}. Ubuntu 24.04 or later.
-
-          Install with \`sudo apt install ./ferrocommander_amd64.deb\`, which
-          pulls in the GTK 4 runtime; \`dpkg -i\` will not."
-
-          gh release create "$ROLLING_TAG" --prerelease --target "$GITHUB_SHA" \
-            --title "Latest build from main" --notes "$notes" \
-          || gh release edit "$ROLLING_TAG" --prerelease --target "$GITHUB_SHA" \
-            --title "Latest build from main" --notes "$notes"
-
-          gh release upload "$ROLLING_TAG" \
-            target/debian/ferrocommander_amd64.deb --clobber
-
-  windows:
-    # After the gate, not beside it. The gate cannot run here — the end-to-end
-    # suite drives the binary through Xvfb and xdotool, and MSYS2's GTK4 is a
-    # Win32-backend build with no X11 to point at one (`docs/windows.md`) — so
-    # the Linux job is the only thing that verifies the commit either package
-    # is built from, and a binary built from an unverified commit is a binary
-    # of unknown quality.
-    needs: build
-
-    # Pinned, for a weaker reason than `build` has. There the image decides
-    # the GTK version and `latest` moving would silently drop the oldest
-    # Ubuntu the package supports; here GTK comes from MSYS2 and the image
-    # decides almost nothing. What pinning buys is only that the ground cannot
-    # move under a toolchain this fussy without somebody choosing it.
-    runs-on: windows-2025
-
-    # Every `run` in the MINGW64 shell, so `cargo`, `gcc`, `pkgconf` and
-    # `pacman` all agree about which of the several environments on a Windows
-    # runner they are in. Getting that wrong is the failure `docs/windows.md`
-    # opens with, and it surfaces at link time rather than at install time.
-    defaults:
-      run:
-        shell: msys2 {0}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # `build.rs` and the zip's version both count commits, so a shallow
-          # clone would report a build number of one.
-          fetch-depth: 0
-
-      - name: MSYS2 with GTK4
-        # Pinned to a commit rather than to `v2`, which moves. This job holds
-        # `contents: write` on every push to the default branch, and the
-        # header above says what that makes the workflow worth to whoever
-        # compromises a dependency; a floating tag on a third-party action is
-        # precisely that door. The comment is which release the commit is, so
-        # the next person can tell an upgrade from a substitution.
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
-        with:
-          # MINGW64, never UCRT64: Rust's `x86_64-pc-windows-gnu` links
-          # msvcrt, and the `mingw-w64-x86_64-*` packages are what match it.
-          msystem: MINGW64
-          update: true
-          # So the runner's own `rustup` and `gh` stay reachable from inside
-          # this shell. Without it MSYS2 brings its own PATH and neither
-          # exists.
-          path-type: inherit
-          # `zip` is MSYS2's own package, not a mingw one — it is the
-          # archiver, not a library the build links against.
-          install: >-
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-gtk4
-            zip
-
-      - name: The gnu host toolchain
-        # The runner ships Rust with the MSVC host, which cannot link against
-        # MSYS2's GTK4. `package-windows.sh` refuses to build with the wrong
-        # host rather than letting it fail at link time, so this is what makes
-        # that check pass rather than something it merely tolerates.
-        #
-        # `set default-host`, not only `default`: `rust-toolchain.toml` pins
-        # `channel = "stable"` and outranks `rustup default`, and a bare
-        # `stable` resolves through the default host — MSVC on this runner,
-        # which is how run #17 died on the guard above. Setting the host makes
-        # the repo's own toolchain file resolve to gnu, the same state
-        # docs/windows.md's `--default-host x86_64-pc-windows-gnu` gives a
-        # dev machine.
-        run: |
-          rustup set default-host x86_64-pc-windows-gnu
-          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
-          rustup default stable-x86_64-pc-windows-gnu
-
-      - name: Package
-        # Builds, gathers the GTK4 DLLs the binary actually imports, checks
-        # the bundle is complete, and starts the app to see that it survives
-        # its first twenty seconds. All of it in the script, none of it here.
-        run: ./scripts/package-windows.sh
-
-      - name: Add it to the rolling build
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ROLLING_TAG: rolling
-        # Only an upload. The release is the `build` job's — it created it or
-        # moved it onto this commit — so there is no second `create` to race
-        # with the first, and nothing here can leave the download URL in the
-        # README pointing at nothing.
-        run: |
-          gh release upload "$ROLLING_TAG" \
-            target/windows/ferrocommander-windows-x86_64.zip --clobber
-
   macos:
     # After the gate, for the Windows job's reason: the end-to-end suite is
     # X11-only and cannot run here, so the Linux job is the only thing that
@@ -196,7 +39,6 @@ jobs:
     # first to do is run the program on macOS at all — the smoke test inside
     # the script below is the first-ever start on this OS
     # (`docs/plans/2026-08-31-macos-package.md`).
-    needs: build
 
     # Pinned, and Apple Silicon: macos-15 runners are arm64 Macs, so this is
     # a native build, not a cross one. `latest` moving would swap the OS,
