@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  linux:
     # Pinned, not `ubuntu-latest`. 24.04 is the oldest Ubuntu with GTK 4.14,
     # and this needs 4.12; `latest` moves, and the day it does, the package
     # quietly stops installing on the oldest release it supports.
@@ -87,7 +87,7 @@ jobs:
         run: |
           notes="Built from ${GITHUB_SHA}. Ubuntu 24.04 or later.
 
-          Install with \`sudo apt install ./ferrocommander_amd64.deb\`, which
+          Install with \`sudo apt install ./ferrocommander-linux-x86_64.deb\`, which
           pulls in the GTK 4 runtime; \`dpkg -i\` will not."
 
           gh release create "$ROLLING_TAG" --prerelease --target "$GITHUB_SHA" \
@@ -96,7 +96,7 @@ jobs:
             --title "Latest build from main" --notes "$notes"
 
           gh release upload "$ROLLING_TAG" \
-            target/debian/ferrocommander_amd64.deb --clobber
+            target/debian/ferrocommander-linux-x86_64.deb --clobber
 
   windows:
     # After the gate, not beside it. The gate cannot run here — the end-to-end
@@ -105,7 +105,7 @@ jobs:
     # the Linux job is the only thing that verifies the commit either package
     # is built from, and a binary built from an unverified commit is a binary
     # of unknown quality.
-    needs: build
+    needs: linux
 
     # Pinned, for a weaker reason than `build` has. There the image decides
     # the GTK version and `latest` moving would silently drop the oldest
@@ -181,7 +181,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ROLLING_TAG: rolling
-        # Only an upload. The release is the `build` job's — it created it or
+        # Only an upload. The release is the `linux` job's — it created it or
         # moved it onto this commit — so there is no second `create` to race
         # with the first, and nothing here can leave the download URL in the
         # README pointing at nothing.
@@ -196,7 +196,7 @@ jobs:
     # first to do is run the program on macOS at all — the smoke test inside
     # the script below is the first-ever start on this OS
     # (`docs/plans/2026-08-31-macos-package.md`).
-    needs: build
+    needs: linux
 
     # Pinned, and Apple Silicon: macos-15 runners are arm64 Macs, so this is
     # a native build, not a cross one. `latest` moving would swap the OS,
@@ -240,7 +240,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ROLLING_TAG: rolling
         # Only an upload, for the Windows job's reason: the release is the
-        # `build` job's, so nothing here can leave the README's URL at a 404.
+        # `linux` job's, so nothing here can leave the README's URL at a 404.
         run: |
           gh release upload "$ROLLING_TAG" \
             target/macos/ferrocommander-macos-arm64.zip --clobber

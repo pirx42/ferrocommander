@@ -11,8 +11,8 @@ Built from scratch in Rust and GTK4.
 The latest build of `main` is published as a `.deb`:
 
 ```sh
-wget -P /tmp https://github.com/pirx42/ferrocommander/releases/download/rolling/ferrocommander_amd64.deb
-sudo apt install /tmp/ferrocommander_amd64.deb
+wget -P /tmp https://github.com/pirx42/ferrocommander/releases/download/rolling/ferrocommander-linux-x86_64.deb
+sudo apt install /tmp/ferrocommander-linux-x86_64.deb
 ```
 
 `/tmp` rather than the directory you happen to be in, because Ubuntu creates

@@ -297,7 +297,7 @@ A second job on `windows-2025`: MSYS2 with the MINGW64 toolchain and GTK4, the
 
 Three choices in it are not obvious:
 
-- **`needs: build`, so it runs after the gate rather than beside it.** The
+- **`needs: linux`, so it runs after the gate rather than beside it.** The
   gate cannot run on Windows — the end-to-end suite drives the binary through
   `Xvfb` and `xdotool`, and MSYS2's GTK4 is a Win32-backend build with no X11
   backend to point at one ([windows.md](windows.md)) — so the Linux job is the
@@ -385,7 +385,10 @@ in the asset's own filename, and Debian convention puts the version there,
 which would change the URL on every build.
 
 So `package-deb.sh` hard-links the built package to
-`ferrocommander_amd64.deb`, and that is what gets uploaded. It costs nothing,
+`ferrocommander-linux-x86_64.deb`, and that is what gets uploaded — the
+platform spelled the way its two siblings spell theirs, `-windows-x86_64`
+and `-macos-arm64`, so the three download URLs differ only where the
+platforms do. It costs nothing,
 and nothing is lost: the version was never in the filename to begin with, it
 is in the package, where `dpkg -I` and `apt show` read it.
 

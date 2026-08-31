@@ -45,7 +45,7 @@ cargo deb --package tc-app --no-build --deb-version "$version" --output "$deb"
 # there, which would make the URL change on every build. A hard link costs
 # nothing and gives both: `dpkg -I` still reports the version, because the
 # version was never in the filename to begin with.
-stable=target/debian/ferrocommander_amd64.deb
+stable=target/debian/ferrocommander-linux-x86_64.deb
 ln -f "$deb" "$stable"
 
 echo "=== checking what was built"
