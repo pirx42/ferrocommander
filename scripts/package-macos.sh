@@ -187,6 +187,7 @@ codesign --force -s - "$app/Contents/MacOS/$BIN"
 # the schemas are missing. Compiled here rather than copied, for the .deb
 # script's reason: one code path that is always right, instead of a copy
 # that depends on a package post-install hook having run.
+mkdir -p "$app/$(dirname "$SCHEMAS")"
 glib-compile-schemas "$brew_prefix/share/glib-2.0/schemas" \
     --targetdir "$app/$(dirname "$SCHEMAS")"
 
