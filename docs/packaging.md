@@ -197,7 +197,7 @@ macOS (Apple Silicon) gets a zip holding a minimal `.app` — what lands in
 GitHub's arm64 runners, which are real Macs. That sentence carries more than
 it looks like: the smoke test inside `package-macos.sh` was **the first time
 ferrocommander ever ran on macOS at all** (CI run #24, 2026-08-31; the
-[plan](plans/2026-08-31-macos-package.md) is the record).
+[plan](plans/archive/2026-08-31-macos-package.md) is the record).
 
 | | |
 |---|---|

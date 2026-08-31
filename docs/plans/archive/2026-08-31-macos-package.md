@@ -1,10 +1,12 @@
 # A macOS package (Apple Silicon), built and checked on every commit
 
-Status: In Progress — decisions 1–3 settled by the owner, 2026-08-31
+Status: Implemented + substance extracted to packaging.md — commits de4e72b
+(script + job), a32591e/d7c101d/b84c3c2/c14719d (the four runner rounds),
+5d75a00 (trim revert), 66d0abf (docs); archived 2026-08-31
 
 The third and last platform job: what `package-windows.sh` and the `windows`
 job did for Windows, done for macOS on GitHub's arm64 runners. The macOS
-groundwork ([2026-08-30 plan](archive/2026-08-30-macos-groundwork.md))
+groundwork ([2026-08-30 plan](2026-08-30-macos-groundwork.md))
 stopped at "everything possible without a Mac"; a `macos-15` runner **is** a
 Mac, so this plan is also the first time ferrocommander will ever run on one.
 The smoke test alone retires the biggest unknown on the groundwork plan's § 5
@@ -161,3 +163,67 @@ queue, not by the writing.
 - macOS runners are 10× minutes on private repos; this repo is public, where
   they are free. If the repo ever goes private, the macos job is the first
   thing that gets expensive.
+
+## 6. Outcome
+
+Green on CI run #24, 2026-08-31, about seven hours after the plan was
+written. The smoke test in that run was the first time ferrocommander ever
+ran on macOS, and it survived its twenty seconds under GTK's **default**
+renderer — the WindowServer coin-flip landed heads, and no macOS analogue of
+the Windows `GSK_RENDERER=cairo` workaround exists to be needed. The zip:
+46 files, 29 MB, uploaded to the rolling release beside the .deb and the
+Windows zip. The durable substance — bundle anatomy, the rewrite argument,
+the signing story, the job's scars — lives in packaging.md.
+
+Phase 3 took four runner rounds, each a one-log diagnosis:
+
+1. **#19** — the image's installed stable Rust lags the channel, and
+   `rust-toolchain.toml`'s `stable` resolves to what is installed
+   (`rustup update stable`). The third variation in three runner setups of
+   one lesson: the image decides the toolchain, not the toolchain file.
+2. **#21** — the pre-named @rpath suspect arrived in the flesh: libwebp
+   naming its sibling libsharpyuv through Homebrew's own-lib-dir rpath.
+   The loud-FAIL guard became the resolution it was holding the door for,
+   and the walk switched to queuing original paths so a reference can be
+   resolved beside its referencer.
+3. **#22** — a missing `mkdir` the Windows script has and the translation
+   dropped. The round that cost the least and indicts the most: the hard
+   parts were designed and the trivial part was transcribed.
+4. **#23** — coreutils is not on the image; the script's own resolve-early
+   guard caught the wrong assumption at second three instead of minute
+   twenty, exactly as designed.
+
+Between rounds one and two the owner cut the workflow down to the macos job
+alone (eddb718, reverted in 5d75a00 the moment the job went green) — each
+round then cost ~4 minutes instead of ~20. Worth adopting deliberately next
+time a new platform job iterates, rather than arriving at it after paying
+the gate twice.
+
+### What the phase 5 audit read, and left alone
+
+The three packaging scripts as one diff. Two duplications inspected and
+kept, both on `check-page-scroll.sh`'s precedent — the scripts are read one
+at a time, and what the copies share is reasoning their comments already
+carry:
+
+- The **smoke test** (timeout, status 124 the only pass, the log shown but
+  not fatal) exists in the Windows and macOS scripts. A shared helper would
+  have to abstract the command (`timeout` vs resolved `gtimeout`), the
+  environment (`GSK_RENDERER` vs nothing), and what is being started (bare
+  exe vs launcher) — more shape than the duplication costs.
+- The **breadth-first walk** exists twice with materially different bodies:
+  name-based DLL lookup against one directory versus path resolution with
+  rewrite bookkeeping. The loop skeleton is the only shared part.
+
+`SMOKE_SECONDS = 20` is stated in both scripts; each names it and says why.
+Centralizing one number across scripts that share no other file was judged
+more coupling than the constant is worth (skill 17 centralizes *per
+subsystem*, and each script is deliberately its own readable unit).
+
+### What would still make this wrong, kept honest
+
+The bundle has run only on the machine that built it. The standalone check
+is what stands between a missed rewrite and a zip that only works there —
+it is static, it caught nothing yet, and its first real test is the first
+person who unzips the download on a Mac that never had Homebrew. That
+person's session is the top row of future-improvements.md's macOS table.

@@ -89,6 +89,7 @@ cross-references instead of duplication.
   | [adoption without remembering](plans/archive/2026-08-30-adoption-without-remembering.md) | `adopt_selection` became a signal instead of a call somebody has to know to make — no live bug behind it, only a rule that had been kept perfectly and failed anyway twice in a week; plus the test that stopped covering its subject without going red |
   | [space counts a folder](plans/archive/2026-08-30-space-counts-a-folder.md) | Total Commander's `Space`, which counts a folder as it marks it, so the status line's marked-bytes total stops reading `0 B` — plus two benchmarks that flattered themselves, and the stall the second one hid |
   | [macOS groundwork](plans/archive/2026-08-30-macos-groundwork.md) | every part of the macOS port a Linux box can do and check — the gate's aarch64 cross-check, the platform branches with their rules fixture-tested here, `cmd` made expressible and the layer shipped dormant as data — plus the trash suite that would have emptied fixtures into a real Mac's bin |
+  | [a macOS package](plans/archive/2026-08-31-macos-package.md) | the third platform job: a signed, relocatable `.app` built natively on CI's arm64 Macs — whose smoke test was the first time the program ever ran on macOS — plus the four one-log runner rounds it took, and the trimmed-workflow iteration trick worth adopting on purpose next time |
 
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
