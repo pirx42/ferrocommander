@@ -84,11 +84,14 @@ cp "target/release/ferrocommander" "$app/Contents/MacOS/$BIN"
 # and nowhere else.
 #
 # A dependency outside the Homebrew prefix is a system library — /usr/lib,
-# the OS frameworks — which every Mac has and none may ship. One that is
-# neither absolute nor already rewritten (@rpath, @loader_path) is a FAIL,
-# not a skip: resolving those needs the binary's rpath list, no Homebrew
-# library has needed it yet, and the first one that does should stop the
-# build and say so rather than ship a bundle missing it.
+# the OS frameworks — which every Mac has and none may ship. An @rpath or
+# @loader_path reference is resolved against the *referencing dylib's own
+# directory*, then Homebrew's lib directory: run #21 met the real case,
+# libwebp naming its sibling libsharpyuv through the rpath Homebrew points
+# at the package's own lib dir. That is why the walk queues the dylibs'
+# ORIGINAL paths rather than the staged copies — a copy in Frameworks no
+# longer knows the directory its siblings live in. One that resolves
+# nowhere is still a FAIL, not a skip.
 # `[[:space:]]` and not `\t`: BSD sed reads `\t` as a literal t, which would
 # make this match nothing and the walk ship a binary with no dylibs at all —
 # caught by the standalone check, but better not written. The header line
@@ -97,25 +100,46 @@ imports() {
     otool -L "$1" | sed -n 's/^[[:space:]]*\([^ ]*\) (.*$/\1/p'
 }
 
+# Where a reference actually points: absolute ones answer for themselves,
+# @-relative ones are looked for beside their referencer and then in brew's
+# lib. Empty answer = nowhere, and the caller fails loudly.
+resolve() {
+    local dep=$1 refdir=$2 name candidate
+    case "$dep" in
+        @rpath/* | @loader_path/*)
+            name="${dep#@*/}"
+            for candidate in "$refdir/$name" "$brew_prefix/lib/$name"; do
+                if [ -f "$candidate" ]; then
+                    echo "$candidate"
+                    return
+                fi
+            done
+            ;;
+        *)
+            echo "$dep"
+            ;;
+    esac
+}
+
 queue=("$app/Contents/MacOS/$BIN")
 next=0
 while [ "$next" -lt "${#queue[@]}" ]; do
     file="${queue[$next]}"
     next=$((next + 1))
     while read -r dep; do
-        case "$dep" in
+        resolved=$(resolve "$dep" "$(dirname "$file")")
+        case "$resolved" in
             "$brew_prefix"/*)
-                base=$(basename "$dep")
+                base=$(basename "$resolved")
                 if [ ! -f "$app/Contents/Frameworks/$base" ]; then
-                    cp "$dep" "$app/Contents/Frameworks/$base"
+                    cp "$resolved" "$app/Contents/Frameworks/$base"
                     chmod u+w "$app/Contents/Frameworks/$base"
-                    queue+=("$app/Contents/Frameworks/$base")
+                    queue+=("$resolved")
                 fi
                 ;;
             /*) ;; # a system library: every Mac has it, none may ship it
-            *)
-                echo "FAIL: $file wants '$dep', which is not a path this" >&2
-                echo "      walk can resolve; see the plan's @rpath note." >&2
+            "")
+                echo "FAIL: $file wants '$dep', which resolves nowhere" >&2
                 exit 1
                 ;;
         esac
@@ -132,7 +156,7 @@ rewrite() {
     local file=$1
     while read -r dep; do
         case "$dep" in
-            "$brew_prefix"/*)
+            "$brew_prefix"/* | @rpath/* | @loader_path/*)
                 install_name_tool -change "$dep" \
                     "@executable_path/../Frameworks/$(basename "$dep")" "$file"
                 ;;
@@ -229,7 +253,7 @@ missing=()
 for file in "$app/Contents/MacOS/$BIN" "$app/Contents/Frameworks/"*.dylib; do
     while read -r dep; do
         case "$dep" in
-            "$brew_prefix"/*)
+            "$brew_prefix"/* | @rpath/* | @loader_path/*)
                 missing+=("$dep (not rewritten, in $(basename "$file"))")
                 ;;
             @executable_path/../Frameworks/*)
