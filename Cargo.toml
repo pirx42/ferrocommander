@@ -69,6 +69,13 @@ trash = { version = "5", default-features = false, features = ["coinit_apartment
 # borrowing an archive handle behind a mutex — which a VirtualFs handed to a
 # worker thread cannot be.
 zip = { version = "8", default-features = false, features = ["deflate"] }
+# The line diff behind Compare by Content (docs/compare.md). A diff is a
+# solved problem with sharp corners — Myers with heuristics, tuned over
+# years — and hand-rolling one trades reliability for nothing the prime
+# directive wants; what it wants is a measurement, which
+# `examples/bench_compare.rs` provides. `text` only: the default features
+# pull inline-diff and unicode helpers this module does its own way.
+similar = { version = "3", default-features = false, features = ["text"] }
 # The deflate decoder those readers are built on, and the CRC that checks
 # them. Also what a `.tar.gz` is unwrapped with.
 flate2 = "1"

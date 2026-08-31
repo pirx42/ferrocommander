@@ -17,6 +17,7 @@ with a plain `cargo test`.
 | `rename.rs` | the multi-rename rules — pure, so the preview *is* the rename |
 | `viewer.rs` | what `F3` shows, built on `read_at` and nothing else |
 | `command.rs` | running a command line, and opening an editor |
+| `compare.rs` | two files as paired diff rows, or a byte verdict — compare by content |
 | `config.rs` | the settings file, read once and written as it changes |
 | `watch.rs` | noticing what another program did to a directory |
 | `glob.rs` | `*` and `?`, for the filter, the marks and the search |

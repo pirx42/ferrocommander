@@ -193,6 +193,31 @@ listing, where a forward scan finds them at once. Moving them to the end is
 what showed the cost. A benchmark that picks its own inputs will pick flattering
 ones unless somebody makes it not.
 
+## What a compare by content costs
+
+The diff engine ([the compare plan](plans/2026-08-31-compare-by-content.md); its own doc arrives with the feature) was measured before anything was
+built on it, on inputs chosen to be unflattering rather than typical
+(`crates/tc-core/examples/bench_compare.rs` states the layouts as part of
+the claim). Release build, 10 000 lines per side, best of five,
+2026-08-31 on this machine:
+
+| Input | Time |
+|---|---|
+| identical files | 2.25 ms |
+| no line in common — the line diff's worst case | 42.84 ms |
+| 1 000 long lines, each changed at its far end — the intra-line pass's worst case | 2.61 ms |
+| one line in a hundred changed — the shape a person actually compares | 3.43 ms |
+
+The number that mattered was the second: Myers is quadratic-ish in the
+change size, and 43 ms for two files with *nothing* in common is the cost
+of the pathological case, not of use. The intra-line refinement stays cheap
+because it runs only on line pairs the line diff already put opposite each
+other — the design's whole argument, and the measurement that pins it.
+
+Files over the module's 64 MiB ceiling never reach any of this: they get a
+streaming byte verdict in constant memory, which is where the viewer's
+never-read-the-file rule hands over to the diff's need to hold both files.
+
 ## Archives
 
 Release build, 10 000 entries plus an 8 MB member of pseudo-English (deflate

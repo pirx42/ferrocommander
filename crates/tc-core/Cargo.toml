@@ -12,6 +12,7 @@ async-channel.workspace = true
 flate2.workspace = true
 notify.workspace = true
 serde.workspace = true
+similar.workspace = true
 tar.workspace = true
 toml.workspace = true
 toml_edit.workspace = true
