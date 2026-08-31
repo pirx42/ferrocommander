@@ -1,6 +1,6 @@
 # Compare by content: a side-by-side diff, and the door to a better one
 
-Status: Draft — §2's decisions are open
+Status: Draft — decisions 1–4 settled by the owner, 2026-08-31
 
 Total Commander's *Compare by Content*, in this project's shape: pick two
 files, see their lines side by side with the differences marked — and when
@@ -49,12 +49,14 @@ because anyone who outgrows it writes one config line.
    decides. Alternative: two separate actions (internal and external),
    which costs a second binding and a second table row for a distinction
    the setting already expresses.
-4. **How simple is the internal view.** Recommended: line-level only —
-   side-by-side, synchronized scrolling, changed/added/removed tinted,
-   `n`/`p` jumping between difference blocks, `Esc` closes, read-only.
-   No intra-line character highlighting in v1; it is the first thing the
-   external hook out-classes anyway. Alternative: intra-line highlights
-   now, at real extra cost in both engine and rendering.
+4. **How simple is the internal view.** The owner chose the fuller one,
+   against the plan's line-level recommendation: **intra-line highlights in
+   v1**. Side-by-side, synchronized scrolling, changed/added/removed tinted,
+   `n`/`p` between difference blocks, `Esc` closes, read-only — and inside
+   each `Changed` row pair, the character ranges that actually differ carry
+   a stronger mark than the line tint. The cost lands in two places the
+   phases below now budget for: the engine's `Changed` rows carry span
+   lists, and the window paints ranges rather than whole lines.
 
 ## 3. Design points that are technical rather than owner decisions
 
@@ -93,10 +95,18 @@ seam is already pinned; the new code brings its own.
 **Phase 1 — the engine** (`crates/tc-core/src/compare.rs`). Read both
 files via VFS; detect binary/oversize and answer with the verdict variant;
 otherwise produce paired rows (`Same`, `Changed`, `LeftOnly`, `RightOnly`)
-from `similar`. Unit tests on the skill-52 invariant that matters: **each
+from `similar` — and for each `Changed` pair, the differing character spans
+per side (decision 4), from a second, char-level pass over just that pair,
+so the expensive refinement runs only on lines already known to differ.
+Spans are byte ranges into the row's own text, aligned to `char`
+boundaries, so the window can hand them to a text buffer unexamined. Unit
+tests on the skill-52 invariant that matters: **each
 side's rows, with the other side's insertions dropped, reconstruct that
-side's file exactly** — a diff that loses or invents a line fails loudly.
-Benchmarks with stated worst-case layouts (skill 74); numbers to
+side's file exactly** — a diff that loses or invents a line fails loudly — and its intra-line sibling: **a `Changed` row's two texts
+with their differing spans deleted are equal**, so a span list that misses
+or invents a difference fails the same way. Benchmarks with stated
+worst-case layouts (skill 74), now including the intra-line worst case —
+many long changed lines differing at their far ends; numbers to
 performance.md in the same commit.
 
 **Phase 2 — the setting and the substitution.** `compare_tool` in
@@ -115,7 +125,8 @@ or the internal window. Directories refuse the way `F3` does.
 
 **Phase 4 — the window** (`dialogs/compare.rs`). Two read-only text views
 in one scrolled pair, one shared vertical adjustment so the sync cannot
-drift, row tints from the engine's row kinds, `n`/`p`/`Esc`. End-to-end:
+drift, row tints from the engine's row kinds, the intra-line spans as
+stronger tags over the tint (decision 4), `n`/`p`/`Esc`. End-to-end:
 open on two fixture files that differ in a known line, assert the window
 title carries both names; press `Esc`, assert it is gone; press the key on
 a directory, assert the refusal. The e2e suite grows by ~3 tests ≈ 10 s.
@@ -136,14 +147,14 @@ Corrected per skill 45 (feature plan; the last plans ran at ~0.10):
 | Phase | Raw | Corrected |
 |---|---|---|
 | 0 | 0.25 d | 0.25 h |
-| 1 engine | 1.5 d | 1.5 h |
+| 1 engine | 2 d | 2 h |
 | 2 setting | 0.5 d | 0.5 h |
 | 3 action | 0.5 d | 0.5 h |
-| 4 window | 2 d | 2 h |
+| 4 window | 2.5 d | 2.5 h |
 | 5 docs | 0.5 d | 0.5 h |
 | 6 audit | 0.5 d | 0.5 h |
 
-About six hours of work, plus a full-gate run (~14 min) per phase commit.
+About seven hours of work, plus a full-gate run (~14 min) per phase commit.
 
 ## 6. What would make this wrong
 
@@ -155,6 +166,10 @@ About six hours of work, plus a full-gate run (~14 min) per phase commit.
   is built on it; the plan names the seam a replacement would use.
 - **The marked-pair cascade** reads Total Commander behaviour from memory
   and the owner's; decision 2 is where that gets confirmed or corrected.
-- The e2e suite cannot see *colors*, so the tint mapping gets a unit test
-  on the row-kind mapping rather than a screenshot assertion — the same
-  line ui-shell.md already draws for the outline cursor.
+- The e2e suite cannot see *colors*, so the tint mapping and the span
+  tagging get unit tests on the mapping rather than screenshot assertions —
+  the same line ui-shell.md already draws for the outline cursor.
+- **Intra-line spans meet multi-byte text**: a span cut through a UTF-8
+  sequence panics in a GTK buffer. The engine aligns spans to `char`
+  boundaries by construction and a unit test feeds it text where every
+  interesting boundary is multi-byte.
