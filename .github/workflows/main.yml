@@ -47,11 +47,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             libgtk-4-dev xvfb xdotool desktop-file-utils
-          rustup target add x86_64-pc-windows-gnu
+          rustup target add x86_64-pc-windows-gnu aarch64-apple-darwin
           cargo install cargo-deb --locked
 
       - name: Green gate
-        # fmt, clippy, the Windows clippy branch, every test including the
+        # fmt, clippy, the Windows and macOS clippy branches, every test including the
         # end-to-end suite, the release build, the documentation links. A
         # package built from an unverified commit is a package of unknown
         # quality.
