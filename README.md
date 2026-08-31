@@ -41,6 +41,30 @@ Not called `main`: a tag with the same name as a branch makes `git push
 origin main` fail with "src refspec main matches more than one", because git
 cannot tell which of the two is meant.
 
+## Run on Windows
+
+The same commit, as a zip that unpacks into one folder:
+
+```
+https://github.com/pirx42/ferrocommander/releases/download/rolling/ferrocommander-windows-x86_64.zip
+```
+
+Unpack it anywhere and run **`ferrocommander.cmd`** — not the `.exe` beside
+it. The `.cmd` sets one environment variable the app needs in order to start
+at all; started directly, the `.exe` exits after about six seconds without
+ever presenting a window ([docs/ui-shell.md](docs/ui-shell.md) § *The renderer
+on Windows*).
+
+Nothing is installed. Everything GTK needs is in the folder, there is no
+runtime to fetch first, and deleting the folder removes the program. The one
+thing written outside it is the settings file, at
+`%APPDATA%\ferrocommander\config.toml`.
+
+Built and run on Windows 11. Two things do not work there yet — the command
+line runs nothing, and the status line shows no free-space figure — and both
+are written down with the rest of it in
+[docs/windows.md](docs/windows.md).
+
 ## What it does
 
 | | |

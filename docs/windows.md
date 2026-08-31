@@ -114,6 +114,32 @@ $env:GSK_RENDERER = "cairo"
 Why this is not simply "Vulkan is broken here", and what would be needed to
 settle it: [ui-shell.md](ui-shell.md) § *The renderer on Windows*.
 
+## Packaging it for somebody else
+
+`scripts/package-windows.sh`, from a MINGW64 shell. It builds, gathers the
+GTK4 DLLs the binary actually imports, compiles the GSettings schemas without
+which GTK aborts at startup, writes the launcher that sets the renderer,
+checks the bundle is complete, starts the app to see that it survives its
+first twenty seconds, and zips what is left.
+
+It needs one package beyond the toolchain above, and needs it only for this:
+
+```powershell
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --needed --noconfirm zip"
+```
+
+MSYS2's own `zip` rather than a `mingw-w64-x86_64-` one — it is the archiver,
+not something the build links against.
+
+The script checks the active Rust toolchain before it starts, and refuses on
+the MSVC host rather than letting it fail at link time, which is the failure
+this file opens with. The same script runs on every commit to `main` from a
+`windows-2025` runner, and its output is published beside the `.deb`.
+
+What the bundle holds, why it holds so little of what a GTK bundle usually
+holds, and why there is a `.cmd` beside the `.exe`:
+[packaging.md](packaging.md).
+
 ## What passes, and what does not
 
 `cargo test -p tc-core --no-fail-fast` — the `--no-fail-fast` matters, because

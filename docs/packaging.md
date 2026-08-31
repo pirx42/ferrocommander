@@ -1,21 +1,30 @@
-# Packaging — the Ubuntu `.deb`
+# Packaging — the Ubuntu `.deb` and the Windows zip
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
-A package somebody can download and install, rebuilt on every commit to
-`main`. The audience stops being "a developer with `cargo`" and becomes
-"somebody with Ubuntu", which is what everything here follows from.
+Something somebody can download and run, rebuilt on every commit to `main`.
+The audience stops being "a developer with `cargo`" and becomes "somebody with
+Ubuntu" or "somebody with Windows", which is what everything here follows
+from — including the two halves being shaped so differently, because those two
+people expect completely different things.
 
 ## The logic is in a script, not in the workflow
 
-`scripts/package-deb.sh` builds the package and checks it.
-`.github/workflows/main.yml` installs the build dependencies and calls it.
+`scripts/package-deb.sh` and `scripts/package-windows.sh` build a package each
+and check it. `.github/workflows/main.yml` installs the build dependencies and
+calls them.
 
 **That split is the point.** A GitHub workflow can only be tested by pushing
 it — there is no local run, no probe, no green gate. So the workflow holds as
 close to nothing as it can, and everything real lives in a script that runs on
 a laptop. It is `scripts/green-gate.sh`'s argument one level out: a sequence
 nobody can run is a sequence nobody can check.
+
+The Windows half makes the argument harder to ignore. Nothing about a GTK
+bundle for Windows can be checked from Linux at all — not the DLL list, not
+the schemas, not whether the thing starts — so the laptop that runs the script
+is not a convenience there, it is the only place the work exists before a
+runner sees it.
 
 ## What the package holds
 
@@ -55,12 +64,22 @@ is running — `0.1.0-121` in the package list is `#121` in the title.
 Zero when git cannot answer — a source tarball, an image with no git — which
 sorts below every real build rather than failing.
 
-**The rule lives here, because the code cannot share it.** `build.rs` runs
-inside a Rust build script that has to work on Windows with no shell;
-`package-deb.sh` runs before cargo is invoked at all. Neither can call the
-other, so the one line — `git rev-list --count HEAD` — is written in both, and
-this paragraph is the place that says they must agree. If the rule ever
-changes, it changes in two files.
+**The rule is in `scripts/version.sh`, and in one other place it cannot
+reach.** `build.rs` runs inside a Rust build script that has to work on
+Windows with no shell, so it cannot source a shell script; both packaging
+scripts can, and do. That leaves the one line — `git rev-list --count HEAD` —
+written twice rather than three times, and this paragraph is what says the two
+must agree. If the rule ever changes, it changes in two files.
+
+A third copy was what adding the Windows package would have cost if the rule
+had stayed where it was, which is what moved it: two places nobody can avoid
+is a constraint, three where the third was optional is just duplication
+(skill [44](skills/44-no-redundancy.md)).
+
+The zip has no `dpkg -I` to read the version back out of, so it goes in the
+name of the folder inside the archive — `ferrocommander-0.1.0-186\` — while
+the archive itself keeps a fixed name, for the reason under *The asset has no
+version in its name* below.
 
 ## Ubuntu 24.04, and why not 22.04
 
@@ -81,6 +100,95 @@ have been wrong in somebody's package before:
 - **The desktop entry is valid**, by `desktop-file-validate` where it exists.
   An invalid one does not stop the installation; it stops the launcher entry
   appearing, silently.
+
+## The Windows zip: no installer, one folder
+
+Windows gets a zip that unpacks into a single folder and runs from wherever it
+lands. No installer, no registry keys, no Start-menu entry: deleting the
+folder removes the program. That is not a corner cut — it is what this
+program's audience expects, because Total Commander itself ships that way.
+
+| | |
+|---|---|
+| `ferrocommander.exe` | the binary, built by the `x86_64-pc-windows-gnu` toolchain, which is the only one that can link MSYS2's GTK4 ([windows.md](windows.md)). |
+| `ferrocommander.cmd` | what a person actually runs. Its own section, below. |
+| `*.dll` | the GTK4 runtime, found rather than listed. The section after that. |
+| `share/glib-2.0/schemas/gschemas.compiled` | GTK reads its own settings through GSettings and **aborts at startup** without this. Compiled by the script rather than copied out of the MSYS2 prefix, so there is one code path that is always right instead of a copy that depends on a package's post-install hook having run. |
+| `README.txt` | six lines saying to run the `.cmd`. |
+
+**No icon theme and no gdk-pixbuf loaders**, which is where a GTK bundle
+usually spends most of its megabytes. Not an oversight, and not a saving taken
+on a hunch: the app names no icon and loads no image — a grep for `icon_name`,
+`IconTheme`, `Pixbuf` and `Image::` over `crates/tc-app/src` finds nothing —
+and the iconography GTK's own widgets use is compiled into `libgtk-4-1.dll` as
+a GResource. The smoke test below is what stops that quietly becoming false.
+
+## The DLLs are derived, not written
+
+The same argument as `depends = "$auto"` one platform over, and it bites
+harder here. `package-windows.sh` reads the binary's imports with `objdump`,
+copies every DLL that MSYS2 provides, and repeats over each one it copied
+until nothing new turns up. What is left unfound is a Windows system DLL —
+`kernel32`, `user32`, `msvcrt` — which every Windows already has and none of
+which may be shipped.
+
+A hand-written list would go stale the first time a dependency moved, and here
+it would go stale **silently**: the build machine has the DLL on its `PATH`,
+so a bundle missing it works perfectly for the person who built it and fails
+for everybody who downloads it. That is the failure this is written against.
+
+`objdump` rather than `ntldd`, because `objdump` comes with the toolchain
+group [windows.md](windows.md) already installs. One fewer package to be
+missing on a fresh machine is one fewer way for this to fail there and nowhere
+else.
+
+## Why there is a `.cmd` next to the `.exe`
+
+The app does not start under the renderer GTK picks for itself: it exits about
+six seconds in with `0xC0000005`, silently, without ever presenting a window
+([ui-shell.md](ui-shell.md) § *The renderer on Windows*). The launcher sets
+`GSK_RENDERER=cairo` and runs the binary beside it, found through `%~dp0` so
+the working directory does not matter.
+
+Set there rather than in `main()`, because the binary is not only a Windows
+binary. Hard-coding a renderer in the code would impose one platform's
+unexplained crash on the two platforms where GTK's own default is the right
+answer — and it would bury the workaround where nobody reading a bug report
+would find it. In the launcher it is six lines of `rem` above the line that
+does it.
+
+The value is named **once in the script**: written into the launcher, and
+exported for the smoke test that starts the app. So the setting that ships and
+the setting that was tested are the same string by construction rather than by
+somebody remembering to change both.
+
+What that leaves is the `.exe` sitting in the folder as a trap for whoever
+double-clicks it, which is what the `README.txt` is for.
+
+## What the Windows script checks, and why those three
+
+The same three the `.deb` checks, in the forms Windows offers them:
+
+- **Nothing declared.** Every DLL the staged files import is either in the
+  bundle or is not one MSYS2 provides. Walked a second time, flat over the
+  staged folder rather than reusing the queue that filled it: a check that
+  reuses the traversal it is checking cannot catch that traversal being wrong.
+- **Everything is in there.** The binary, the launcher, the notes and the
+  compiled schemas, by path.
+- **It starts, and stays started.** The counterpart of
+  `desktop-file-validate` — what it catches does not announce itself, it just
+  means nobody can run what was published. The app runs under a `timeout` and
+  has to still be running when the clock runs out.
+
+Twenty seconds for that last one, because the documented failure is not a
+refusal to start but a death about six seconds in. A check that only asked
+"did it launch" would pass over exactly the bug it is there for.
+
+It is a `timeout` rather than a background job and a `kill -0`, which is how
+it was written first and was wrong: a child that has exited but has not been
+reaped still answers signal 0, so the check meant to catch the app dying would
+have reported a corpse as alive. The verdict is a number now — 124, `timeout`
+saying it had to stop the app itself — and there is nothing subtle left in it.
 
 ## The workflow, and what could be checked about it before it ran
 
@@ -108,6 +216,54 @@ connects to.
 **What is left unchecked** is everything that needs GitHub: whether the runner
 image has what the `apt-get` line assumes, and whether `fetch-depth: 0` really
 gives `build.rs` the commit count. Those were watched on the first real runs.
+
+## The Windows job, and how little of it could be checked
+
+A second job on `windows-2025`: MSYS2 with the MINGW64 toolchain and GTK4, the
+`x86_64-pc-windows-gnu` toolchain installed over the runner's MSVC default,
+`scripts/package-windows.sh`, and an upload.
+
+Three choices in it are not obvious:
+
+- **`needs: build`, so it runs after the gate rather than beside it.** The
+  gate cannot run on Windows — the end-to-end suite drives the binary through
+  `Xvfb` and `xdotool`, and MSYS2's GTK4 is a Win32-backend build with no X11
+  backend to point at one ([windows.md](windows.md)) — so the Linux job is the
+  only thing that verifies the commit *either* package is built from. A binary
+  built from an unverified commit is a binary of unknown quality, and waiting
+  the extra ten minutes is the whole price of not publishing one.
+- **Upload only, never `create`.** The release is the Linux job's: it created
+  it or moved it onto this commit, and this only adds an asset. So there is no
+  second `create` racing the first, and nothing in this job can leave the
+  download URL in the README pointing at nothing.
+- **`msys2/setup-msys2` pinned to a commit, not to `v2`.** This job holds
+  `contents: write` on every push to the default branch, which is what makes
+  the workflow the most attractive thing in the repository to whoever
+  compromises a dependency — and a floating tag on a third-party action is
+  exactly that door. The comment beside the hash says which release it is, so
+  the next person can tell an upgrade from a substitution. The action is used
+  at all because the alternative — `pacman` against whatever MSYS2 the runner
+  image happens to carry — inherits the update dance `windows.md` opens with,
+  on a machine nobody can watch.
+
+**What could be checked before pushing, and was:** the file parses; all seven
+`run:` blocks are valid shell (`bash -n`); `scripts/package-windows.sh` is
+`100755` in the index, which a workflow otherwise discovers by failing; and
+the launcher the script generates was run on a real Windows machine from a
+different working directory, where `%~dp0` resolved to the folder beside it
+and `GSK_RENDERER=cairo` was observed arriving in the child process.
+
+**What could not be checked is the build itself.** It was written on a Windows
+machine with neither Rust nor MSYS2 installed, so nothing downstream of
+`cargo build` has run once: not the link against GTK4, not the `objdump` walk,
+not the schema compile. The step most likely to need a second attempt is the
+smoke test, because it needs a GitHub runner to be able to start a GUI process
+at all — and if it cannot, that is a property of the runner, not of the
+bundle, and the check has to move to the laptop rather than be deleted.
+
+This is the same position [the Ubuntu job](#the-workflow-and-what-could-be-checked-about-it-before-it-ran)
+was in before its first green run, which is the argument for the script/workflow
+split rather than an exception to it.
 
 The release step itself is no longer a question, because it stopped being a
 delete. It is `gh release create … || gh release edit …`, then

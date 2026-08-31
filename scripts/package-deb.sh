@@ -13,21 +13,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # The version the window title already carries, so `dpkg -l` and a screenshot
-# agree about which build somebody is running.
+# agree about which build somebody is running. That agreement was checked by
+# eye: `0.1.0-121` in `dpkg -l`, `#121` in the title.
 #
-# **The same one-line rule as `crates/tc-app/build.rs`, written twice**, and
-# deliberately: that one runs inside a Rust build script that must work on
-# Windows with no shell, this one runs before cargo is invoked at all, and
-# neither can call the other. What they share is the rule — the build number
-# is `git rev-list --count HEAD` — which is stated in `docs/packaging.md` and
-# is the thing to change in two places if it ever changes at all. The two
-# agreeing was checked by eye: `0.1.0-121` in `dpkg -l`, `#121` in the title.
-#
-# Zero when git cannot answer (a source tarball, an image with no git), which
-# is a version that sorts below every real build rather than a failure.
-crate_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-build_number=$(git rev-list --count HEAD 2>/dev/null || echo 0)
-version="${crate_version}-${build_number}"
+# The rule itself is in `scripts/version.sh`, shared with the Windows package;
+# `crates/tc-app/build.rs` is the one place that has to repeat it, and
+# `docs/packaging.md` says why.
+. scripts/version.sh
 
 echo "=== building ferrocommander ${version}"
 # `cargo deb` would build this itself, but doing it here means the release

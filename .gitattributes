@@ -1,0 +1,13 @@
+# Shell scripts are checked out with LF, on every platform.
+#
+# Not a style preference. `scripts/green-gate.sh` and the two packaging
+# scripts are run by bash on machines whose git checks out CRLF by default —
+# a Windows laptop with the Git for Windows setting, and the Windows CI
+# runner. A CRLF shebang then fails with a message about `bash\r` that names
+# neither the file nor the cause, and the same tree works perfectly on Linux.
+#
+# This is the half of the problem a repository can fix for everybody who
+# clones it. The other half — a tree already checked out as CRLF, which git
+# reports as clean — is a working copy, so it stays where it was: a note in
+# docs/windows.md § Line endings will bite twice.
+*.sh text eol=lf

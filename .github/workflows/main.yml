@@ -1,8 +1,9 @@
-# Verifies every commit to `main` and publishes an Ubuntu package.
+# Verifies every commit to `main` and publishes what it built: an Ubuntu
+# package, and a Windows zip.
 #
 # **Deliberately almost empty.** A workflow can only be tested by pushing it —
-# no local run, no probe, no green gate — so the logic lives in two scripts
-# that run on a laptop, and this file installs what they need and calls them.
+# no local run, no probe, no green gate — so the logic lives in scripts that
+# run on a laptop, and this file installs what they need and calls them.
 # Every line here that is not such a call is a line nobody can check before it
 # runs for real (`docs/packaging.md`).
 name: main
@@ -96,3 +97,85 @@ jobs:
 
           gh release upload "$ROLLING_TAG" \
             target/debian/ferrocommander_amd64.deb --clobber
+
+  windows:
+    # After the gate, not beside it. The gate cannot run here — the end-to-end
+    # suite drives the binary through Xvfb and xdotool, and MSYS2's GTK4 is a
+    # Win32-backend build with no X11 to point at one (`docs/windows.md`) — so
+    # the Linux job is the only thing that verifies the commit either package
+    # is built from, and a binary built from an unverified commit is a binary
+    # of unknown quality.
+    needs: build
+
+    # Pinned, for a weaker reason than `build` has. There the image decides
+    # the GTK version and `latest` moving would silently drop the oldest
+    # Ubuntu the package supports; here GTK comes from MSYS2 and the image
+    # decides almost nothing. What pinning buys is only that the ground cannot
+    # move under a toolchain this fussy without somebody choosing it.
+    runs-on: windows-2025
+
+    # Every `run` in the MINGW64 shell, so `cargo`, `gcc`, `pkgconf` and
+    # `pacman` all agree about which of the several environments on a Windows
+    # runner they are in. Getting that wrong is the failure `docs/windows.md`
+    # opens with, and it surfaces at link time rather than at install time.
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `build.rs` and the zip's version both count commits, so a shallow
+          # clone would report a build number of one.
+          fetch-depth: 0
+
+      - name: MSYS2 with GTK4
+        # Pinned to a commit rather than to `v2`, which moves. This job holds
+        # `contents: write` on every push to the default branch, and the
+        # header above says what that makes the workflow worth to whoever
+        # compromises a dependency; a floating tag on a third-party action is
+        # precisely that door. The comment is which release the commit is, so
+        # the next person can tell an upgrade from a substitution.
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          # MINGW64, never UCRT64: Rust's `x86_64-pc-windows-gnu` links
+          # msvcrt, and the `mingw-w64-x86_64-*` packages are what match it.
+          msystem: MINGW64
+          update: true
+          # So the runner's own `rustup` and `gh` stay reachable from inside
+          # this shell. Without it MSYS2 brings its own PATH and neither
+          # exists.
+          path-type: inherit
+          # `zip` is MSYS2's own package, not a mingw one — it is the
+          # archiver, not a library the build links against.
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-gtk4
+            zip
+
+      - name: The gnu host toolchain
+        # The runner ships Rust with the MSVC host, which cannot link against
+        # MSYS2's GTK4. `package-windows.sh` refuses to build with the wrong
+        # host rather than letting it fail at link time, so this is what makes
+        # that check pass rather than something it merely tolerates.
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+          rustup default stable-x86_64-pc-windows-gnu
+
+      - name: Package
+        # Builds, gathers the GTK4 DLLs the binary actually imports, checks
+        # the bundle is complete, and starts the app to see that it survives
+        # its first twenty seconds. All of it in the script, none of it here.
+        run: ./scripts/package-windows.sh
+
+      - name: Add it to the rolling build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROLLING_TAG: rolling
+        # Only an upload. The release is the `build` job's — it created it or
+        # moved it onto this commit — so there is no second `create` to race
+        # with the first, and nothing here can leave the download URL in the
+        # README pointing at nothing.
+        run: |
+          gh release upload "$ROLLING_TAG" \
+            target/windows/ferrocommander-windows-x86_64.zip --clobber

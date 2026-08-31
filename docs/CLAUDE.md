@@ -40,13 +40,14 @@ cross-references instead of duplication.
 - [config.md](config.md) — the settings file: where it lives, why it is
   written as it changes rather than on exit, why the write is atomic, and why
   nothing about it may stop the program starting.
-- [packaging.md](packaging.md) — the Ubuntu `.deb`: what it holds, how its
-  version ties to the title bar, and why the logic is in a script rather than
-  in the workflow.
-- [windows.md](windows.md) — building, running and testing on Windows: the
-  MSYS2 toolchain, the two failures that announce themselves as something
-  else, the renderer the app has to be told to use, and what the suite can
-  and cannot do there.
+- [packaging.md](packaging.md) — the Ubuntu `.deb` and the Windows zip: what
+  each holds, how their version ties to the title bar, why the runtime
+  dependencies of both are derived rather than listed, and why the logic is in
+  scripts rather than in the workflow.
+- [windows.md](windows.md) — building, running, packaging and testing on
+  Windows: the MSYS2 toolchain, the two failures that announce themselves as
+  something else, the renderer the app has to be told to use, and what the
+  suite can and cannot do there.
 - [reliability.md](reliability.md) — the standing reliability requirement for
   file operations, and where the tests live.
 - [performance.md](performance.md) — the standing speed requirement, the
