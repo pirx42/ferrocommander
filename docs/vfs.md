@@ -251,10 +251,19 @@ anything ([the groundwork plan](plans/archive/2026-08-30-macos-groundwork.md)
 is the record).
 
 The check covers `tc-core` only. Cross-checking `tc-app` would need GTK's
-`-sys` build scripts to find a mingw libgtk-4 through pkg-config, which a
+`-sys` build scripts to find a target libgtk-4 through pkg-config, which a
 Linux box does not have. That is an acceptable boundary because **every
-platform-divergent line lives in `tc-core`** — `tc-app` contains no `cfg`
-branches at all. The Windows GTK build itself was verified by hand on
+platform-divergent *behaviour* lives in `tc-core`** — with one counted
+exception: the three `cfg` markers in `keymap.rs` that ship the dormant macOS
+key layer, which cannot live in the engine because an `Action` is a shell
+concept the engine deliberately does not know ([config.md](config.md)). Those
+three lines are therefore the only platform code no gate cross-checks. What
+keeps that honest is that the *layer itself* is data, applied and asserted
+unconditionally by tests on Linux — only the two-line wiring in
+`Keymap::default` is beyond every check, and it is named here rather than
+rounded away. (This sentence used to say `tc-app` contains no `cfg` at all,
+and was true until the layer landed.) The Windows GTK build itself was
+verified by hand on
 2026-08-30 — MSYS2 MINGW64 with GTK4 4.22.4 — and it compiles and runs; what
 it needs in order to start is in [ui-shell.md](ui-shell.md). That was a
 one-off on a developer machine, not something the gate can do.
