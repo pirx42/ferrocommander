@@ -1,6 +1,6 @@
 # A macOS package (Apple Silicon), built and checked on every commit
 
-Status: Draft
+Status: Draft — decisions 1–3 settled by the owner, 2026-08-31
 
 The third and last platform job: what `package-windows.sh` and the `windows`
 job did for Windows, done for macOS on GitHub's arm64 runners. The macOS
@@ -63,17 +63,14 @@ Different, each a real decision or a real unknown:
    an Apple Developer account (99 USD/yr), certificate secrets in the repo
    settings, and `notarytool` plumbing; worth revisiting only if real Mac
    users appear.
-3. **Iteration route: a temporary topic-branch trigger** (recommended).
-   The workflow fires only on `main` and `workflow_dispatch`, so the Windows
-   job was debugged with three red runs *on main*. Adding
-   `topic/macos-package` to `on.push.branches` while developing keeps main
-   green while the new job finds its real failures; the trigger line and the
-   two guards it needs are removed in the final phase, before merge. The two
-   guards: the publish/upload steps get `if: github.ref ==
-   'refs/heads/main'` so a topic build can never clobber the rolling
-   release's assets, and the concurrency group becomes
-   `main-${{ github.ref }}` so a topic run cannot cancel a real main run.
-   The `if:` on the uploads is worth keeping after merge; the rest goes.
+3. **Iteration route: on main, like Windows** — the owner's call, against
+   the plan's recommendation of a temporary topic-branch trigger, and the
+   simpler one: the workflow file stays exactly as merged, with no trigger
+   line and no guards to remember to remove. The accepted cost is what the
+   Windows job paid — red runs on main until the new job is green, three in
+   that case — bounded by the fact that a red `macos` job never blocks the
+   `build` job it depends on, so the gate, the `.deb` and the Windows zip
+   keep publishing throughout.
 
 ## 3. Phases
 
@@ -81,13 +78,12 @@ Different, each a real decision or a real unknown:
 cover the packaging scripts; their coverage *is* their self-checks plus CI.
 From this Linux box: the workflow parses, every run block is valid shell,
 `bash -n` on the script, the link check. Everything downstream of `brew` is
-unreachable — same honesty line the Windows commit drew, and this plan's
-whole reason for the topic-branch trigger.
+unreachable — the same honesty line the Windows commit drew, which is why
+phase 3 exists as its own phase rather than as optimism.
 
-**Phase 1 — the workflow's `macos` job, trigger first.** The temporary
-trigger, the guards from decision 3, and the job skeleton: `needs: build`,
-`runs-on: macos-15` (pinned — `latest` moves, and the day it moves it decides
-a different Xcode, brew, and OS under a bundle this path-sensitive),
+**Phase 1 — the workflow's `macos` job.** `needs: build`, `runs-on:
+macos-15` (pinned — `latest` moves, and the day it moves it decides a
+different Xcode, brew, and OS under a bundle this path-sensitive),
 `brew install gtk4`, then `./scripts/package-macos.sh`, then the
 upload-only release step copied from the Windows job. Committed together
 with phase 2's script — a job that calls a script that does not exist is
@@ -108,8 +104,8 @@ No renderer override until the smoke test demands one: Windows earned its
 `GSK_RENDERER=cairo` from a measured crash, and macOS starts with GTK's
 default and the same instrument pointed at it.
 
-**Phase 3 — iterate on the topic branch until the job is green.** The
-phase that cannot be planned, only budgeted (§ 4). The known suspects, in
+**Phase 3 — merge to main and iterate there until the job is green**
+(decision 3). The phase that cannot be planned, only budgeted (§ 4). The known suspects, in
 the order they would fire: brew's gtk4 formula missing something the MSYS2
 package had; the dylib walk finding `@rpath` entries that need resolving
 against the binary's rpaths rather than copying verbatim; codesign order;
@@ -133,7 +129,6 @@ exist; read them as one diff. The known candidate: the smoke test
 (`timeout`-status-124 plus log handling) is about to exist twice — decide
 shared-helper versus read-alone with the same argument
 `check-page-scroll.sh` already had, and record the verdict either way.
-Remove the temporary trigger; merge.
 
 ## 4. Effort
 
@@ -145,7 +140,7 @@ Corrected per skill 45; factor 0.10 held exactly on the groundwork plan.
 | 1+2 job + script | 2 d | 2 h |
 | 3 CI iteration | — | wall-clock bound: each round is a push plus a ~20–30 min run (brew, build, smoke); budget 3–6 rounds going by the Windows job's three |
 | 4 docs | 0.5 d | 0.5 h |
-| 5 audit + merge | 0.5 d | 0.5 h |
+| 5 audit | 0.5 d | 0.5 h |
 
 Working time about three hours; elapsed time is owned by phase 3's runner
 queue, not by the writing.
