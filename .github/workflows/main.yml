@@ -54,10 +54,12 @@ jobs:
           fetch-depth: 0
 
       - name: GTK4 from Homebrew
-        # The platform's MSYS2. Everything else the script needs — rustup,
-        # otool, install_name_tool, codesign, coreutils' gtimeout — is on
-        # the runner image already.
-        run: brew install gtk4
+        # The platform's MSYS2. coreutils is beside it for one command: the
+        # smoke test's gtimeout, which run #23 proved is NOT on the image —
+        # stock macOS has no timeout at all, and the script fails with the
+        # line this step answers. rustup, otool, install_name_tool and
+        # codesign are on the image.
+        run: brew install gtk4 coreutils
 
       - name: Current stable Rust
         # On the image, but stale: run #19 died on "rustc 1.97.1 is not
