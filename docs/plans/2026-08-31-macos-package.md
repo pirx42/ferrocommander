@@ -1,6 +1,6 @@
 # A macOS package (Apple Silicon), built and checked on every commit
 
-Status: Draft — decisions 1–3 settled by the owner, 2026-08-31
+Status: In Progress — decisions 1–3 settled by the owner, 2026-08-31
 
 The third and last platform job: what `package-windows.sh` and the `windows`
 job did for Windows, done for macOS on GitHub's arm64 runners. The macOS

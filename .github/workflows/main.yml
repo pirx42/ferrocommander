@@ -1,5 +1,5 @@
 # Verifies every commit to `main` and publishes what it built: an Ubuntu
-# package, and a Windows zip.
+# package, a Windows zip, and a macOS app.
 #
 # **Deliberately almost empty.** A workflow can only be tested by pushing it —
 # no local run, no probe, no green gate — so the logic lives in scripts that
@@ -188,3 +188,48 @@ jobs:
         run: |
           gh release upload "$ROLLING_TAG" \
             target/windows/ferrocommander-windows-x86_64.zip --clobber
+
+  macos:
+    # After the gate, for the Windows job's reason: the end-to-end suite is
+    # X11-only and cannot run here, so the Linux job is the only thing that
+    # verifies the commit this package is built from. What this job *is* the
+    # first to do is run the program on macOS at all — the smoke test inside
+    # the script below is the first-ever start on this OS
+    # (`docs/plans/2026-08-31-macos-package.md`).
+    needs: build
+
+    # Pinned, and Apple Silicon: macos-15 runners are arm64 Macs, so this is
+    # a native build, not a cross one. `latest` moving would swap the OS,
+    # Xcode and Homebrew under a bundle whose dylib rewriting is sensitive
+    # to all three.
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `build.rs` and the zip's version both count commits, so a shallow
+          # clone would report a build number of one.
+          fetch-depth: 0
+
+      - name: GTK4 from Homebrew
+        # The platform's MSYS2. Everything else the script needs — rustup,
+        # otool, install_name_tool, codesign, coreutils' gtimeout — is on
+        # the runner image already.
+        run: brew install gtk4
+
+      - name: Package
+        # Builds, stages the .app, rewrites the Homebrew dylib paths the
+        # bundle carries, re-signs what the rewriting unsigned, checks the
+        # bundle stands alone, and starts the app to see that it survives
+        # its first twenty seconds. All of it in the script, none of it here.
+        run: ./scripts/package-macos.sh
+
+      - name: Add it to the rolling build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROLLING_TAG: rolling
+        # Only an upload, for the Windows job's reason: the release is the
+        # `build` job's, so nothing here can leave the README's URL at a 404.
+        run: |
+          gh release upload "$ROLLING_TAG" \
+            target/macos/ferrocommander-macos-arm64.zip --clobber
