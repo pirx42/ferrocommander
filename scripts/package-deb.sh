@@ -65,10 +65,16 @@ case "$depends" in
         ;;
 esac
 
+# The listing is read once into a variable, not piped into `grep -q`. Under
+# `pipefail`, `grep -q` hanging up on the first match can hand the pipeline
+# tar's SIGPIPE exit instead of grep's success — a race that reported a file
+# missing from a package that contained it, on CI run #16 and on none of the
+# fifteen runs before.
+contents=$(dpkg-deb -c "$deb")
 for path in usr/bin/ferrocommander \
             usr/share/applications/st.rose.Ferrocommander.desktop \
             usr/share/icons/hicolor/scalable/apps/st.rose.Ferrocommander.svg; do
-    if ! dpkg-deb -c "$deb" | grep -q " ./$path\$"; then
+    if ! grep -q " ./$path\$" <<<"$contents"; then
         echo "FAIL: $path is not in the package" >&2
         exit 1
     fi
