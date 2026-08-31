@@ -603,7 +603,17 @@ fn with_recording_editor(home: &Path) {
 
     let settings = home.join(SETTINGS_FILE);
     std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
-    std::fs::write(settings, format!("editor = \"{}\"\n", script.display())).unwrap();
+    // The compare_tool line rides along as a second witness for the
+    // write-back test below: the editor proves a field the shell reads,
+    // this proves one it only carries.
+    std::fs::write(
+        settings,
+        format!(
+            "editor = \"{}\"\ncompare_tool = \"diff -u %1 %2\"\n",
+            script.display()
+        ),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -1409,6 +1419,10 @@ fn a_setting_the_shell_does_not_own_survives_being_written_back() {
     assert!(
         written.contains("record-editor.sh"),
         "the editor line was written away:\n{written}"
+    );
+    assert!(
+        written.contains("diff -u %1 %2"),
+        "the compare_tool line was written away:\n{written}"
     );
 
     // And it still works on the next run, which is what the line is for.

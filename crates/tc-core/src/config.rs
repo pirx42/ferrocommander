@@ -66,6 +66,14 @@ pub struct Settings {
     /// so somebody wanting `vim` writes `x-terminal-emulator -e vim` here — the
     /// value is a command line, run the same way the command line's is.
     pub editor: String,
+    /// The command Compare by Content runs instead of its own view.
+    ///
+    /// A command line with `%1` and `%2` standing for the two files, each
+    /// replaced by a quoted path — `meld %1 %2` is the whole configuration
+    /// for somebody with meld. Empty means the built-in side-by-side view
+    /// ([`docs/compare.md`]): the setting *is* the decision, so one key
+    /// always means one thing and no second binding exists to learn.
+    pub compare_tool: String,
     /// Command lines that were run, newest first.
     ///
     /// Kept so `Ctrl+↓` has something to offer on the next run: a history that
@@ -315,6 +323,20 @@ impl PaneSettings {
 }
 
 impl Settings {
+    /// The compare command, or `None` when the built-in view is meant.
+    ///
+    /// `Option` rather than a default string, unlike [`Settings::editor`]:
+    /// the editor always has a sensible fallback to hand a file to, and the
+    /// compare's fallback is a different *mechanism*, which the caller has
+    /// to choose between rather than merely spawn.
+    pub fn compare_tool(&self) -> Option<&str> {
+        let trimmed = self.compare_tool.trim();
+        match trimmed.is_empty() {
+            true => None,
+            false => Some(trimmed),
+        }
+    }
+
     /// The command that opens a file, configured or defaulted.
     pub fn editor(&self) -> &str {
         if self.editor.trim().is_empty() {
@@ -610,6 +632,25 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(settings.editor(), "x-terminal-emulator -e vim");
+    }
+
+    #[test]
+    fn an_unset_compare_tool_means_the_built_in_view() {
+        assert_eq!(Settings::default().compare_tool(), None);
+        let blank = Settings {
+            compare_tool: "   ".to_string(),
+            ..Settings::default()
+        };
+        assert_eq!(blank.compare_tool(), None);
+    }
+
+    #[test]
+    fn a_configured_compare_tool_is_used_as_written() {
+        let settings = Settings {
+            compare_tool: " meld %1 %2 ".to_string(),
+            ..Settings::default()
+        };
+        assert_eq!(settings.compare_tool(), Some("meld %1 %2"));
     }
 
     #[test]

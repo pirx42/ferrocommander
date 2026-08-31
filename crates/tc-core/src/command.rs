@@ -119,6 +119,58 @@ pub fn open_with(program: &str, path: &VfsPath) {
     });
 }
 
+/// Runs a command template with `%1` and `%2` replaced by two quoted paths.
+///
+/// What Compare by Content does with a configured tool
+/// (`docs/compare.md`): the template is the user's own line, the paths land
+/// where the placeholders are, and the whole thing runs like a typed
+/// command — detached, for [`open_with`]'s reason: a diff tool runs for as
+/// long as somebody is reading.
+///
+/// The working directory is the left file's, arbitrarily but not
+/// meaninglessly: it is the active pane's side, the same directory a typed
+/// command would run in.
+pub fn run_with_paths(template: &str, left: &VfsPath, right: &VfsPath) {
+    let line = substituted(template, left.as_str(), right.as_str());
+    let directory = left.parent().unwrap_or_else(VfsPath::root);
+    std::thread::spawn(move || {
+        let _ = run(&directory, &line);
+    });
+}
+
+/// The template with each `%1`/`%2` replaced by its path, quoted.
+///
+/// **Single-pass on purpose.** Two `str::replace` calls in sequence read
+/// their own output: a *path* containing the text `%2` would come out of
+/// the first replacement and be substituted again by the second, splicing
+/// the other file's path into the middle of this one's. One walk over the
+/// template never re-reads what it wrote. Anything else after `%` — `%3`,
+/// a lone `%`, `%%` — passes through as written; the template is the
+/// user's line and inventing meanings for it here would be guessing.
+fn substituted(template: &str, left_path: &str, right_path: &str) -> String {
+    let mut line = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(at) = rest.find('%') {
+        line.push_str(&rest[..at]);
+        match rest.as_bytes().get(at + 1) {
+            Some(b'1') => {
+                line.push_str(&shell_quoted(left_path));
+                rest = &rest[at + 2..];
+            }
+            Some(b'2') => {
+                line.push_str(&shell_quoted(right_path));
+                rest = &rest[at + 2..];
+            }
+            _ => {
+                line.push('%');
+                rest = &rest[at + 1..];
+            }
+        }
+    }
+    line.push_str(rest);
+    line
+}
+
 /// A string the shell will read back as exactly one word.
 ///
 /// Single quotes take everything literally; the only thing that cannot appear
@@ -163,4 +215,49 @@ fn limited(mut text: String) -> String {
     text.truncate(cut);
     text.push_str(TRUNCATION_NOTICE);
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::substituted;
+
+    #[test]
+    fn both_placeholders_land_quoted_where_they_stand() {
+        assert_eq!(
+            substituted("meld %1 %2", "/a/left file", "/b/right"),
+            "meld '/a/left file' '/b/right'"
+        );
+    }
+
+    #[test]
+    fn a_quote_in_a_path_survives_the_shell() {
+        assert_eq!(
+            substituted("diff %1 %2", "/it's here", "/plain"),
+            r#"diff '/it'\''s here' '/plain'"#
+        );
+    }
+
+    #[test]
+    fn a_placeholder_named_twice_is_filled_twice_and_one_missing_is_missing() {
+        // The template is the user's line: `%1` twice means they wanted the
+        // path twice, and no `%2` means they did not want the second path.
+        assert_eq!(substituted("x %1 %1", "/a", "/b"), "x '/a' '/a'");
+        assert_eq!(substituted("x %1", "/a", "/b"), "x '/a'");
+    }
+
+    #[test]
+    fn stray_percents_pass_through_as_written() {
+        assert_eq!(substituted("x %3 %% % %", "/a", "/b"), "x %3 %% % %");
+    }
+
+    // The reason the walk is single-pass: sequential `replace` calls read
+    // their own output, and a path *containing* `%2` would have the other
+    // file's path spliced into its middle.
+    #[test]
+    fn a_path_containing_a_placeholder_is_not_substituted_again() {
+        assert_eq!(
+            substituted("x %1 %2", "/dir/100%2off.txt", "/b"),
+            "x '/dir/100%2off.txt' '/b'"
+        );
+    }
 }

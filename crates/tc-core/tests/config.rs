@@ -49,6 +49,9 @@ fn settings() -> Settings {
             ..PaneSettings::default()
         },
     );
+    // Not a default, so the round trip proves the field travels and not
+    // merely that two defaults agree.
+    settings.compare_tool = "meld %1 %2".to_string();
     // Two of them, in an order the alphabet would not produce, so the
     // round-trip test says the order came back and not merely the entries.
     settings.favourites = vec![
