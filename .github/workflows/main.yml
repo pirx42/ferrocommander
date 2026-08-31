@@ -158,7 +158,16 @@ jobs:
         # MSYS2's GTK4. `package-windows.sh` refuses to build with the wrong
         # host rather than letting it fail at link time, so this is what makes
         # that check pass rather than something it merely tolerates.
+        #
+        # `set default-host`, not only `default`: `rust-toolchain.toml` pins
+        # `channel = "stable"` and outranks `rustup default`, and a bare
+        # `stable` resolves through the default host — MSVC on this runner,
+        # which is how run #17 died on the guard above. Setting the host makes
+        # the repo's own toolchain file resolve to gnu, the same state
+        # docs/windows.md's `--default-host x86_64-pc-windows-gnu` gives a
+        # dev machine.
         run: |
+          rustup set default-host x86_64-pc-windows-gnu
           rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
           rustup default stable-x86_64-pc-windows-gnu
 
