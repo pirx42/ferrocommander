@@ -152,6 +152,14 @@ line count it touched.
   Windows six as engine behaviour rather than as three test skips.
 - **The libc premise was wrong** (§ 0's correction): the dependency this plan
   "added" had been there since the disk figure.
+- **And the plan itself falsified a documented claim without noticing.** The
+  Cmd layer put three `cfg` markers into `tc-app`'s `keymap.rs` while
+  `vfs.md` still said `tc-app` contains no `cfg` at all — caught only when
+  the owner asked, after the audit, whether conditionals had spread. The
+  sentence now counts its one exception and names the two lines no gate can
+  reach. A plan whose whole subject was documentation-checked platform
+  boundaries drifted a platform-boundary document mid-flight; the drift
+  review's lesson, demonstrated on its own author.
 
 ### § 5 addendum — the first-run review list, final
 
