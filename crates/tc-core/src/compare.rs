@@ -76,14 +76,17 @@ pub struct Row {
     pub right: Option<Side>,
 }
 
-/// One side of a row: the line's text, and the byte ranges of it that
+/// One side of a row: the line's text, and the **char** ranges of it that
 /// differ from the other side.
 ///
-/// The ranges are ascending, non-overlapping, aligned to `char` boundaries
-/// by construction — they come from a diff over `char`s, mapped back
-/// through `char_indices` — and empty everywhere except inside a `Changed`
-/// pair. Char-aligned matters: a range cut through a UTF-8 sequence is a
-/// panic waiting in whatever text buffer receives it.
+/// Char ranges, not byte ranges, end to end: the diff that finds them runs
+/// over `char`s and the text buffer that paints them counts characters, so
+/// bytes would only enter to be converted back out — that round trip
+/// existed once, each half cancelling the other, and the phase 6 audit
+/// removed both. It also makes a mis-slice impossible by construction: with
+/// no byte offsets there is no UTF-8 boundary to cut. The ranges are
+/// ascending, non-overlapping, and empty everywhere except inside a
+/// `Changed` pair.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Side {
     pub text: String,
@@ -299,18 +302,18 @@ fn changed_pair(left_text: &str, right_text: &str) -> (Side, Side) {
             DiffOp::Equal { .. } => {}
             DiffOp::Delete {
                 old_index, old_len, ..
-            } => push_span(&mut left_spans, byte_range(left_text, old_index, old_len)),
+            } => push_span(&mut left_spans, old_index..old_index + old_len),
             DiffOp::Insert {
                 new_index, new_len, ..
-            } => push_span(&mut right_spans, byte_range(right_text, new_index, new_len)),
+            } => push_span(&mut right_spans, new_index..new_index + new_len),
             DiffOp::Replace {
                 old_index,
                 old_len,
                 new_index,
                 new_len,
             } => {
-                push_span(&mut left_spans, byte_range(left_text, old_index, old_len));
-                push_span(&mut right_spans, byte_range(right_text, new_index, new_len));
+                push_span(&mut left_spans, old_index..old_index + old_len);
+                push_span(&mut right_spans, new_index..new_index + new_len);
             }
         }
     }
@@ -324,21 +327,6 @@ fn changed_pair(left_text: &str, right_text: &str) -> (Side, Side) {
             changed: right_spans,
         },
     )
-}
-
-/// A char range mapped back to the byte range a text buffer wants.
-fn byte_range(text: &str, char_index: usize, char_len: usize) -> Range<usize> {
-    let mut indices = text.char_indices().map(|(byte, _)| byte);
-    let start = indices.nth(char_index).unwrap_or(text.len());
-    let end = match char_len {
-        0 => start,
-        _ => text
-            .char_indices()
-            .map(|(byte, _)| byte)
-            .nth(char_index + char_len)
-            .unwrap_or(text.len()),
-    };
-    start..end
 }
 
 /// Appends a span, merging it into the previous one when they touch — two
@@ -370,14 +358,12 @@ mod tests {
     }
 
     fn with_spans_removed(side: &Side) -> String {
-        let mut text = String::new();
-        let mut next = 0;
-        for span in &side.changed {
-            text.push_str(&side.text[next..span.start]);
-            next = span.end;
-        }
-        text.push_str(&side.text[next..]);
-        text
+        side.text
+            .chars()
+            .enumerate()
+            .filter(|(at, _)| !side.changed.iter().any(|span| span.contains(at)))
+            .map(|(_, character)| character)
+            .collect()
     }
 
     // The conservation invariant (skill 52): a diff that loses or invents a
@@ -434,20 +420,20 @@ mod tests {
         assert!(rows[2].left.is_none());
     }
 
-    // The UTF-8 hazard named in the plan: a span cut through a multi-byte
-    // sequence panics in whatever buffer receives it. Every boundary this
-    // input offers is multi-byte, so a span off by a byte cannot slice it.
+    // The spans are counted in chars, and multi-byte text is where a count
+    // secretly done in bytes would drift: every interesting boundary in
+    // this input is multi-byte, so a byte-counted span would select the
+    // wrong characters and fail the removal equality below.
     #[test]
-    fn spans_land_on_char_boundaries_in_multibyte_text() {
+    fn spans_count_chars_not_bytes_in_multibyte_text() {
         let rows = rows("ein grünes Fass\n", "ein grönes Faß\n");
         let row = &rows[0];
         assert_eq!(row.kind, RowKind::Changed);
         for side in [row.left.as_ref().unwrap(), row.right.as_ref().unwrap()] {
+            let chars = side.text.chars().count();
             for span in &side.changed {
-                assert!(side.text.is_char_boundary(span.start));
-                assert!(side.text.is_char_boundary(span.end));
-                // And the span selects the difference, not an empty spot.
-                assert!(span.start < span.end);
+                // Within the line, in char terms, and selecting something.
+                assert!(span.start < span.end && span.end <= chars, "{span:?}");
             }
         }
         assert_eq!(

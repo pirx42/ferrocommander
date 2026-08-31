@@ -6,7 +6,7 @@ Two files, one verdict: their lines side by side with the differences
 marked, or — when the settings name a real diff tool — that tool, handed
 both paths. The internal view is deliberately simple, and the external hook
 is what makes simple acceptable: anyone who outgrows it writes one config
-line ([the plan](plans/2026-08-31-compare-by-content.md) is the record of
+line ([the plan](plans/archive/2026-08-31-compare-by-content.md) is the record of
 that decision and the three beside it).
 
 ## Which two files
@@ -93,11 +93,12 @@ archive is refused with the reason — `F4`'s rule, one key over
 ## What the tests pin
 
 The engine's two conservation invariants ([reliability.md](reliability.md)
-routes here): every side's rows reconstruct that side's file exactly, and a
-changed pair's texts with their differing spans removed are equal — each
-probed by breaking the code on purpose. The spans land on `char`
-boundaries in text where every interesting boundary is multi-byte, because
-a span cut through a UTF-8 sequence is a panic in the text buffer that
-receives it. End to end, the suite opens the window on a real pair, walks
+lists the suite): every side's rows reconstruct that side's file exactly,
+and a changed pair's texts with their differing spans removed are equal —
+each probed by breaking the code on purpose. The spans count **chars** end
+to end — the diff finds them in chars and the text buffer paints them in
+chars, so bytes never enter to need converting back out — and a multi-byte
+fixture pins that a count secretly done in bytes would select the wrong
+characters and fail the equality. End to end, the suite opens the window on a real pair, walks
 the cascade's marked arm, runs a recording script as the external tool and
 reads both paths out of its log.

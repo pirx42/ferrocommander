@@ -145,15 +145,12 @@ fn fill<'a>(view: &gtk::TextView, rows: &'a [Row], side: impl Fn(&'a Row) -> Opt
 
         let Some(side) = side(row) else { continue };
         for range in &side.changed {
-            // The engine's spans are byte ranges; a text buffer counts
-            // characters. Chars up to the boundary is the conversion, and
-            // the engine's char-alignment guarantee is what makes the count
-            // land exactly on it.
-            let from = side.text[..range.start].chars().count() as i32;
-            let to = side.text[..range.end].chars().count() as i32;
+            // The engine's spans count chars, which is exactly what a text
+            // iter's line offset counts — the audit removed the byte round
+            // trip that used to sit here.
             let (Some(start), Some(end)) = (
-                buffer.iter_at_line_offset(line, from),
-                buffer.iter_at_line_offset(line, to),
+                buffer.iter_at_line_offset(line, range.start as i32),
+                buffer.iter_at_line_offset(line, range.end as i32),
             ) else {
                 continue;
             };

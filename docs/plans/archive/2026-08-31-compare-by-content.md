@@ -1,6 +1,8 @@
 # Compare by content: a side-by-side diff, and the door to a better one
 
-Status: Draft — decisions 1–4 settled by the owner, 2026-08-31
+Status: Implemented + substance extracted to compare.md — commits 5489c40
+(engine), 339738e (setting + substitution), 3bdbc61 (key, cascade, window,
+tool hook), plus the phase 5/6 closing commit; archived 2026-08-31
 
 Total Commander's *Compare by Content*, in this project's shape: pick two
 files, see their lines side by side with the differences marked — and when
@@ -11,7 +13,7 @@ because anyone who outgrows it writes one config line.
 
 ## 1. What exists to build on
 
-- **The external-tool precedent is `editor`** ([config.md](../config.md) §
+- **The external-tool precedent is `editor`** ([config.md](../../config.md) §
   `editor`): a command line in settings, run like a typed one,
   `tc_core::command::open_with` appending one quoted path. The compare tool
   cannot append — two paths must land in caller-chosen positions — so it
@@ -75,7 +77,7 @@ because anyone who outgrows it writes one config line.
   "never read the file whole" rule stops at the diff's door (a line diff
   needs both files in memory), so the ceiling is where that honesty lives.
 - **The external tool needs operating-system paths**, so inside an archive
-  it refuses with the same words `F4` uses there ([viewer.md](../viewer.md) —
+  it refuses with the same words `F4` uses there ([viewer.md](../../viewer.md) —
   an editor takes an OS path, and extracting a temp copy is not v1). The
   internal view reads through the VFS and works in archives and branch
   view.
@@ -173,3 +175,49 @@ About seven hours of work, plus a full-gate run (~14 min) per phase commit.
   sequence panics in a GTK buffer. The engine aligns spans to `char`
   boundaries by construction and a unit test feeds it text where every
   interesting boundary is multi-byte.
+
+## 7. Outcome
+
+All four decisions shipped as settled, about five working hours across four
+commits, each behind a full green gate. The durable substance lives in
+compare.md, config.md § `compare_tool`, performance.md's measured table,
+and reliability.md's suite row; what follows is what the doing taught.
+
+- **The keymap gate caught a real defect before any user could.**
+  `ctrl+shift+C` did not round-trip: Shift makes the capital keysym of a
+  letter, and the spec parser reads back the lowercase one. The fix
+  extended `normalize`'s keypad-twins argument to letters — the case is a
+  fact about the keyboard — with the deliberate Shift kept. This is the
+  fourth find for the doc-drift gates, and the first in code rather than
+  documentation.
+- **Phases 3 and 4 could never have been separate commits.** The
+  every-binding-is-pressed test makes a binding without its window and e2e
+  red by design; the plan should have seen that and planned them as one.
+  Likewise docs/compare.md arrived with the binding, not in phase 5 — the
+  link check insisted the moment keymap.md referenced it, which is the
+  docs-in-same-commit rule enforcing itself. Phase 5 was left holding only
+  reliability.md's row and a stale window count.
+- **The phase 6 audit found the byte↔char round trip.** The engine
+  converted its char-level diff to byte ranges; the window converted them
+  straight back to char offsets for GTK — two conversions each existing to
+  undo the other, plus a UTF-8-boundary hazard that only existed because
+  bytes entered at all. Spans count chars end to end now; `byte_range` and
+  the dialog's conversion loop are deleted, and the mis-slice the old test
+  guarded against is impossible by construction. The lesson: when a value
+  crosses a boundary, check what the *other* side counts in before picking
+  a unit to be safe in.
+- **The single-ScrolledWindow bet paid.** Both text views in one box under
+  one scroller made synchronized scrolling a property of the widget tree
+  rather than of a handler, and the e2e window tests passed on their first
+  run. The accepted cost — the views lay out whole buffers — is bounded by
+  the engine's ceiling and recorded in the module.
+- **Measured before built on** (skill 74's layouts as part of the claim):
+  identical 2.25 ms, nothing-in-common 42.84 ms, intra-line worst case
+  2.61 ms, one-in-a-hundred 3.43 ms over 10 000 lines. The intra-line
+  refinement staying at 2.61 ms is the design's argument — it never touches
+  lines the line diff matched — and the number that would have vetoed
+  `similar` never appeared.
+- **Left alone, with reasons**: `start_compare` gathers a seven-slot tuple
+  under one borrow — wide, but each slot is used once and a struct would
+  add names without removing a step; the `%1`-containing-path substitution
+  test is the single-pass loop's whole justification and stays beside it.
