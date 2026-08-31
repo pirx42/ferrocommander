@@ -217,6 +217,15 @@ jobs:
         # the runner image already.
         run: brew install gtk4
 
+      - name: Current stable Rust
+        # On the image, but stale: run #19 died on "rustc 1.97.1 is not
+        # supported" against the workspace's 1.98 rust-version, because
+        # rust-toolchain.toml's `stable` resolves to whatever stable is
+        # *installed*, and this image's lags the channel. The Linux image
+        # tracks it closely and the Windows job installs its toolchain
+        # fresh, which is why only this job ever saw the difference.
+        run: rustup update stable
+
       - name: Package
         # Builds, stages the .app, rewrites the Homebrew dylib paths the
         # bundle carries, re-signs what the rewriting unsigned, checks the
