@@ -756,6 +756,11 @@ impl PaneView {
     /// when the listing actually got longer or shorter. It is also cheaper by
     /// the same stroke — a re-read of fifty thousand rows used to allocate
     /// fifty thousand `PaneEntry` values ([`docs/performance.md`]).
+    ///
+    /// The *marking* path does not come through here, and
+    /// [`refresh_marks`](Self::refresh_marks) says why: it is the same
+    /// question asked more cheaply, for the one case where the answer is
+    /// known to be two flags.
     fn sync_rows(&self) {
         let wanted = self.shown.listing.len();
         let held = self.store.n_items() as usize;

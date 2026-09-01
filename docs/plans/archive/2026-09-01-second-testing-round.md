@@ -1,6 +1,7 @@
 # Testing round two — three bugs, one answer, and the row
 
-Status: Draft — decisions settled by the owner, 2026-09-01
+Status: **Done**, 2026-09-01 — all seven items, each behind a green gate.
+Outcome in § 7.
 
 Seven items from the second round of using the program. Three are the same
 subject seen from three angles — a viewport that moves when nothing asked it
@@ -62,7 +63,7 @@ line to reverse.
 **Phase 0 — coverage pre-check** (skill 43).
 
 - *The viewport.* Nothing automated, and nothing can be: a scroll offset is
-  not a window title, a file or a key press ([ui-shell.md](../ui-shell.md)).
+  not a window title, a file or a key press ([ui-shell.md](../../ui-shell.md)).
   `scripts/check-scroll-memory.sh` is the check, and it covers the memory and
   the marking case — not the two job paths, and not the navigate-and-return
   case this round reports.
@@ -104,7 +105,7 @@ editor, so the layout there grows a box rather than a widget.
 The icon lookup is cached by extension. A listing of fifty thousand rows must
 not become fifty thousand content-type guesses, and only the rows on screen
 bind — but the cache is what keeps scrolling cheap
-([performance.md](../performance.md)), and the phase carries a measurement
+([performance.md](../../performance.md)), and the phase carries a measurement
 rather than a claim.
 
 Row height is CSS: the padding on the cells and the row, taken down until a
@@ -116,10 +117,10 @@ its text inside itself; what changes the row's height is the button appearing
 and disappearing. It stays in the layout always and goes transparent when
 idle, so the bottom row has one height for the life of the window.
 
-**Phase 5 — docs.** [listing.md](../listing.md) for the brackets and the
-hidden-file rule that `AppData` ran into, [ui-shell.md](../ui-shell.md) for
-the icon and the row metrics, [performance.md](../performance.md) for the
-icon cache's number, [ops.md](../ops.md) for what a `+` means beside the
+**Phase 5 — docs.** [listing.md](../../listing.md) for the brackets and the
+hidden-file rule that `AppData` ran into, [ui-shell.md](../../ui-shell.md) for
+the icon and the row metrics, [performance.md](../../performance.md) for the
+icon cache's number, [ops.md](../../ops.md) for what a `+` means beside the
 count it belongs to.
 
 **Phase 6 — refactoring audit** (skill 49) and the end-of-plan ritual.
@@ -165,3 +166,66 @@ About seven hours, plus a full-gate run (~15 min) per phase commit.
   `full_name` protects them; what would make it wrong is a sixth reader that
   takes the displayed name instead, which is exactly the kind of thing that
   is invisible until somebody renames a folder to `[Documents]`.
+
+## 7. Outcome
+
+Seven items, five commits, six green gates. What the plan got right, and the
+two things it did not.
+
+**The plan's own § 6 said the third viewport case was unknown and would be
+reproduced rather than assumed. That was the right call, and it paid.** The
+two known causes — `reload_after_job` restoring nothing, `reread` restoring
+into a collapsed adjustment — were fixed first, and *neither fix worked* for
+the third case. Instrumenting every painted frame's offset is what showed
+why: a watcher nudge still moved the view from 630 px to 1170, the cursor row
+at the top, which is exactly the wording of the report.
+
+Two more fixes were written and measured before the one in the commit:
+
+- restoring the offset at the deferred priority after `refresh` — still 1170,
+  because `scroll_to` after a rebuild does not scroll minimally; with no
+  anchor it puts the row at the top, and GTK applies it during the frame's
+  own layout, after every idle a caller could hook;
+- also suppressing that `scroll_to` — the view then went to **0**, because
+  the allocation reconfigures the adjustment from the anchor either way.
+
+So the cause was never *when* the offset was put back. It was that `refresh`
+emptied the store, and `remove_all` takes the list's scroll anchor with it.
+`sync_rows` keeps the objects and rewrites their contents; nothing is
+replaced, so nothing is anchored to a row that has gone. All three cases then
+hold at 630, measured the same way.
+
+That is the second round running in which the first diagnosis was wrong and a
+measurement settled it. The pattern is worth naming: **reading GTK code
+predicts what a widget is asked to do, not what it does at allocation time.**
+
+**The folder-size report was one bug and its symptom**, which the plan had
+already worked out: `+` means a lower bound, and what was putting it there
+was the previous keypress cancelling a walk whose partial count was then
+delivered and written over a good one. Two guards, because they fail
+separately. The first test written for the first guard proved nothing — it
+cancelled the token *before* `spawn`, which the pre-existing check catches —
+and was replaced with one that cancels from inside the first `read_dir`.
+
+**`AppData` was not a bug**, and the rule is written down now.
+
+**The three visual items went as planned**, and the one thing worth
+recording is that the plan asserted an icon cache would be needed without
+having measured. It is 5× cheaper and neither figure was ever a problem: a
+whole screenful is 87 µs against a 16 ms frame. `docs/performance.md` says
+that rather than implying the cache rescued something.
+
+**Three existing tests changed.** Two row tests asserted the unbracketed
+display name; the third was the one the gate caught rather than I did —
+`a_dragged_column_width_reaches_the_settings_file` aims at the header band by
+pixel, and a shorter header moved it. It is the single place in the whole
+suite that knows a pixel of the pane's layout, which is now said beside the
+constant so the next row-height change expects it.
+
+The audit found one thing, and it is a *non*-finding worth writing down:
+`refresh_marks` and `sync_rows` both answer "which rows say something
+different now", and they stay separate on purpose. `sync_rows` builds each
+row to compare it, which is right after a re-read where the rows have to be
+built anyway; a mark changes two flags, and asking the expensive question
+about it would format fifty thousand dates on every `Space`. Two functions
+that look like duplication and are not now say so.
