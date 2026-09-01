@@ -91,14 +91,30 @@ Three things the plan has to decide rather than discover:
 
 ## 3. Phases
 
-**Phase 0 — coverage pre-check** (skill 43). The seams: the keymap tables
-(covered by the gate's own tests), `viewer::View` (covered headlessly by
-`fc-core/tests/viewer.rs`), the pane's widget tree (covered only by the
-end-to-end suite), and quit (pressed today as `ctrl+q`). Nothing here is
-unpinned enough to owe characterisation tests; what is owed is a
-*measurement*, which is phase 1.
+**Phase 0 — coverage pre-check** (skill 43), *done, and it moved phase 2*.
+The seams are covered: the keymap tables by the gate's own tests,
+`viewer::View` headlessly by `fc-core/tests/viewer.rs`, the pane's widget
+tree by the end-to-end suite alone, and the directory walk by
+`fc-core/tests/sizes.rs`. Nothing owed characterisation tests.
 
-**Phase 1 — the cost of following a cursor.** Before the feature: a
+**What it found is bigger than the plan assumed.** `ctrl+q` is not pressed
+by a *test* — it is pressed by the **harness**: `App::close()` sends it to
+quit the app, because settings are written from GTK's close handler and a
+killed process never runs one. Eleven tests close an app that way and
+seven of those relaunch it afterwards to read what was written, so moving
+quit off `ctrl+q` moves the mechanism that proves the settings survive at
+all. The gate's binding-pressed test scans the harness as well as the
+suite, which is why the binding counts as pressed today and why it will
+keep counting once the harness says `alt+F4`.
+
+So phase 2 is not "rebind two keys": it is rebinding two keys *and* the
+one line every closing test depends on, with the whole suite as the check
+that it still shuts down cleanly. That is the phase's real risk, and it is
+in front of it rather than behind it.
+
+**Phase 1 — the cost of following a cursor** *(done; the numbers are in
+[performance.md](../performance.md), and they settled the debounce
+question: cancellation, not delay).* Before the feature: a
 benchmark for what one preview step costs — `stat` plus one 64 KiB
 windowed read — with the input layout stated as part of the claim (skill
 74), including the two cases that cannot flatter it: an archive member, where
@@ -110,7 +126,9 @@ over a folder without ever asking. The number decides whether the preview may up
 from the key handler or has to be debounced, and it goes in
 [performance.md](../performance.md) either way.
 
-**Phase 2 — the keys move.** `Action::Quit` rebinds to `Alt+F4`;
+**Phase 2 — the keys move, harness included.** `Action::Quit` rebinds to
+`Alt+F4` and `App::close()` sends that instead — the change phase 0 found,
+and the one the whole suite checks by continuing to shut down cleanly;
 `ctrl+q` becomes `Action::QuickView`, which for this phase only toggles a
 flag and redraws nothing. The macOS layer keeps `cmd+q → quit` and gains
 nothing. The gate's tables follow in the same commit, and the end-to-end
@@ -153,7 +171,7 @@ Corrected per skill 45; the last plans held at ~0.10.
 |---|---|---|
 | 0 pre-check | 0.25 d | 0.25 h |
 | 1 measurement | 0.75 d | 0.75 h |
-| 2 the keys | 0.5 d | 0.5 h |
+| 2 the keys | 0.75 d | 0.75 h |
 | 3 the preview | 2.5 d | 2.5 h |
 | 4 end-to-end | 1 d | 1 h |
 | 5 docs | 0.5 d | 0.5 h |

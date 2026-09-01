@@ -218,6 +218,39 @@ Files over the module's 64 MiB ceiling never reach any of this: they get a
 streaming byte verdict in constant memory, which is where the viewer's
 never-read-the-file rule hands over to the diff's need to hold both files.
 
+## What one step of the quick view costs
+
+Quick view follows the cursor ([viewer.md](viewer.md)), so every arrow key
+asks what the row under it holds. Measured before the feature was built,
+release build, best of twenty, 2026-09-01 on this machine
+(`crates/fc-core/examples/bench_quick_view.rs` states the layouts as part
+of the claim):
+
+| Step | Time |
+|---|---|
+| a small file | 0.004 ms |
+| a file 16 MB long | 0.011 ms |
+| **starting** a directory walk and cancelling it | 0.058 ms |
+| that same walk run to the end, over 2 000 entries | 5.745 ms |
+
+The first two answer the obvious worry and dismiss it: a preview costs the
+same whatever the file's size, because it reads one 64 KiB window and never
+the file — the viewer's rule, inherited whole.
+
+**The fourth number is the one that decided the design**, and a benchmark
+of the keystroke alone would never have shown it. What a key press pays for
+a directory is 0.058 ms; what it *starts* runs on behind it, and 5.745 ms
+for two thousand entries scales with the tree — a home directory or a
+source checkout is seconds, not milliseconds. Held-down arrows at a typical
+repeat rate would leave those walks piling up, each doing real disk work
+nobody is waiting for.
+
+So the rule is cancellation, not delay: **moving the cursor cancels the
+walk the last row started**, which bounds the background work to one walk
+cut off after about a keystroke, however large the tree. A debounce was
+considered and not taken — it would add latency to the common case, a file,
+to solve a problem cancellation already solves for the rare one.
+
 ## Archives
 
 Release build, 10 000 entries plus an 8 MB member of pseudo-English (deflate
