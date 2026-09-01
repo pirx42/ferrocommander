@@ -257,14 +257,10 @@ encoding lives and is tested.
 
 ## A window listing the running jobs
 
-`Background` closes a progress window and leaves its job running, which is
-what the field report asked for. What it does not yet have is the way back:
-once backgrounded, a job cannot be watched again or cancelled, because
-nothing lists it.
-
-The engine is ready for that list — every job's progress, cancel token and
-report already hang off its own `JobHandle`, and the shell already holds one
-per running job. What is missing is a non-modal window over them.
+The way back exists as of 2026-09-01: a backgrounded job keeps a bar in the
+corner of the window, and clicking it opens the progress window again on the
+same cancel token ([ops.md](ops.md)). What is still missing is a *list* — and
+it is missing for a reason rather than by omission.
 
 The queue behind it still runs jobs **one at a time**, which is a documented
 property rather than an oversight: two copies writing into one directory at

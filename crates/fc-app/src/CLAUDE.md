@@ -18,6 +18,7 @@ for every answer. **Nothing here touches the filesystem directly.**
 | `jobs.rs` | what a file-operation keystroke asks for — pure, over a `Listing` and the typed text |
 | `command_line.rs` | the entry at the bottom, and what a typed line means |
 | `progress.rs` | the throughput meter: events folded into a fraction, a caption and a path |
+| `indicator.rs` | the corner that says a job is running, and gets its window back |
 | `format.rs` | how a byte count, a time left and a failure are written for a person |
 | `row.rs` | one row of a pane, as GTK needs it |
 | `constants.rs` | every string, size and delay the shell uses |

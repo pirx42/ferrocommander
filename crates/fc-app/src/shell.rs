@@ -12,13 +12,14 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
 
 use fc_core::config;
 use fc_core::listing::Loading;
-use fc_core::ops::{Job, JobHandle, JobQueue};
+use fc_core::ops::{CancelToken, Job, JobHandle, JobQueue, Progress};
 use fc_core::sizes::Sizes;
 use fc_core::vfs::VfsPath;
 
@@ -27,10 +28,24 @@ use crate::constants::{
     CONFLICT_PROMPT, PANE_COUNT, PREVIEW_FOLDER_COUNTING, PROGRESS_DELAY, SETTINGS_SAVE_DELAY,
     SETTINGS_UNWRITABLE, TITLE_CONFLICT,
 };
+use crate::indicator::JobIndicator;
 use crate::keymap::Keymap;
 use crate::pane::PaneView;
-use crate::{command_line, dialogs, progress};
+use crate::progress::Meter;
+use crate::{command_line, dialogs};
 use fc_core::vfs::LocalFs;
+
+/// The job that is running: what stops it, how far it has got, and its window
+/// when one is open.
+///
+/// The window is an `Option` because it is not always there — it opens only
+/// once a job has proved it will take a moment, and `Background` closes it
+/// while the job runs on. Reopening it is what the indicator's click does.
+struct Running {
+    cancel: CancelToken,
+    meter: Meter,
+    view: Option<dialogs::ProgressView>,
+}
 
 /// The two panes, which of them keystrokes go to, and the jobs they started.
 pub(crate) struct Shell {
@@ -49,6 +64,16 @@ pub(crate) struct Shell {
     /// Every file operation goes through here, so they run one at a time and
     /// off the UI thread.
     queue: JobQueue,
+    /// The job that is running, while one is.
+    ///
+    /// **State rather than a local of the future that drains the events**,
+    /// which is what it used to be — and why a job whose window had been sent
+    /// to the background could never be found again: nothing outside that
+    /// future could reach its window, its meter or its cancel token
+    /// ([`docs/ops.md`]).
+    running: Option<Running>,
+    /// The corner that says a job is running, and gets its window back.
+    indicator: JobIndicator,
     /// Weak, or the window would own the shell that owns the window. Read
     /// through [`window`](Self::window), which is the only thing anyone wants
     /// from it.
@@ -109,6 +134,7 @@ impl Shell {
         saved: config::Settings,
         keymap: Keymap,
         command_line: command_line::CommandLine,
+        indicator: JobIndicator,
     ) -> Self {
         let mut shell = Shell {
             panes,
@@ -116,6 +142,8 @@ impl Shell {
             quick_view: false,
             command_line,
             queue: JobQueue::new(),
+            running: None,
+            indicator,
             window: window.downgrade(),
             config_root,
             drives: saved.drives.clone(),
@@ -225,6 +253,87 @@ impl Shell {
                 Some((counting, answers))
             }
         }
+    }
+
+    /// The running-job corner, so the window can wire its click.
+    pub(crate) fn indicator(&self) -> &JobIndicator {
+        &self.indicator
+    }
+
+    /// Takes over a job that has just been submitted.
+    pub(crate) fn job_started(&mut self, cancel: CancelToken) {
+        self.running = Some(Running {
+            cancel,
+            meter: Meter::default(),
+            view: None,
+        });
+    }
+
+    /// Folds one progress event in and shows where the job has got to.
+    ///
+    /// **The meter lives here**, not in the future that drains the events, so
+    /// that the indicator's click can find it — and so that an event costs
+    /// one fold rather than a fold and a clone. A job of two hundred files
+    /// sends fifty-five thousand events; anything per-event is a decision
+    /// about how the whole program feels while a copy runs
+    /// ([`docs/performance.md`]).
+    ///
+    /// Returns whether the job has now earned a window: real work, and long
+    /// enough to be worth interrupting for. The indicator obeys the same rule
+    /// rather than having a second one — a bar that flashes for thirty
+    /// milliseconds is exactly the noise that rule exists to prevent.
+    pub(crate) fn job_advanced(&mut self, event: &Progress, elapsed: Duration) -> bool {
+        let Some(running) = &mut self.running else {
+            return false;
+        };
+        running.meter.apply(event);
+        // The clock is read here, not by the meter: what the events add up to
+        // is arithmetic, and how fast they arrived is an observation.
+        running.meter.observe(elapsed);
+        let worth_showing = running.meter.has_work() && elapsed >= PROGRESS_DELAY;
+        // A window the user closed with `Background` is gone, and holding a
+        // handle to it would leave the indicator with nothing to reopen.
+        if running.view.as_ref().is_some_and(|view| view.is_closed()) {
+            running.view = None;
+        }
+        if !worth_showing {
+            return false;
+        }
+        if let Some(view) = &running.view {
+            view.update(&running.meter);
+        }
+        self.indicator.show(&running.meter);
+        true
+    }
+
+    /// Opens the running job's window if it is not already up.
+    ///
+    /// Both halves of the way back that `Background` used to close off: the
+    /// job can be watched again, and cancelled, because the window it reopens
+    /// holds the same token the engine is checking.
+    pub(crate) fn show_progress_window(&mut self) {
+        let Some(window) = self.window() else {
+            return;
+        };
+        let Some(running) = &mut self.running else {
+            return;
+        };
+        if running.view.as_ref().is_some_and(|view| !view.is_closed()) {
+            return;
+        }
+        let view = dialogs::ProgressView::open(&window, running.cancel.clone());
+        view.update(&running.meter);
+        running.view = Some(view);
+    }
+
+    /// The job is over: its window goes, and so does the corner.
+    pub(crate) fn job_finished(&mut self) {
+        if let Some(running) = self.running.take() {
+            if let Some(view) = running.view {
+                view.close();
+            }
+        }
+        self.indicator.hide();
     }
 
     /// What the settings file would say if it were written right now.
@@ -364,34 +473,27 @@ pub(crate) fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl Fn
         cancel,
     } = handle;
 
+    shell.borrow_mut().job_started(cancel);
+
     let showing = shell.clone();
     glib::spawn_future_local(async move {
         let started = std::time::Instant::now();
-        let mut meter = progress::Meter::default();
-        let mut view: Option<dialogs::ProgressView> = None;
+        let mut opened = false;
         while let Ok(event) = progress.recv().await {
-            meter.apply(&event);
-            // The clock is the shell's to read, not the meter's: what the
-            // events add up to is arithmetic, and how fast they arrived is an
-            // observation.
-            meter.observe(started.elapsed());
-            // The window appears only once a job has proved it is going to
+            // A job earns its window only once it has proved it is going to
             // take a moment. Checked as events arrive rather than on a timer:
             // a job that finishes first simply never opens one, and a job
             // that moves no bytes at all never qualifies.
-            if view.is_none() && meter.has_work() && started.elapsed() >= PROGRESS_DELAY {
-                let Some(window) = showing.borrow().window() else {
-                    return;
-                };
-                view = Some(dialogs::ProgressView::open(&window, cancel.clone()));
-            }
-            if let Some(view) = &view {
-                view.update(&meter);
+            let worth_showing = showing.borrow_mut().job_advanced(&event, started.elapsed());
+            // Opened once, and never reopened behind the user's back: after
+            // `Background` the indicator is the way back, and a window that
+            // let itself in again would make that button meaningless.
+            if worth_showing && !opened {
+                opened = true;
+                showing.borrow_mut().show_progress_window();
             }
         }
-        if let Some(view) = view {
-            view.close();
-        }
+        showing.borrow_mut().job_finished();
     });
 
     let asking = shell.clone();

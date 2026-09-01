@@ -12,6 +12,7 @@ mod command_line;
 mod constants;
 mod dialogs;
 mod format;
+mod indicator;
 mod jobs;
 mod keymap;
 mod navigation;
@@ -118,11 +119,19 @@ fn build_window(app: &gtk::Application) {
         .build();
 
     let command_line = command_line::CommandLine::new();
+    let indicator = indicator::JobIndicator::new();
 
     let layout = gtk::Box::new(gtk::Orientation::Vertical, PANE_SPACING);
+    // The command line and the running-job indicator share the bottom row:
+    // the line takes the width it is given, and the bar sits at the end of it
+    // where a status corner belongs ([`docs/ops.md`]).
+    let bottom = gtk::Box::new(gtk::Orientation::Horizontal, PANE_SPACING);
+    bottom.append(command_line.widget());
+    bottom.append(indicator.widget());
+
     layout.append(&drives);
     layout.append(&panes);
-    layout.append(command_line.widget());
+    layout.append(&bottom);
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
@@ -139,6 +148,7 @@ fn build_window(app: &gtk::Application) {
         settings.clone(),
         keymap,
         command_line,
+        indicator,
     )));
     shell.borrow_mut().active = settings.active_pane.min(PANE_COUNT - 1);
     shell.borrow_mut().update_active();
@@ -147,6 +157,7 @@ fn build_window(app: &gtk::Application) {
         wire_selection(&shell, index);
     }
     fill_drive_bar(&drives, &shell);
+    wire_indicator(&shell);
     wire_command_line(&shell);
     for index in 0..PANE_COUNT {
         wire_inline_rename(&shell, index);
@@ -234,6 +245,18 @@ fn typed_into_the_pane(
     // `a_click_then_a_letter_searches_from_the_row_that_was_clicked`.
     shell.borrow_mut().active_pane().type_ahead(character);
     glib::Propagation::Stop
+}
+
+/// Connects the running-job indicator to the window it brings back.
+///
+/// The whole point of the corner: `Background` used to be a one-way door,
+/// because closing the progress window took away the only thing that referred
+/// to the job ([`docs/ops.md`]). Clicking here opens it again, on the same
+/// cancel token the engine is still checking.
+fn wire_indicator(shell: &Rc<RefCell<Shell>>) {
+    let button = shell.borrow().indicator().widget().clone();
+    let showing = shell.clone();
+    button.connect_clicked(move |_| showing.borrow_mut().show_progress_window());
 }
 
 /// Connects one pane's inline rename to the job that carries it out.

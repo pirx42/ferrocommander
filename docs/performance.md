@@ -317,6 +317,27 @@ the same size, plus one call per turn that inlines away. **The property, not
 the timing, is what the suite holds:** the progress deltas add up to what the
 scan promised, on both the copy path and the pack path.
 
+## What a progress event may cost
+
+A copy of two hundred small files sends about **55 000** progress events, so
+anything done per event is a decision about how the whole program feels while
+a job runs. That number is not an estimate: it was counted, by logging every
+call, while working out why the app had stopped answering keystrokes.
+
+The cause was one line. Adding the running-job indicator (2026-09-01) meant
+the shell needed the meter, and the first version handed it over by value —
+`meter.clone()` per event, cloning the rate window's `VecDeque`, plus a
+`RefCell` borrow per event where there had been none. The main loop then had
+so little left that a keypress on the progress window's `Background` button
+was never processed, and the end-to-end suite failed on a window that would
+not close. Not a slow copy: an unresponsive program.
+
+So the meter lives in the shell and an event costs one fold, with no clone
+and one borrow. Two widgets are written per event, which is one more than
+before; the honest note is that this has not been measured against a repaint
+budget, and a throttle is the obvious next step if a job ever feels heavy
+again.
+
 ## What is deliberately still slow
 
 **The listing loads whole directories.** No pagination, no incremental

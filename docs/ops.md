@@ -214,6 +214,38 @@ Deleting and copying treat them differently, and both are deliberate:
   call to recreate it with. The refusal is reported as a per-path failure, so
   it is visible rather than silent.
 
+## A backgrounded job is still on screen
+
+`Background` closes the progress window and leaves the job running — the
+token is not pulled, the events go on being drained, and the copy runs to its
+end. Until 2026-09-01 that was a one-way door: nothing on screen referred to
+the job any more, so it could not be watched again and, more to the point,
+could not be cancelled.
+
+The corner is that something. A bar with its percentage sits at the end of
+the command line's row while a job runs, under the same rule the window
+follows — real work, and longer than `PROGRESS_DELAY` — so a job too short
+to be worth a window is too short to be worth a bar. Clicking it opens the
+window again, on the same cancel token the engine is still checking.
+
+**The meter lives in the shell**, not in the future that drains the events,
+which is what makes the click able to find it. That is also the cheaper
+arrangement: a copy of two hundred files sends about fifty-five thousand
+progress events, so an event costs one fold rather than a fold and a clone of
+the meter's sample window. Making it cost the clone was measurable in the
+worst way — the app stopped answering keystrokes while a copy ran, and the
+end-to-end suite caught it as a `Background` button that would not take its
+`Return` ([performance.md](performance.md)).
+
+What no test covers is the click itself: it means something only while a job
+runs with no modal dialog up, and neither half stands still long enough for
+the end-to-end suite to catch ([ui-shell.md](ui-shell.md) says why, and what
+was proved before the racy test was taken out again).
+
+The queue behind all this still runs jobs **one at a time**, so there is one
+job to indicate. That is a documented property rather than an oversight, and
+the section below says why.
+
 ## The queue
 
 `ops::queue` runs jobs off the caller's thread: one worker thread takes them

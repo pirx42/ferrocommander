@@ -505,6 +505,19 @@ click can and cannot hit. That is a real limit on what a feature whose whole
 point is on-screen text can be proven to do here, and it is why quick view's
 five preview cases are unit-tested against the listing rather than end to end.
 
+**And clicking the running-job corner cannot be tested here**, which is a
+limit of the harness rather than of the feature. The click only means
+anything while a job is running and no modal dialog is up, and neither half
+can be held still: a local copy of the suite's twenty thousand cached files
+finishes in the moment between backgrounding the window and reaching for the
+mouse, and the one lever that *does* stop a job — an unanswered conflict —
+puts a modal dialog over the main window, where GTK's grab discards the
+click. A test written against that race passed twice and failed once in a
+full-suite run, which is exactly the test this repository does not keep. What
+it proved while it passed is real: the corner reopened the window, and
+emptying the click handler made it fail. The reopen is verified that way and
+by eye, not by anything that runs in the gate.
+
 **A scroll offset is invisible to it too.** It is not a
 window title, a file on disk or a key press, so `xdotool` has no way to read
 it — which is why the per-directory scroll memory is checked by

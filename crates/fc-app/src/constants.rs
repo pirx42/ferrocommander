@@ -361,6 +361,15 @@ pub const STYLESHEET: &str = "
     font-family: monospace;
     opacity: 0.7;
 }
+.job-indicator {
+    /* The running-job bar at the end of the command line's row. Flat and
+       narrow, because it lives in the chrome rather than in a dialog. */
+    padding: 0 4px;
+    min-height: 0;
+}
+.job-indicator progress, .job-indicator trough {
+    min-height: 14px;
+}
 .output {
     /* Program output, where the columns mean something. */
     font-family: monospace;
@@ -441,6 +450,12 @@ pub const CLASS_DIM: &str = "dim";
 pub const CLASS_COMMAND_LINE: &str = "command-line";
 pub const CLASS_COMMAND_PROMPT: &str = "command-prompt";
 pub const CLASS_OUTPUT: &str = "output";
+/// The running-job bar in the corner ([`docs/ops.md`]).
+pub const CLASS_JOB_INDICATOR: &str = "job-indicator";
+
+/// How wide that bar is. Wide enough for `42 % — 1.2 GB of 3.0 GB` to be
+/// legible, narrow enough that the command line keeps the row.
+pub const INDICATOR_WIDTH: i32 = 220;
 
 /// What the quick-filter field says when it is empty.
 pub const FILTER_PLACEHOLDER: &str = "Filter\u{2026}  (Esc to clear)";

@@ -65,6 +65,15 @@ impl ProgressView {
         ProgressView { window, path, bar }
     }
 
+    /// Whether this window has gone — `Background` closed it, or `Cancel`
+    /// did.
+    ///
+    /// Asked rather than signalled, because the answer is a property of the
+    /// window and a signal would be a second place that has to agree with it.
+    pub fn is_closed(&self) -> bool {
+        !self.window.is_visible()
+    }
+
     pub fn update(&self, meter: &Meter) {
         self.path.set_text(meter.current());
         self.bar.set_fraction(meter.fraction());
