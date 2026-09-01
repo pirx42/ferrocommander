@@ -308,6 +308,32 @@ the reason it has to exist is that `scroll_to` after a rebuild does not
 scroll *minimally* — with the anchor gone it puts the cursor row at the top,
 which is precisely what the second testing round reported.
 
+## What a row looks like
+
+Three things the second testing round asked for, against a screenshot of
+Total Commander itself:
+
+- **A leading icon**, 16 px, before the name and outside the rename editor's
+  stack — so it stays put while a row is being renamed, because the editor
+  replaces the name and not the row. It comes from the desktop icon theme by
+  *content type* rather than by icon name: GIO turns `text/plain` into the
+  theme's whole fallback chain, so a desktop missing one rung still finds the
+  next. On Windows and macOS these are the bundled Adwaita icons, not the
+  ones Explorer and Finder draw — the alternative was two more platform
+  branches no gate here can test, for icons that differ only in style.
+- **Directory names in brackets**, `[Documents]`, and the parent row with
+  them, `[..]`. **Display only**: `Row::full_name` stays what the filesystem
+  calls it, because renaming, the type-ahead, the marks, the pack prefill and
+  every job read that field, and a bracket reaching a `VfsPath` would be an
+  operation on a file that does not exist. A unit test pins that.
+- **Rows as compact as the font allows.** GTK's default row is padded for
+  touch: the pane was 39 px a row and showed about half as many files as
+  Total Commander does in the same window. Zero padding, `min-height: 0` —
+  which matters as much, because GTK keeps its own floor otherwise — and a
+  font a notch smaller bring it to 21 px. The screenshot is 17, which is a
+  smaller UI font than this desktop's default; the target was the density,
+  not the pixel.
+
 ## Active pane
 
 Exactly one pane is active. It is marked by a style class on its **path bar**,

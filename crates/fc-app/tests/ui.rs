@@ -85,7 +85,14 @@ fn settings_text(app: &App) -> String {
 
 /// Where the header band sits, and what the Ext column starts out wide.
 /// Spelled out rather than imported, like every other expectation here.
-const EXT_DIVIDER_Y: i32 = 70;
+///
+/// It moved from 70 to 59 on 2026-09-01, when the rows and the header they
+/// sit above were made compact: the band the drag has to land on is where it
+/// is, and this constant is the one thing in the suite that knows a pixel of
+/// the pane's layout. A row-height change is therefore expected to move it —
+/// and the test failing loudly is exactly right, since a drag that misses the
+/// header would otherwise silently be a drag over the rows.
+const EXT_DIVIDER_Y: i32 = 59;
 /// The divider at the right edge of Ext: the name column is 260 wide and Ext
 /// 70. Dragged a hundred pixels right, which is far enough that no rounding
 /// could account for the difference.

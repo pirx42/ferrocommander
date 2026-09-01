@@ -8,9 +8,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use fc_core::listing::split_name;
 use fc_core::vfs::Entry;
+use gtk::gio;
 use gtk::glib;
 
-use crate::constants::{DATE_FORMAT, DIR_SIZE_LABEL, SIZE_PARTIAL_MARKER};
+use crate::constants::{
+    DATE_FORMAT, DIRECTORY_CONTENT_TYPE, DIR_NAME_CLOSE, DIR_NAME_OPEN, DIR_SIZE_LABEL,
+    SIZE_PARTIAL_MARKER,
+};
 use crate::format::group_digits;
 
 /// One rendered row: four column strings plus what the UI needs to style it.
@@ -55,7 +59,16 @@ impl Row {
         };
 
         Row {
-            name: name.to_string(),
+            // Directories are bracketed, Total Commander's own spelling, and
+            // the parent row with them. **Display only** — `full_name` below
+            // stays what the filesystem calls it, because renaming, the
+            // type-ahead, the marks, the pack prefill and every job read that
+            // field. A bracket that reached a `VfsPath` would be an operation
+            // on a name that does not exist.
+            name: match entry.is_dir() {
+                true => format!("{DIR_NAME_OPEN}{name}{DIR_NAME_CLOSE}"),
+                false => name.to_string(),
+            },
             ext: ext.to_string(),
             full_name: entry.name.clone(),
             size: match (entry.is_dir(), measured) {
@@ -85,6 +98,32 @@ impl Row {
             is_dir: entry.is_dir(),
             selected,
         }
+    }
+}
+
+impl Row {
+    /// The content type whose icon this row shows.
+    ///
+    /// A *content type* rather than an icon name, because GIO turns one into
+    /// the theme's whole fallback chain: a theme with no `text-plain` still
+    /// finds `text-x-generic`, and a theme with neither still finds the
+    /// generic file. Asking for a name directly would be asking for one
+    /// rung of that ladder and falling off it.
+    ///
+    /// **Guessed from the name, never from the file's contents.** Reading the
+    /// first bytes of every row to identify it is what the viewer's
+    /// never-read-the-file rule forbids one key over, and a directory of
+    /// fifty thousand entries would be fifty thousand opens
+    /// ([`docs/performance.md`]).
+    pub fn content_type(&self) -> String {
+        if self.is_dir {
+            return DIRECTORY_CONTENT_TYPE.to_string();
+        }
+        // The `bool` is "and I am only guessing", which is true of every
+        // answer here — the alternative is opening the file.
+        gio::content_type_guess(Some(self.full_name.as_str()), None)
+            .0
+            .into()
     }
 }
 
@@ -148,9 +187,67 @@ mod tests {
 
     #[test]
     fn a_directory_keeps_its_whole_name_even_when_it_looks_like_a_file() {
+        // The assertion moved from `archive.tar.gz` to `[archive.tar.gz]` on
+        // 2026-09-01, when directory names started being bracketed. What it
+        // is about is unchanged and still the point: the name is *not* split
+        // across the two columns, because a directory called `.tar.gz` has no
+        // extension.
         let row = Row::from_entry(&directory("archive.tar.gz"), false, false, None);
-        assert_eq!(row.name, "archive.tar.gz");
+        assert_eq!(row.name, "[archive.tar.gz]");
         assert_eq!(row.ext, "");
+        assert_eq!(
+            row.full_name, "archive.tar.gz",
+            "the brackets reached the name a rename would use"
+        );
+    }
+
+    #[test]
+    fn a_directory_asks_for_the_folder_icon_whatever_it_is_called() {
+        // Including one whose name looks like a file's, which is the case a
+        // guess from the name would get wrong.
+        assert_eq!(
+            Row::from_entry(&directory("archive.tar.gz"), false, false, None).content_type(),
+            "inode/directory"
+        );
+    }
+
+    #[test]
+    fn a_file_asks_for_the_type_its_name_claims() {
+        assert_eq!(
+            Row::from_entry(&file("notes.txt", 0), false, false, None).content_type(),
+            "text/plain"
+        );
+    }
+
+    #[test]
+    fn a_file_with_no_extension_still_asks_for_something() {
+        // GIO answers `application/octet-stream` or the platform's equivalent
+        // — what matters is that it is never empty, because an empty content
+        // type looks up no icon at all and the column would go ragged.
+        let asked = Row::from_entry(&file("LICENSE", 0), false, false, None).content_type();
+        assert!(!asked.is_empty(), "a nameless type shows no icon");
+    }
+
+    #[test]
+    fn a_directory_is_bracketed_and_a_file_is_not() {
+        assert_eq!(
+            Row::from_entry(&directory("Documents"), false, false, None).name,
+            "[Documents]"
+        );
+        assert_eq!(
+            Row::from_entry(&file("notes.txt", 0), false, false, None).name,
+            "notes"
+        );
+    }
+
+    #[test]
+    fn the_brackets_never_reach_the_name_anything_acts_on() {
+        // Five things read a row's name to *do* something with it — rename,
+        // type-ahead, the marks, the pack prefill and every job — and all of
+        // them read `full_name`. A bracket reaching a `VfsPath` would be an
+        // operation on a file that does not exist.
+        let row = Row::from_entry(&directory("Documents"), false, false, None);
+        assert_eq!(row.full_name, "Documents");
     }
 
     #[test]
@@ -223,7 +320,10 @@ mod tests {
     #[test]
     fn the_parent_row_shows_no_timestamp() {
         let row = Row::from_entry(&directory(".."), true, false, None);
-        assert_eq!(row.name, "..");
+        // Bracketed like any other directory since 2026-09-01, which is what
+        // the screenshot of Total Commander shows; the rest of this test is
+        // unchanged and is what it is about.
+        assert_eq!(row.name, "[..]");
         assert_eq!(row.modified, "");
         assert_eq!(row.size, "<DIR>");
     }

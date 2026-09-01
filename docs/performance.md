@@ -338,6 +338,32 @@ before; the honest note is that this has not been measured against a repaint
 budget, and a throttle is the obvious next step if a job ever feels heavy
 again.
 
+## What a row's icon costs
+
+Each row shows the icon its content type maps to, and the pane asks for one
+per *visible* row — again whenever a row scrolls into view. Measured on this
+machine, release build, forty names over the ten extensions a source tree
+actually holds (`crates/fc-app/examples/bench_icons.rs` states the input as
+part of the claim):
+
+| | |
+|---|---|
+| ask the theme every time | 2.181 µs/row — **87 µs** a screenful |
+| cached by content type | 0.430 µs/row — **17 µs** a screenful |
+
+Five times cheaper, and **neither number was ever a problem**: 87 µs is half
+a percent of a 16 ms frame. The cache is kept because it costs one `HashMap`
+and removes a question, not because it rescued anything — and saying so is
+the point, since the plan that added it asserted the cache would be needed
+without having measured. The number that would matter is a directory where
+every row is a different type, and the cache degrades to the cold column
+there, which is still 87 µs.
+
+The icon is guessed from the **name**, never from the file's contents.
+Reading the first bytes of every row to identify it is what the viewer's
+never-read-the-file rule forbids one key over, and a directory of fifty
+thousand entries would be fifty thousand opens.
+
 ## What is deliberately still slow
 
 **The listing loads whole directories.** No pagination, no incremental

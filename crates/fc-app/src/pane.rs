@@ -1,6 +1,7 @@
 //! One pane: a path bar above a column view of a directory.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -23,8 +24,8 @@ use crate::constants::{
     COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE,
     COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER,
     PAGE_OVERLAP_ROWS, PAGE_ROWS_FALLBACK, PANE_PAGE_LIST, PANE_PAGE_PREVIEW, PANE_SPACING,
-    PATH_BAR_ERROR_SEPARATOR, ROW_REVISION, SCROLL_RESTORE_PRIORITY, SORT_MARKER_ASCENDING,
-    SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
+    PATH_BAR_ERROR_SEPARATOR, ROW_ICON_GAP, ROW_ICON_SIZE, ROW_REVISION, SCROLL_RESTORE_PRIORITY,
+    SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
@@ -216,6 +217,16 @@ impl PaneEntry {
             .borrow()
             .as_ref()
             .map(|row| row.full_name.clone())
+            .unwrap_or_default()
+    }
+
+    /// The content type this row's icon comes from.
+    fn content_type(&self) -> String {
+        self.imp()
+            .row
+            .borrow()
+            .as_ref()
+            .map(Row::content_type)
             .unwrap_or_default()
     }
 
@@ -1963,7 +1974,21 @@ const STACK_EDITOR: &str = "editor";
 /// ext columns are a presentation split, and renaming `notes` to `todo` while
 /// silently keeping `.txt` in another column is not something the user can see
 /// to have agreed to.
-fn bind_name_cell(stack: &gtk::Stack, entry: &PaneEntry) -> gtk::Label {
+fn bind_name_cell(
+    cell: &gtk::Box,
+    entry: &PaneEntry,
+    icons: &RefCell<HashMap<String, gio::Icon>>,
+) -> gtk::Label {
+    let icon = cell
+        .first_child()
+        .and_downcast::<gtk::Image>()
+        .expect("setup put the icon first");
+    icon.set_from_gicon(&themed_icon(entry, icons));
+    let stack = icon
+        .next_sibling()
+        .and_downcast::<gtk::Stack>()
+        .expect("setup put the stack after the icon");
+    let stack = &stack;
     let label = stack
         .child_by_name(STACK_LABEL)
         .and_downcast::<gtk::Label>()
@@ -2002,6 +2027,11 @@ fn bind_name_cell(stack: &gtk::Stack, entry: &PaneEntry) -> gtk::Label {
 /// deep rather than fifty thousand (`docs/performance.md`).
 fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewColumn {
     let factory = gtk::SignalListItemFactory::new();
+    // One cache per column — which in practice means one, since only the name
+    // column shows icons. Shared by every cell of it, because forty cells
+    // asking the theme for `text/plain` forty times is thirty-nine answers
+    // nobody needed ([`docs/performance.md`]).
+    let bind_icons: Rc<RefCell<HashMap<String, gio::Icon>>> = Rc::default();
 
     let setup_rename = rename.clone();
     factory.connect_setup(move |_, item| {
@@ -2042,7 +2072,14 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
         let stack = gtk::Stack::new();
         stack.add_named(&label, Some(STACK_LABEL));
         stack.add_named(&editor, Some(STACK_EDITOR));
-        item.set_child(Some(&stack));
+
+        // The icon sits *outside* the stack, so it stays put while a row is
+        // being renamed — the editor replaces the name, not the row.
+        let icon = gtk::Image::builder().pixel_size(ROW_ICON_SIZE).build();
+        let cell = gtk::Box::new(gtk::Orientation::Horizontal, ROW_ICON_GAP);
+        cell.append(&icon);
+        cell.append(&stack);
+        item.set_child(Some(&cell));
     });
 
     factory.connect_bind(move |_, item| {
@@ -2065,12 +2102,13 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
         // below, because that cell will be showing another row by then.
         let paint = {
             let child = child.downgrade();
+            let icons = Rc::clone(&bind_icons);
             move |entry: &PaneEntry| {
                 let Some(child) = child.upgrade() else {
                     return;
                 };
-                let label = match child.downcast_ref::<gtk::Stack>() {
-                    Some(stack) => bind_name_cell(stack, entry),
+                let label = match child.downcast_ref::<gtk::Box>() {
+                    Some(cell) => bind_name_cell(cell, entry, &icons),
                     None => child
                         .downcast_ref::<gtk::Label>()
                         .expect("setup installed a Label")
@@ -2106,6 +2144,22 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
     // wide it is, and GTK picks the one nobody asked for.
     view_column.set_resizable(!column.expands());
     view_column
+}
+
+/// The icon for a row's type, from the cache or from the theme.
+///
+/// GIO's content type carries the theme's whole fallback chain, so a desktop
+/// without an icon for `text/plain` still finds `text-x-generic` and one
+/// without either still finds the generic file — which is why the row asks
+/// for a *type* rather than an icon name.
+fn themed_icon(entry: &PaneEntry, icons: &RefCell<HashMap<String, gio::Icon>>) -> gio::Icon {
+    let content_type = entry.content_type();
+    if let Some(icon) = icons.borrow().get(&content_type) {
+        return icon.clone();
+    }
+    let icon = gio::content_type_get_icon(&content_type);
+    icons.borrow_mut().insert(content_type, icon.clone());
+    icon
 }
 
 /// Writes one cell from its row: the column's text, and the colour a marked

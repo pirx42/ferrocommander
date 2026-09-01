@@ -275,6 +275,27 @@ pub const XALIGN_LEFT: f32 = 0.0;
 pub const XALIGN_RIGHT: f32 = 1.0;
 
 /// Shown in the size column for directories, whose byte size is meaningless.
+/// How big a row's leading icon is, and how far the name sits from it.
+///
+/// Sixteen pixels is what the screenshot of Total Commander shows and what
+/// every desktop icon theme has at native size — asking for anything else
+/// means a scaled bitmap on the row that is redrawn most.
+pub const ROW_ICON_SIZE: i32 = 16;
+pub const ROW_ICON_GAP: i32 = 4;
+
+/// What GIO calls a directory. Not guessed from the name: a folder called
+/// `archive.tar.gz` is not a gzip, and it is the one row whose type is known
+/// without asking.
+pub const DIRECTORY_CONTENT_TYPE: &str = "inode/directory";
+
+/// What a directory's name is wrapped in, Total Commander's own spelling —
+/// `[Documents]`, and `[..]` for the parent row.
+///
+/// Display only. The name a rename, a mark, the type-ahead or a job uses is
+/// `Row::full_name`, which is what the filesystem calls it.
+pub const DIR_NAME_OPEN: &str = "[";
+pub const DIR_NAME_CLOSE: &str = "]";
+
 pub const DIR_SIZE_LABEL: &str = "<DIR>";
 
 /// Separates thousands in file sizes, as Total Commander groups them.
@@ -336,6 +357,30 @@ pub const STYLESHEET: &str = "
 .path-bar {
     padding: 4px 8px;
     font-family: monospace;
+}
+.pane columnview listview > row {
+    /* As compact as the font allows. GTK's default row is padded for touch
+       and the pane showed about half as many files as Total Commander does
+       in the same window — the second testing round's screenshot is 17 px a
+       row, and this is how close a desktop font gets to it. `min-height: 0`
+       matters as much as the padding: without it GTK keeps its own floor and
+       the padding change does nothing. */
+    padding: 0;
+    min-height: 0;
+    /* And a notch smaller than the desktop's default, which is set for
+       reading prose rather than for scanning a directory. The screenshot is
+       17 px a row; padding alone reaches 23, and this reaches 20 without
+       making the names harder to read than the date column beside them. */
+    font-size: 0.9em;
+}
+.pane columnview listview > row cell {
+    padding: 0 4px;
+    min-height: 0;
+}
+.pane columnview header button {
+    /* The header follows the rows down, or it is taller than three of them. */
+    padding: 1px 4px;
+    min-height: 0;
 }
 .marked {
     /* Colour only, no bold: bold text is wider, and it pushed the date out
