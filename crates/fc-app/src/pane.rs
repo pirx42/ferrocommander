@@ -219,6 +219,14 @@ impl PaneEntry {
             .unwrap_or_default()
     }
 
+    /// Whether this entry already says exactly that.
+    ///
+    /// The whole row, not just the mark: [`sync_rows`](PaneView::sync_rows)
+    /// uses it to leave untouched every position a re-read did not change.
+    fn says(&self, row: &Row) -> bool {
+        self.imp().row.borrow().as_ref() == Some(row)
+    }
+
     /// Whether this entry would say something different with those flags.
     ///
     /// Asked rather than assigned: the answer is what keeps a mark toggle from
@@ -558,6 +566,12 @@ impl PaneView {
             .focus_on_arrival
             .take()
             .or_else(|| self.shown.listing.current().map(|entry| entry.name.clone()));
+        // Where the view is, because a job that changed a file somewhere is
+        // not a reason to move what somebody is looking at. This ran without
+        // any restore at all until 2026-09-01, which is why finishing a copy
+        // yanked *both* panes onto their cursors — the one in the other pane
+        // included, which had nothing to do with the job.
+        let offset = self.scroller.vadjustment().value();
         let mut listing = match self.is_branch() {
             true => self.walk_again(),
             false => {
@@ -570,7 +584,7 @@ impl PaneView {
         }
         self.shown.listing = listing;
         self.error = None;
-        self.refresh();
+        self.refresh_keeping_view(offset);
     }
 
     /// Walks the tree again, keeping this pane a branch view.
@@ -652,8 +666,9 @@ impl PaneView {
         // `Listing::reload` re-reads one directory, which for a branch view
         // would quietly replace the whole tree with the root's own files.
         if self.is_branch() {
+            // `reload_after_job` puts the offset back itself, and the one it
+            // reads is this one — nothing has moved the view in between.
             self.reload_after_job();
-            self.scroller.vadjustment().set_value(scroll);
             return;
         }
         if self.shown.listing.reload(self.shown.fs.as_ref()).is_err() {
@@ -661,10 +676,7 @@ impl PaneView {
             return;
         }
         self.error = None;
-        self.refresh();
-        // After `refresh`, which scrolls to the cursor: this is the one that
-        // has to win.
-        self.scroller.vadjustment().set_value(scroll);
+        self.refresh_keeping_view(scroll);
     }
 
     /// Updates the marks on the rows already in the store, without rebuilding.
@@ -718,6 +730,50 @@ impl PaneView {
         }
     }
 
+    /// Brings the store in line with the listing, keeping every row object
+    /// it can.
+    ///
+    /// **Emptying and refilling was what made a pane jump.** `GtkListBase`
+    /// anchors its scroll position on an *item*, and `remove_all` takes every
+    /// item away — so the next allocation reconfigures the adjustment from an
+    /// anchor that no longer exists, and nothing set before that allocation
+    /// survives it. A re-read after a job, or a watcher nudge, therefore
+    /// moved the view however carefully the offset was put back.
+    ///
+    /// So the objects stay and their contents are rewritten. Positions that
+    /// say the same thing are not touched at all; the tail is spliced only
+    /// when the listing actually got longer or shorter. It is also cheaper by
+    /// the same stroke — a re-read of fifty thousand rows used to allocate
+    /// fifty thousand `PaneEntry` values ([`docs/performance.md`]).
+    fn sync_rows(&self) {
+        let wanted = self.shown.listing.len();
+        let held = self.store.n_items() as usize;
+        for index in 0..wanted.min(held) {
+            let row = self.row_at(index);
+            let entry = self
+                .store
+                .item(index as u32)
+                .and_downcast::<PaneEntry>()
+                .expect("the store holds PaneEntry values");
+            if !entry.says(&row) {
+                entry.rewrite(row);
+            }
+        }
+        match wanted.cmp(&held) {
+            std::cmp::Ordering::Greater => {
+                let added: Vec<PaneEntry> =
+                    (held..wanted).map(|index| self.entry_at(index)).collect();
+                self.store.splice(held as u32, 0, &added);
+            }
+            std::cmp::Ordering::Less => {
+                let none: [PaneEntry; 0] = [];
+                self.store
+                    .splice(wanted as u32, (held - wanted) as u32, &none);
+            }
+            std::cmp::Ordering::Equal => {}
+        }
+    }
+
     /// Rewrites the store's row at `index` from the listing.
     fn rewrite_row(&self, index: usize) {
         let Some(entry) = self.store.item(index as u32).and_downcast::<PaneEntry>() else {
@@ -754,6 +810,28 @@ impl PaneView {
     /// re-read. Anything that only changes what a row says goes through
     /// [`refresh_marks`](Self::refresh_marks) instead.
     pub fn refresh(&mut self) {
+        self.rebuild(true);
+    }
+
+    /// The same, but leaving the viewport to the caller.
+    ///
+    /// **The cursor is not scrolled to.** Emptying the store costs the list
+    /// its scroll anchor, and the `scroll_to` that `sync_cursor` issues then
+    /// puts the cursor row at the *top* rather than scrolling minimally to
+    /// it — and it wins over an offset put back on an idle, because GTK
+    /// applies it during the frame's own layout. That is the pane jumping
+    /// after a re-read or a job, with the cursor row landing at the top of
+    /// the list, which is what the second testing round reported twice.
+    ///
+    /// So a caller that means to restore an offset asks for no scroll at all
+    /// and then restores it. The selection still moves to the cursor; only
+    /// the viewport is left alone.
+    fn refresh_keeping_view(&mut self, offset: f64) {
+        self.rebuild(false);
+        self.restore_offset(offset);
+    }
+
+    fn rebuild(&mut self, scroll_to_cursor: bool) {
         let shown = self.shown_dir();
         // A branch view is not the directory it was walked from, and a path
         // bar that said only the root would be the pane lying about what is
@@ -778,14 +856,18 @@ impl PaneView {
         // was a no-op: nothing between the two lines could change it, because
         // reaching `refresh` at all means holding the borrow that keeps the
         // handler out (skill 19).
-        self.store.remove_all();
-        for index in 0..self.shown.listing.len() {
-            self.store.append(&self.entry_at(index));
-        }
+        self.sync_rows();
 
         self.status
             .set_text(&crate::jobs::selection_status(&self.shown.listing));
-        self.sync_cursor();
+        if scroll_to_cursor {
+            self.sync_cursor();
+        } else if !self.shown.listing.is_empty() {
+            // The selection follows the cursor; the viewport does not,
+            // because the caller is about to put it back where it was.
+            self.selection
+                .set_selected(self.shown.listing.cursor() as u32);
+        }
     }
 
     /// The selection the widget keeps, so the shell can hear it move.
@@ -1754,6 +1836,19 @@ impl PaneView {
         let Some(&offset) = self.scrolled_to.get(self.shown.listing.dir().as_str()) else {
             return;
         };
+        self.restore_offset(offset);
+    }
+
+    /// Puts the view at `offset` once the rows are laid out and before they
+    /// are painted.
+    ///
+    /// **The one place that knows when an offset may be put back**, and there
+    /// are four callers now: arriving in a directory, re-reading one, and
+    /// reloading after a job in either pane. Three of them used to do it
+    /// themselves and two got it wrong in different ways — one set the value
+    /// on the line after `refresh`, where the adjustment is still collapsed,
+    /// and one never restored at all.
+    fn restore_offset(&self, offset: f64) {
         let adjustment = self.scroller.vadjustment();
         glib::idle_add_local_full(glib::Priority::from(SCROLL_RESTORE_PRIORITY), move || {
             adjustment.set_value(offset);
@@ -1958,29 +2053,34 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
             .expect("the store holds PaneEntry values");
         let child = item.child().expect("setup installed a child");
 
-        let label = match child.downcast_ref::<gtk::Stack>() {
-            Some(stack) => bind_name_cell(stack, &entry),
-            None => child
-                .downcast::<gtk::Label>()
-                .expect("setup installed a Label"),
-        };
-        paint_cell(&label, &entry, column);
-
-        // And again whenever the row is rewritten under it. This is what
-        // makes a mark repaint without the model changing — the alternative,
-        // splicing a new object in, costs the list its scroll anchor
-        // (`PaneEntry::rewrite`).
+        // One closure, run now and run again whenever the row is rewritten
+        // under this cell. The two must do the same thing: a rewrite is how a
+        // mark repaints, how a counted size appears, *and* how the rename
+        // editor opens — and the editor is in the name column's stack, so a
+        // repaint that only touched the label would leave a rename with
+        // nowhere to type.
         //
-        // A weak reference to the label, so the entry's handler does not keep
-        // a recycled cell alive; the handler itself is disconnected on unbind
-        // below, because the cell it paints will be showing another row by
-        // then.
-        let repainting = label.downgrade();
-        let id = entry.connect_notify_local(Some(ROW_REVISION), move |entry, _| {
-            if let Some(label) = repainting.upgrade() {
+        // A weak reference to the cell, so the entry's handler does not keep
+        // a recycled one alive; the handler itself is disconnected on unbind
+        // below, because that cell will be showing another row by then.
+        let paint = {
+            let child = child.downgrade();
+            move |entry: &PaneEntry| {
+                let Some(child) = child.upgrade() else {
+                    return;
+                };
+                let label = match child.downcast_ref::<gtk::Stack>() {
+                    Some(stack) => bind_name_cell(stack, entry),
+                    None => child
+                        .downcast_ref::<gtk::Label>()
+                        .expect("setup installed a Label")
+                        .clone(),
+                };
                 paint_cell(&label, entry, column);
             }
-        });
+        };
+        paint(&entry);
+        let id = entry.connect_notify_local(Some(ROW_REVISION), move |entry, _| paint(entry));
         // SAFETY: the key is this module's own, the value is put on the very
         // `ListItem` that `connect_unbind` takes it off again, and the type
         // there matches the type here.

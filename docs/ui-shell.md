@@ -300,9 +300,13 @@ on screen without any caller knowing which kind of key it is.
 That rule was learned from a bug: until 2026-09-01, pressing `Space` on a list
 scrolled away from the cursor snapped the whole list back to the top.
 
-`refresh` saves and restores the cursor around the store rebuild, because
-emptying and refilling the store makes the widget move its selection on its
-own — which the next adoption would otherwise read back as the user's intent.
+**A rebuild does not scroll to the cursor.** `refresh` is for a navigation,
+where bringing the cursor into view is the point; `refresh_keeping_view` is
+for a re-read or a reload after a job, where the user is looking at something
+and nothing about their view should change. The difference is one flag, and
+the reason it has to exist is that `scroll_to` after a rebuild does not
+scroll *minimally* — with the anchor gone it puts the cursor row at the top,
+which is precisely what the second testing round reported.
 
 ## Active pane
 

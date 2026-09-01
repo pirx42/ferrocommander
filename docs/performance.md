@@ -397,10 +397,20 @@ the running app, and `scripts/check-scroll-memory.sh` is where that case now
 lives. What `differs` decides has a unit test; the repaint itself does not,
 and this paragraph is the record of how it was verified instead.
 
-**The rename editor still rebuilds.** A row that was not rebuilt does not end
-up with the keyboard focus the way a rebuilt one does, and a rename field that
-opens without focus is no field at all. Renaming happens once in a while and
-can afford 70 ms; marking cannot.
+**Nothing rebuilds the store any more**, and that was not a speed decision
+either. `refresh` — a navigation, a sort, a filter, a re-read — used to empty
+the store and refill it, which took the list's scroll *anchor* with it: the
+next allocation then reconfigured the adjustment from an anchor that no longer
+existed, and no offset set beforehand survived. That is why a pane jumped
+after a copy, after a delete in the *other* pane, and whenever a watcher
+noticed somebody else's change (2026-09-01, the second testing round).
+
+`sync_rows` brings the store in line instead: positions that already say the
+same thing are left untouched, the ones that differ are rewritten in place
+through the same `revision` property a mark uses, and the tail is spliced only
+when the listing genuinely got longer or shorter. The rename editor comes
+along for free — it opens through the same repaint, which is why the cell's
+bind and its rewrite are one closure rather than two that have to agree.
 
 **And the remembered scroll offset is put back between GTK's layout and its
 paint.** It has to be deferred at all, because before the rows are laid out

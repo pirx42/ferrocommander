@@ -7,6 +7,16 @@ invisible until you navigated away and back — there was not even a key to ask.
 Now there are two ways in: the pane watches its own directory, and `Ctrl+R`
 re-reads on demand.
 
+## A re-read is not something you can see happening
+
+Whether the change came from `Ctrl+R` or from the watcher, the rows are
+brought up to date underneath whatever the user is looking at: the view does
+not move, the marks survive by name, and the cursor stays on the row it was
+on. Until 2026-09-01 it did move — a rebuild cost the list its scroll anchor,
+so a file appearing in the directory yanked the pane onto its cursor row. The
+mechanism, and why putting the offset back afterwards could not fix it, is in
+[performance.md](performance.md).
+
 ## Both go through the same re-read
 
 `PaneView::reread` uses `Listing::reload`, which is the one that keeps the

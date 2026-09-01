@@ -17,6 +17,12 @@
 #                  off-screen cursor row and left the view alone; `dir-01`
 #                  means the list jumped to the cursor, which it did until
 #                  2026-09-01 for every marking key, not just this one.
+#   after-watch.png   a re-read does not scroll. A file appears in the
+#                  directory from outside, the watcher notices, and the rows
+#                  are brought up to date — `dir-21` still at the top means
+#                  the view stayed; anything else means the rebuild took the
+#                  list's scroll anchor with it, which is what made a pane
+#                  jump after a copy and after somebody else's change.
 #
 #   scripts/check-scroll-memory.sh && xdg-open "${TMPDIR:-/tmp}"/ferrocommander-scroll-check/returned.png
 #
@@ -91,4 +97,10 @@ shoot returned
 key space 0.8
 shoot after-space
 
-echo "wrote $OUT/{left-scrolled,inside,returned,after-space}.png"
+# And the third: somebody else changes the directory. The watcher re-reads it
+# under the user, which must not be something the user can see happening.
+echo appeared > "$HOME_DIR/src/zz-appeared.txt"
+sleep 2
+shoot after-watch
+
+echo "wrote $OUT/{left-scrolled,inside,returned,after-space,after-watch}.png"
