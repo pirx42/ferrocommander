@@ -228,6 +228,13 @@ follows — real work, and longer than `PROGRESS_DELAY` — so a job too short
 to be worth a window is too short to be worth a bar. Clicking it opens the
 window again, on the same cancel token the engine is still checking.
 
+**The bar never changes the window's layout.** It is in the bottom row
+always, and goes transparent when there is no job rather than being taken
+away — a widget that comes and goes takes the row's height with it, and the
+whole window twitched at the start and end of every job. The percentage and
+the byte count are drawn *inside* the bar, which is where the room is: a
+label beside it would be a second widget in a row that has none to spare.
+
 **The meter lives in the shell**, not in the future that drains the events,
 which is what makes the click able to find it. That is also the cheaper
 arrangement: a copy of two hundred files sends about fifty-five thousand

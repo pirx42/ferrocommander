@@ -61,6 +61,14 @@ the view is just rebuilt over the same data.
 Showing hidden entries adds *exactly* the hidden ones (a count invariant the
 tests pin), and toggling twice restores the identical view.
 
+**`Ctrl+H` is the toggle, and what counts as hidden is the platform's own
+answer** — a leading dot on Unix, `FILE_ATTRIBUTE_HIDDEN` on Windows
+([vfs.md](vfs.md)). So `C:\Users\<you>\AppData`, which Windows marks
+hidden, is absent from the pane until `Ctrl+H`, and then it is there. That
+came in as a bug report in the second testing round and is not one; it is
+written down here because costing a report is the evidence it was not written
+down anywhere a person would look.
+
 ## The cursor
 
 The cursor is an index into the visible rows and is always valid: `set_cursor`

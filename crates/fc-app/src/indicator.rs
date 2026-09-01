@@ -13,6 +13,11 @@
 use gtk::prelude::*;
 
 use crate::constants::{CLASS_JOB_INDICATOR, INDICATOR_WIDTH};
+
+/// The two opacities the indicator has. Not `set_visible`, which would take
+/// the row's height with it — see [`JobIndicator::new`].
+const VISIBLE: f64 = 1.0;
+const HIDDEN: f64 = 0.0;
 use crate::progress::Meter;
 
 /// The bar, and the button that is really the clickable part.
@@ -30,12 +35,23 @@ impl JobIndicator {
             .build();
 
         // A button around the bar rather than a click handler on it: the
-        // button is what makes the thing look pressable and reachable by
-        // keyboard, and a progress bar has no such affordance of its own.
+        // button is what makes the thing look pressable, which a progress bar
+        // has no affordance for. Not focusable — `Tab` switches panes here,
+        // so there is no keyboard route to it and an invisible widget in the
+        // focus chain would only be somewhere the focus could get lost.
+        //
+        // **Always in the layout**, and hidden by going transparent rather
+        // than by `set_visible(false)`. A widget that comes and goes takes
+        // the row's height with it, so the whole window twitched every time a
+        // job started or ended — which the second testing round reported.
+        // Transparent still occupies its space, so the bottom row has one
+        // height for the life of the window.
         let button = gtk::Button::builder()
             .child(&bar)
             .has_frame(false)
-            .visible(false)
+            .opacity(0.0)
+            .can_target(false)
+            .can_focus(false)
             .build();
         button.add_css_class(CLASS_JOB_INDICATOR);
 
@@ -47,20 +63,30 @@ impl JobIndicator {
     }
 
     /// Shows the indicator, at whatever the meter now says.
+    ///
+    /// The caption goes *inside* the bar rather than beside it, which is
+    /// where the room is: a percentage and a byte count next to a bar would
+    /// be a second widget in a row that has none to spare.
     pub fn show(&self, meter: &Meter) {
         self.bar.set_fraction(meter.fraction());
         self.bar.set_text(Some(&meter.caption()));
-        // Only when it is not already showing. A job sends tens of thousands
-        // of progress events — 55 080 for the end-to-end suite's copy — and
-        // making a widget visible that already is means asking GTK to lay the
-        // row out again each time.
-        if !self.button.is_visible() {
-            self.button.set_visible(true);
+        // Only when it is not already up. A job sends tens of thousands of
+        // progress events — 55 080 for the end-to-end suite's copy — and
+        // setting a property to what it already holds is work asked for
+        // fifty-five thousand times.
+        if self.button.opacity() != VISIBLE {
+            self.button.set_opacity(VISIBLE);
+            self.button.set_can_target(true);
         }
     }
 
     /// Takes it away, which is what the end of a job looks like.
+    ///
+    /// Transparent, not gone: the space stays reserved, and a bar showing the
+    /// last job's percentage forever would be worse than no bar. `can_target`
+    /// goes with it, so an invisible button cannot be clicked.
     pub fn hide(&self) {
-        self.button.set_visible(false);
+        self.button.set_opacity(HIDDEN);
+        self.button.set_can_target(false);
     }
 }
