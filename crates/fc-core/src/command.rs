@@ -166,7 +166,7 @@ pub fn run(directory: &VfsPath, line: &str) -> Outcome {
 /// `Enter` dialog.** `Command::arg` quotes for the C runtime's rules — it
 /// wraps an argument holding spaces in `"` and escapes the quotes inside it
 /// as `\"` — and `cmd` reads neither. A line as ordinary as
-/// `start "" "C:\dir\a.exe"` arrived with backslashes in front of its
+/// `notepad "C:\dir\a file.txt"` arrived with backslashes in front of its
 /// quotes and was taken apart into something that is not a path. `raw_arg`
 /// appends it exactly as written, which is the only way to hand `cmd` a
 /// command line.
@@ -219,7 +219,7 @@ pub fn open_with(program: &str, path: &VfsPath) {
 pub fn editor_line(program: &str, path: &VfsPath) -> Option<String> {
     match program.trim() == DESKTOP_HANDLER {
         true => None,
-        false => Some(opening_line(program, &native(path), QUOTING)),
+        false => Some(format!("{program} {}", quoted(&native(path), QUOTING))),
     }
 }
 
@@ -321,11 +321,6 @@ mod desktop {
             );
         }
     }
-}
-
-/// A program's line with one path appended as its last argument.
-fn opening_line(program: &str, path: &str, style: Quoting) -> String {
-    format!("{program} {}", quoted(path, style))
 }
 
 /// Runs a command template with `%1` and `%2` replaced by two quoted paths.

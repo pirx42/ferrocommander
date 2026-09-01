@@ -1,6 +1,7 @@
 # Enter on Windows — the quoting, and the end of "cannot be tested here"
 
-Status: **In progress**, 2026-09-01.
+Status: **Done**, 2026-09-01 — the fix and the CI step that makes it
+checkable, each behind a green gate. Outcome in § 6.
 
 One finding, and one question that matters more than the finding:
 
@@ -120,11 +121,57 @@ About four hours, plus a full-gate run (~15 min) per phase commit.
 - **`cmd` expands `%VAR%` inside quotes**, so a file named `%TEMP%.txt`
   handed to `F4`'s configured editor still goes wrong. `Enter` is immune
   after phase 3 because it never builds a line. Recorded in
-  [future-improvements.md](../future-improvements.md) rather than papered over.
+  [future-improvements.md](../../future-improvements.md) rather than papered over.
 - **Wildcards are not the shell's on Windows.** `dir /b *.txt` works because
   `dir` expands the pattern, not because `cmd` did — so the phrasebook's
   glob test asserts the pipe, which both platforms really share.
 
 ## 6. Outcome
 
-_To be written when the phases are done._
+Three commits. `bf9e65a` is the fix, `4c2e642` the CI step, and this one the
+audit.
+
+**What the fix came to.** `Enter` builds nothing: `open_in_desktop` hands the
+path over as one argument, to `xdg-open`, to `open`, or to `ShellExecuteW`.
+`WINDOWS_OPENER` and `DESKTOP_OPENER`'s public form are gone, `DEFAULT_EDITOR`
+is the empty line, and an unconfigured `F4` is now literally the same call as
+`Enter` rather than a second route to the same idea. What still composes a
+line — a configured editor, the compare tool, a typed command — does it
+through `editor_line`/`substituted`, both of which take the quoting style as
+an argument and are checked in both styles from Linux.
+
+**What is now verified, and by what.** The `windows` job runs 16 command
+tests, of which 14 are shared claims in `cmd`'s own words and two are about
+the platform:
+
+| Verified on Windows by CI | Not verified anywhere |
+|---|---|
+| a typed line runs, in the pane's directory, and its output and exit code come back | `ShellExecuteW` actually launching a handler — it needs a desktop session |
+| both streams, truncation, a missing program | `xdg-open`/`open` spawning, for the same reason |
+| a pipe, and a wildcard the program expands | that a `.exe` starts and a `.png` opens |
+| which quoting style the build picked | |
+| the editor line composed from a VFS path — the bug, as a string | |
+
+That second column is honest rather than resigned: what a handler does with a
+file is the desktop's answer and not something a test can assert without a
+desktop. What *can* be checked without one — every string this program builds
+— now is.
+
+**The lesson, which is the reason this plan exists.** The last round wrote
+*"the Windows runner cannot be tested where it runs"* in its own § 6 and
+shipped anyway; one commit later it was broken in three ways, all three of
+them a string that a Linux test could have read. Writing a limitation down is
+not a mitigation. The two useful moves were both cheap: make the
+platform-dependent decision a *parameter* so the gate that runs can see both
+answers, and split the composition out of the function that spawns, so there
+is a value to assert on at all.
+
+## 7. What the audit changed
+
+- `opening_line` had one caller and existed only as a step; it is now the
+  `format!` inside `editor_line`, which is the function that is the claim.
+- A doc comment on `push_line` illustrated the quoting bug with `start ""` —
+  a constant the same commit deletes.
+
+Nothing else. The change is one function per platform and one enum; there is
+no second place any of it is done.
