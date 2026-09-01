@@ -355,21 +355,38 @@ colour — and worse, emptying the store drops the scroll adjustment to zero
 before `sync_cursor` puts it back, so the view moved under the user.
 
 Now the marking commands go through `refresh_marks`, which finds the rows whose
-mark or rename flag actually moved and splices only the span between the first
-and the last. A single toggle is one row. `Ctrl+A` still replaces everything,
-because everything genuinely changed — but as one splice rather than an empty
-followed by a refill, so the scroll position survives.
+mark or rename flag actually moved and **rewrites those rows in place** —
+nothing is spliced, nothing is allocated, and only the rows that differ are
+touched rather than the whole span between the first and the last.
 
-**Replaced, not mutated.** A `ListView` rebinds a cell when its item is a
-different object; mutating a row behind the model's back leaves the screen
-saying what it used to, and the mark would silently never repaint. No test in
-this repository could see that — the end-to-end suite asserts on the
-filesystem, not on pixels — so it was checked by screenshotting the running
-app before and after a `Space`. What `differs` decides has a unit test; the
-repaint itself does not, and this paragraph is the record of how it was
-verified instead.
+**Rewritten, not replaced, and the reason is not the microseconds.** A
+`ListView` rebinds a cell when its item is a different object, so replacing
+was the obvious way to make a mark repaint — and it cost the list its scroll
+anchor. `GtkListBase` anchors the scroll position on an *item*; splice a new
+object over the anchored one and the next `gtk_widget_allocate` reconfigures
+the adjustment from nothing, which puts the list at the top. That is what made
+`Space` jump (2026-09-01), and no amount of saving and restoring the offset
+beats it: the reset happens inside GTK's own allocation, after every idle a
+caller could hook. So `PaneEntry` carries a `revision` property instead, the
+cell watches it, and the model never changes at all.
 
-**The rename editor still rebuilds.** A spliced row does not end up with the
-keyboard focus the way a rebuilt one does, and a rename field that opens
-without focus is no field at all. Renaming happens once in a while and can
-afford 70 ms; marking cannot.
+No test in this repository can see a repaint — the end-to-end suite asserts on
+the filesystem, not on pixels — so both halves were checked by screenshotting
+the running app, and `scripts/check-scroll-memory.sh` is where that case now
+lives. What `differs` decides has a unit test; the repaint itself does not,
+and this paragraph is the record of how it was verified instead.
+
+**The rename editor still rebuilds.** A row that was not rebuilt does not end
+up with the keyboard focus the way a rebuilt one does, and a rename field that
+opens without focus is no field at all. Renaming happens once in a while and
+can afford 70 ms; marking cannot.
+
+**And the remembered scroll offset is put back between GTK's layout and its
+paint.** It has to be deferred at all, because before the rows are laid out
+there is no height to clamp the offset against and it collapses to zero; a
+plain idle, though, runs after the paint as well, and that frame is a visible
+flicker. Logging every painted frame's offset is what settled it: coming back
+out of a directory painted one frame at 39 px — the cursor row — before
+landing at the remembered 828. At `SCROLL_RESTORE_PRIORITY` it goes straight
+to 828. The number is a documented ordering rather than an API contract, which
+is stated where the constant is.

@@ -289,6 +289,17 @@ walk off the bottom of the viewport. Focus matters just as much: Page Up/Down
 are handled by the widget and page from *its* focus, so unless focus follows
 our cursor, paging resumes from wherever the widget last was.
 
+**It is called when the cursor moves, and only then.** A marking key that
+leaves the cursor where it is — `Space`, `Num +`, `Num *`, `Num /`, the
+wildcard marking — has nothing to scroll into view, and a view somebody
+wheeled away from the cursor was wheeled there on purpose. `marking` compares
+the cursor before and after the change and decides from that, so `Insert` and
+`Shift+↓`, which mark *and advance* through the same path, keep their cursor
+on screen without any caller knowing which kind of key it is.
+
+That rule was learned from a bug: until 2026-09-01, pressing `Space` on a list
+scrolled away from the cursor snapped the whole list back to the top.
+
 `refresh` saves and restores the cursor around the store rebuild, because
 emptying and refilling the store makes the widget move its selection on its
 own — which the next adoption would otherwise read back as the user's intent.

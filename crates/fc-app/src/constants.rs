@@ -512,6 +512,33 @@ pub const TITLE_VIEWER: &str = "{name} \u{2014} {percent}%";
 pub const VIEWER_WIDTH: i32 = 900;
 pub const VIEWER_HEIGHT: i32 = 700;
 
+/// The `PaneEntry` property a cell watches to know its row changed.
+///
+/// A row is rewritten in place rather than replaced, so nothing about the
+/// *model* changes when a mark is toggled — see `PaneEntry::rewrite`.
+pub const ROW_REVISION: &str = "revision";
+
+/// Where a bound cell keeps the handler that repaints it, so unbinding can
+/// take it off again. A `ListItem` is recycled across rows, and a handler
+/// left connected would paint the wrong row's text into it.
+pub const CELL_REPAINT: &str = "fc-cell-repaint";
+
+/// When the remembered scroll offset is put back, as a main-loop priority.
+///
+/// **Between GTK's two idle passes, and that is the whole point.** GTK lays
+/// out at `GTK_PRIORITY_RESIZE` (`HIGH_IDLE + 10`) and paints at
+/// `GDK_PRIORITY_REDRAW` (`HIGH_IDLE + 20`). Restoring before the first
+/// clamps the offset to zero, because the adjustment does not know how tall
+/// the rows are yet; restoring after the second — which is what a plain
+/// `idle_add_local_once` at `DEFAULT_IDLE` does — paints one frame at the top
+/// of the list and corrects it on the next. That frame is the flicker a
+/// person sees coming back out of a directory.
+///
+/// The number is a documented ordering rather than an API contract, and
+/// `scripts/check-scroll-memory.sh` is the only thing that would notice it
+/// changing.
+pub const SCROLL_RESTORE_PRIORITY: i32 = 115;
+
 /// What a file with nothing in it says, rather than an empty window that looks
 /// like it failed to load.
 pub const VIEWER_EMPTY: &str = "(empty file)";

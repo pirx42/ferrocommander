@@ -1,17 +1,30 @@
 #!/usr/bin/env bash
-# Does a pane come back to the scroll position it was left at?
+# Who is allowed to move a pane's viewport?
 #
-# The end-to-end suite cannot answer this: a scroll offset is not a window
+# The end-to-end suite cannot answer that: a scroll offset is not a window
 # title, a file on disk or a key press, so `xdotool` cannot see it. This
-# drives the real app on a private X server and leaves three screenshots to
-# look at — the only check there is for the per-directory scroll memory.
+# drives the real app on a private X server and leaves screenshots to look
+# at — the only check there is for either of the two rules below.
 #
-# The case it sets up is the one the cursor cannot explain: the cursor stays
-# on the *first* row while the view is wheeled far down, so coming back to
-# where the cursor is would show the top. `returned.png` showing `dir-21`
-# means the memory worked; showing `dir-01` means it did not.
+# Both share one set-up, and it is the case the cursor cannot explain: the
+# cursor stays on the *first* row while the view is wheeled far down, so
+# anything that scrolls back to the cursor shows the top.
+#
+#   returned.png   the per-directory scroll memory. `dir-21` means a pane
+#                  came back where it was left; `dir-01` means it did not.
+#   after-space.png   marking does not scroll. `dir-21` with the status line
+#                  reading `1 of 60 selected` means `Space` marked the
+#                  off-screen cursor row and left the view alone; `dir-01`
+#                  means the list jumped to the cursor, which it did until
+#                  2026-09-01 for every marking key, not just this one.
 #
 #   scripts/check-scroll-memory.sh && xdg-open "${TMPDIR:-/tmp}"/ferrocommander-scroll-check/returned.png
+#
+# **What it does not check is the flicker**: coming back used to paint one
+# frame at the top before the remembered offset landed, and one frame is
+# shorter than a screenshot. That was verified by logging every painted
+# frame's offset from inside the app — 39 px, then 828 — which is
+# instrumentation rather than a check, and is written up in docs/ui-shell.md.
 #
 # Needs a debug build, Xvfb, xdotool and ImageMagick's `import`.
 set -euo pipefail
@@ -72,4 +85,10 @@ shoot inside
 key BackSpace 0.9                  # back out
 shoot returned
 
-echo "wrote $OUT/{left-at-bottom,inside,returned}.png"
+# And the second rule, from the same place: the view is far from the cursor
+# again (the memory just put it there), so a `Space` that scrolls is a `Space`
+# that moved the viewport for a keystroke that moved nothing.
+key space 0.8
+shoot after-space
+
+echo "wrote $OUT/{left-scrolled,inside,returned,after-space}.png"

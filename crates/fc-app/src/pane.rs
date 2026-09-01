@@ -18,12 +18,13 @@ use fc_core::vfs::constants::SEPARATOR;
 use fc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
-    BRANCH_MARKER, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_OUTPUT, CLASS_PANE, CLASS_PANE_ACTIVE,
-    CLASS_PATH_BAR, CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT,
-    COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT,
-    COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER, PAGE_OVERLAP_ROWS,
-    PAGE_ROWS_FALLBACK, PANE_PAGE_LIST, PANE_PAGE_PREVIEW, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
-    SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
+    BRANCH_MARKER, CELL_REPAINT, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_OUTPUT, CLASS_PANE,
+    CLASS_PANE_ACTIVE, CLASS_PATH_BAR, CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE,
+    COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE,
+    COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER,
+    PAGE_OVERLAP_ROWS, PAGE_ROWS_FALLBACK, PANE_PAGE_LIST, PANE_PAGE_PREVIEW, PANE_SPACING,
+    PATH_BAR_ERROR_SEPARATOR, ROW_REVISION, SCROLL_RESTORE_PRIORITY, SORT_MARKER_ASCENDING,
+    SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
@@ -140,7 +141,8 @@ impl Column {
 }
 
 mod imp {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
+    use std::sync::OnceLock;
 
     use super::*;
 
@@ -148,6 +150,11 @@ mod imp {
     #[derive(Default)]
     pub struct PaneEntry {
         pub row: RefCell<Option<Row>>,
+        /// Bumped whenever the row is rewritten in place, which is what tells
+        /// the cell showing it to paint itself again — see
+        /// [`PaneEntry::rewrite`](super::PaneEntry::rewrite) for why a row is
+        /// rewritten rather than replaced.
+        pub revision: Cell<u32>,
     }
 
     #[glib::object_subclass]
@@ -156,7 +163,21 @@ mod imp {
         type Type = super::PaneEntry;
     }
 
-    impl ObjectImpl for PaneEntry {}
+    impl ObjectImpl for PaneEntry {
+        fn properties() -> &'static [glib::ParamSpec] {
+            static PROPERTIES: OnceLock<Vec<glib::ParamSpec>> = OnceLock::new();
+            PROPERTIES.get_or_init(|| vec![glib::ParamSpecUInt::builder(ROW_REVISION).build()])
+        }
+
+        fn property(&self, _id: usize, _spec: &glib::ParamSpec) -> glib::Value {
+            self.revision.get().to_value()
+        }
+
+        fn set_property(&self, _id: usize, value: &glib::Value, _spec: &glib::ParamSpec) {
+            self.revision
+                .set(value.get().expect("the revision is the only property"));
+        }
+    }
 }
 
 glib::wrapper! {
@@ -168,6 +189,25 @@ impl PaneEntry {
         let entry: Self = glib::Object::new();
         entry.imp().row.replace(Some(row));
         entry
+    }
+
+    /// Puts a new `row` into this entry and tells its cell to repaint.
+    ///
+    /// **In place, never a replacement**, and that is not a micro-optimisation
+    /// but the whole reason the revision exists. `GtkListBase` anchors the
+    /// scroll position on an *item*; splice a new object over the anchored one
+    /// and the anchor is gone, so the next `gtk_widget_allocate` reconfigures
+    /// the adjustment from scratch and the list is at the top. That is a pane
+    /// jumping to `..` because somebody pressed `Space`, and no amount of
+    /// putting the offset back beats it — the reset happens inside GTK's own
+    /// allocation, after every idle a caller could hook.
+    fn rewrite(&self, row: Row) {
+        self.imp().row.replace(Some(row));
+        let next = self.imp().revision.get().wrapping_add(1);
+        // Through `set_property` rather than the cell directly, because that
+        // is what emits `notify` — and the cell may not exist: a `ColumnView`
+        // keeps widgets only for the rows on screen.
+        self.set_property(ROW_REVISION, next);
     }
 
     fn full_name(&self) -> String {
@@ -644,7 +684,7 @@ impl PaneView {
     /// former — and rebuilding also empties the store, which drops the scroll
     /// adjustment to zero before `sync_cursor` puts it back, so the view
     /// visibly moved for a keystroke that changed one row's colour.
-    fn refresh_marks(&mut self) {
+    fn refresh_marks(&mut self, moved: bool) {
         // Which rows actually say something different now. Everything else is
         // left exactly as it is, object identity included.
         let changed: Vec<usize> = (0..self.shown.listing.len())
@@ -659,29 +699,35 @@ impl PaneView {
             })
             .collect();
 
-        if let (Some(&first), Some(&last)) = (changed.first(), changed.last()) {
-            // The span between the first and last change, replaced in one
-            // splice. **Replaced**, not mutated: a `ListView` rebinds a cell
-            // when its item is a different object, and mutating one behind the
-            // model's back leaves the row on screen saying what it used to —
-            // the mark would not repaint and the rename field would not open.
-            //
-            // One splice rather than a remove-all and refill, because emptying
-            // the store drops the scroll adjustment to zero and the view jumps
-            // for a keystroke that changed one row's colour.
-            let replacements: Vec<PaneEntry> =
-                (first..=last).map(|index| self.entry_at(index)).collect();
-            self.store
-                .splice(first as u32, replacements.len() as u32, &replacements);
+        // Rewritten where they stand, not spliced over. The model does not
+        // change at all, so the list keeps its scroll anchor and its
+        // selection — and each row is exactly the ones that differ rather
+        // than the whole span between the first and the last.
+        for index in changed {
+            self.rewrite_row(index);
         }
 
         self.status
             .set_text(&crate::jobs::selection_status(&self.shown.listing));
-        self.sync_cursor();
+        // Only when the cursor actually moved. `Insert` and `Shift+↓` mark
+        // *and advance*, and a held-down key has to keep its cursor on
+        // screen; `Space` marks where it stands, and a view somebody scrolled
+        // away from the cursor was scrolled there on purpose.
+        if moved {
+            self.sync_cursor();
+        }
+    }
+
+    /// Rewrites the store's row at `index` from the listing.
+    fn rewrite_row(&self, index: usize) {
+        let Some(entry) = self.store.item(index as u32).and_downcast::<PaneEntry>() else {
+            return;
+        };
+        entry.rewrite(self.row_at(index));
     }
 
     /// One row of the store, built from the listing.
-    fn entry_at(&self, index: usize) -> PaneEntry {
+    fn row_at(&self, index: usize) -> Row {
         let entry = self
             .shown
             .listing
@@ -694,7 +740,11 @@ impl PaneView {
             self.shown.listing.measured_at(index),
         );
         row.renaming = self.renaming.as_deref() == Some(row.full_name.as_str());
-        PaneEntry::new(row)
+        row
+    }
+
+    fn entry_at(&self, index: usize) -> PaneEntry {
+        PaneEntry::new(self.row_at(index))
     }
 
     /// Rebuilds the rows from the listing and puts the selection back on the
@@ -1168,8 +1218,13 @@ impl PaneView {
     /// per dispatched action, before the action runs, and nothing reaches a
     /// mark operation any other way.
     fn marking(&mut self, change: impl FnOnce(&mut Listing)) {
+        // Whether the cursor moved is the only thing that entitles a marking
+        // key to move the view, and one comparison tells the keys apart — so
+        // no caller has to know which kind it is.
+        let before = self.shown.listing.cursor();
         change(&mut self.shown.listing);
-        self.refresh_marks();
+        let moved = self.shown.listing.cursor() != before;
+        self.refresh_marks(moved);
     }
 
     /// Selects the listing's cursor row, focuses it, and scrolls it into
@@ -1411,8 +1466,7 @@ impl PaneView {
         let Some(index) = self.shown.listing.set_measured(name, bytes, complete) else {
             return;
         };
-        let replacement = self.entry_at(index);
-        self.store.splice(index as u32, 1, &[replacement]);
+        self.rewrite_row(index);
         // The total the accumulation was for, which the status line renders
         // from the marks and now includes this folder in.
         self.status
@@ -1688,12 +1742,23 @@ impl PaneView {
     /// the thing it is meant to override. The offset is clamped by the
     /// adjustment itself, which is what makes a directory that shrank while
     /// you were below it land at its end rather than past it.
+    ///
+    /// **The priority is what stops it flickering.** Deferred it must be —
+    /// before the rows are laid out there is no height to clamp against — but
+    /// a plain idle runs after the paint as well, and the frame in between is
+    /// the one showing the top of the list. Logging every painted frame's
+    /// offset says it outright: coming back out of a directory used to paint
+    /// a frame at 39 px, the cursor row, before landing at the remembered
+    /// 828; at [`SCROLL_RESTORE_PRIORITY`] it goes straight to 828.
     fn restore_scroll(&self) {
         let Some(&offset) = self.scrolled_to.get(self.shown.listing.dir().as_str()) else {
             return;
         };
         let adjustment = self.scroller.vadjustment();
-        glib::idle_add_local_once(move || adjustment.set_value(offset));
+        glib::idle_add_local_full(glib::Priority::from(SCROLL_RESTORE_PRIORITY), move || {
+            adjustment.set_value(offset);
+            glib::ControlFlow::Break
+        });
     }
 
     /// Puts the cursor on `path` when the listing being read arrives.
@@ -1899,13 +1964,37 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
                 .downcast::<gtk::Label>()
                 .expect("setup installed a Label"),
         };
-        label.set_text(&entry.text(column));
-        // Marked rows are coloured, which is how Total Commander shows them
-        // and the only cue that survives the row also being the cursor.
-        if entry.is_marked() {
-            label.add_css_class(CLASS_MARKED);
-        } else {
-            label.remove_css_class(CLASS_MARKED);
+        paint_cell(&label, &entry, column);
+
+        // And again whenever the row is rewritten under it. This is what
+        // makes a mark repaint without the model changing — the alternative,
+        // splicing a new object in, costs the list its scroll anchor
+        // (`PaneEntry::rewrite`).
+        //
+        // A weak reference to the label, so the entry's handler does not keep
+        // a recycled cell alive; the handler itself is disconnected on unbind
+        // below, because the cell it paints will be showing another row by
+        // then.
+        let repainting = label.downgrade();
+        let id = entry.connect_notify_local(Some(ROW_REVISION), move |entry, _| {
+            if let Some(label) = repainting.upgrade() {
+                paint_cell(&label, entry, column);
+            }
+        });
+        // SAFETY: the key is this module's own, the value is put on the very
+        // `ListItem` that `connect_unbind` takes it off again, and the type
+        // there matches the type here.
+        unsafe { item.set_data(CELL_REPAINT, id) };
+    });
+
+    factory.connect_unbind(|_, item| {
+        let item = list_item(item);
+        // SAFETY: as above — the same key, the same item, the same type.
+        let Some(id) = (unsafe { item.steal_data::<glib::SignalHandlerId>(CELL_REPAINT) }) else {
+            return;
+        };
+        if let Some(entry) = item.item().and_downcast::<PaneEntry>() {
+            entry.disconnect(id);
         }
     });
 
@@ -1917,6 +2006,20 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
     // wide it is, and GTK picks the one nobody asked for.
     view_column.set_resizable(!column.expands());
     view_column
+}
+
+/// Writes one cell from its row: the column's text, and the colour a marked
+/// row carries.
+///
+/// Marked rows are coloured, which is how Total Commander shows them and the
+/// only cue that survives the row also being the cursor.
+fn paint_cell(label: &gtk::Label, entry: &PaneEntry, column: Column) {
+    label.set_text(&entry.text(column));
+    if entry.is_marked() {
+        label.add_css_class(CLASS_MARKED);
+    } else {
+        label.remove_css_class(CLASS_MARKED);
+    }
 }
 
 /// From GTK 4.12 the factory hands over a plain `Object`, because a factory
