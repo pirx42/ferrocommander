@@ -341,10 +341,15 @@ impl App {
     /// Takes the app by value: there is nothing to drive afterwards, and the
     /// point is to be able to start a second one on the same home directory.
     pub fn close(mut self) -> TempDir {
-        // Ctrl+Q, not a kill: settings are written from GTK's close handler,
+        // Alt+F4, not a kill: settings are written from GTK's close handler,
         // and a killed process never runs one. Closing the way a person does
         // is also the only way to test that the handler works at all.
-        self.key("ctrl+q");
+        //
+        // This line *is* the coverage for the quit binding — the gate's
+        // every-binding-is-pressed test reads this file as well as the suite
+        // — and eleven tests plus seven relaunches depend on it shutting the
+        // app down cleanly, which is why moving the key moved this too.
+        self.key("alt+F4");
         let deadline = Instant::now() + EFFECT_TIMEOUT;
         while self.app.try_wait().ok().flatten().is_none() {
             if Instant::now() >= deadline {

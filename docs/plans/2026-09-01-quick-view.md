@@ -128,12 +128,18 @@ from the key handler or has to be debounced, and it goes in
 
 **Phase 2 — the keys move, harness included.** `Action::Quit` rebinds to
 `Alt+F4` and `App::close()` sends that instead — the change phase 0 found,
-and the one the whole suite checks by continuing to shut down cleanly;
-`ctrl+q` becomes `Action::QuickView`, which for this phase only toggles a
-flag and redraws nothing. The macOS layer keeps `cmd+q → quit` and gains
-nothing. The gate's tables follow in the same commit, and the end-to-end
-quit test moves to the new key — the one existing test whose subject
-this phase moves out from under it (skill 74's re-probe rule).
+and the one the whole suite checks by continuing to shut down cleanly. The
+macOS layer keeps `cmd+q → quit` and gains nothing.
+
+`Ctrl+Q` is left **unbound** here rather than pointed at a `QuickView` that
+does nothing yet. The plan first proposed the latter, and the gate would
+have refused it: a binding no end-to-end test presses is red, and a test
+pressing a key with no visible effect is a test proving nothing — which
+this repository has twice caught itself writing. Unbinding needs no
+temporary excuse in `UI_UNPRESSED` and leaves the risky half of this
+phase — one harness line that eleven closing tests lean on — alone in its
+own commit. Quick view claims the key in phase 3, together with the
+preview and the tests that press it.
 
 **Phase 3 — the preview itself.** The `gtk::Stack` in the pane, the text
 widget, and the wiring: what the *other* pane shows is a pure function of

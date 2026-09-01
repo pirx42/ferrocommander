@@ -633,9 +633,15 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::ToggleHidden,
     },
+    // `Alt+F4`, not `Ctrl+Q`, since 2026-09-01: quick view took `Ctrl+Q`,
+    // which is the key Total Commander gives it. On a desktop this binding
+    // is mostly ceremony — the window manager takes `Alt+F4` before the
+    // application ever sees it and closes the window itself — but under the
+    // end-to-end suite there is no window manager, so this is what quits,
+    // and on macOS the Command layer adds `cmd+q` beside it.
     Binding {
-        key: Key::q,
-        modifiers: ModifierType::CONTROL_MASK,
+        key: Key::F4,
+        modifiers: ModifierType::ALT_MASK,
         action: Action::Quit,
     },
 ];
@@ -1107,7 +1113,7 @@ mod tests {
                 ModifierType::CONTROL_MASK.union(ModifierType::SHIFT_MASK),
                 Action::Compare,
             ),
-            (Key::q, ModifierType::CONTROL_MASK, Action::Quit),
+            (Key::F4, ModifierType::ALT_MASK, Action::Quit),
             (Key::Right, PLAIN, Action::FocusCommandLine),
             (Key::c, ModifierType::CONTROL_MASK, Action::ClipboardCopy),
             (Key::x, ModifierType::CONTROL_MASK, Action::ClipboardCut),
@@ -1640,13 +1646,17 @@ mod tests {
         // everything the Linux table promised still works. The layer moving
         // beyond additive is a decision for somebody at a real Mac.
         let keymap = with_macos_layer();
+        // `q` is not in this list, and that is the point of the assertion
+        // below it: since quick view took `Ctrl+Q` (2026-09-01), the layer's
+        // `cmd+q` is the one entry whose Ctrl twin is deliberately *not* the
+        // same action. Cmd+Q is how a Mac quits; Ctrl+Q is quick view on
+        // every platform, macOS included.
         for (key, action) in [
             (Key::c, Action::ClipboardCopy),
             (Key::x, Action::ClipboardCut),
             (Key::v, Action::ClipboardPaste),
             (Key::a, Action::MarkAll),
             (Key::z, Action::UndoRename),
-            (Key::q, Action::Quit),
             (Key::r, Action::Reread),
         ] {
             assert_eq!(
@@ -1660,6 +1670,19 @@ mod tests {
                 "{key:?} under Ctrl still"
             );
         }
+        // Cmd+Q quits, and Ctrl+Q does not — the one place the layer is more
+        // than additive. Stated as "not quit" rather than as an exact action
+        // so it keeps holding when quick view claims the key.
+        assert_eq!(
+            keymap.action_for(Key::q, ModifierType::META_MASK),
+            Some(Action::Quit),
+            "Cmd+Q is how a Mac quits"
+        );
+        assert_ne!(
+            keymap.action_for(Key::q, ModifierType::CONTROL_MASK),
+            Some(Action::Quit),
+            "Ctrl+Q belongs to quick view, on macOS as everywhere else"
+        );
     }
 
     #[test]
@@ -2005,7 +2028,7 @@ mod tests {
         for noise in [ModifierType::LOCK_MASK, ModifierType::BUTTON1_MASK] {
             assert_eq!(bound(Key::Down, noise), Some(Action::CursorDown));
             assert_eq!(
-                bound(Key::q, ModifierType::CONTROL_MASK | noise),
+                bound(Key::F4, ModifierType::ALT_MASK | noise),
                 Some(Action::Quit)
             );
         }

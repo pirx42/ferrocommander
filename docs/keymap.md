@@ -56,7 +56,7 @@
 | `Ctrl+Shift+C` | Compare two files by content — see [compare.md](compare.md) |
 | `Ctrl+S` | Narrow the pane as you type |
 | `Esc` | Stop a running branch walk; otherwise stop narrowing |
-| `Ctrl+Q` | Quit |
+| `Alt+F4` | Quit — on macOS `Cmd+Q` does it too |
 
 **This table is checked against the code, and its punctuation is what does
 the checking.** A comma joins keys that are **one command** reachable more
@@ -586,7 +586,7 @@ the keystroke it was written from. Case and modifier order do not matter when
 | `exchange_panes` | `ctrl+u` |
 | `toggle_hidden` | `ctrl+h` |
 | `compare` | `ctrl+shift+c` |
-| `quit` | `ctrl+q` |
+| `quit` | `alt+F4` |
 
 <!-- /generated: action names -->
 
@@ -730,8 +730,10 @@ The wiring *between* a physical keypress and those functions used to have no
 automated coverage at all. It is now covered by the end-to-end suite in
 `crates/fc-app/tests/ui.rs`, where a real X server delivers real key events to
 the real binary and the checks are on the filesystem afterwards. The cursor
-keys and Tab are used by every test to get anywhere at all, and `Ctrl+Q` is
-how the harness closes the app.
+keys and Tab are used by every test to get anywhere at all, and `Alt+F4` is
+how the harness closes the app — which is also the only coverage the quit
+binding has, and the reason moving that key moved a line eleven tests lean
+on.
 
 **What is deliberately not exercised end to end** is no longer a paragraph.
 It is `UI_UNPRESSED` in `constants.rs`, eight entries with a reason each, and
