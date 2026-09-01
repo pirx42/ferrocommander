@@ -1,7 +1,8 @@
 # `tc` means Total Commander, and nothing else
 
-Status: In Progress — both decisions settled by the owner, 2026-09-01:
-`fc-core` / `fc-app`, and the archived plans rewritten
+Status: Implemented + substance extracted to crates/CLAUDE.md and
+scripts/check-naming.py — commits 110fecb (the rename), 647ce65 (the
+archive and the guard), plus the closing audit; archived 2026-09-01
 
 The crates are called `tc-core` and `tc-app`, from a working title the
 project outgrew: it is *FerroCommander*, and `tc` in a crate name says
@@ -22,7 +23,7 @@ treatment:
 | archived plans | 127 | historical records that named the crates while describing work already done (§2, decision 2) |
 
 And the **legitimate** `tc`, which stays by the owner's own rule: `TC's own
-quirk` and the like in [keymap.md](../keymap.md), the root CLAUDE.md's *TC
+quirk` and the like in [keymap.md](../../keymap.md), the root CLAUDE.md's *TC
 Clone Linux* title, and `2026-08-28-tc-clone-design.md` — each of those is
 Total Commander being named.
 
@@ -122,3 +123,56 @@ four full-gate runs at ~15 minutes each.
   path in someone's notes, a `cargo run -p tc-app` in muscle memory — is
   not reachable from here. The README's build line is the one place a
   newcomer would have read it, and it moves in phase 1.
+
+## 6. Outcome
+
+441 substitutions over 98 files, in three commits behind three green
+gates, and the repository now answers to one name. What the doing taught,
+beyond what the plan predicted:
+
+- **The formatter caught what a substitution could not.** `fc_core` sorts
+  before `gtk`, `harness` and `std` where `tc_core` sorted after, so every
+  import block that names the engine had to be reordered — which is why
+  the rename diff is 347 lines against 346 rather than symmetric. The
+  plan's "a sed is not a rename" was right for a reason it did not
+  foresee.
+- **The guard failed on its own documentation, immediately.** The first
+  version banned the bare word `tc`, and the sentences *stating the rule*
+  — in CLAUDE.md, in the gate script's comment — quote the spelling in
+  order to forbid it. A check that fails on its own explanation is read
+  once and worked around, so the line moved to where the owner had drawn
+  it in the first place: the `tc-`/`tc_` name prefix, with the bare word
+  left alone because that is how prose names Total Commander. The lesson
+  is narrower than "write a guard": a rule about a spelling has to survive
+  being written down.
+- **Two stale claims surfaced because their neighbours were being
+  edited**, neither about the rename. CLAUDE.md said `check-links.py` was
+  "not part of the green gate" long after a links step existed, and the
+  root document was still titled "TC Clone Linux" — with "for Linux" and a
+  two-platform target list under it — for a project that had shipped a
+  macOS app on every commit for a day. The owner asked for the retitle;
+  the rest came with it.
+- **One fossil, revealed rather than caused.** `crates/fc-core/proof.txt`
+  held the word "written" and was committed in 2c74f0b, from a run when
+  the command test wrote into the crate directory instead of its tempdir.
+  The test uses the tempdir correctly today; the file had simply never
+  been noticed, and a rename that lists every file in both crates is what
+  made it visible. Deleted in the audit.
+- **The guard had a blind spot the size of its own rules.** It walks
+  `git ls-files`, and an untracked script is not in that list — so
+  `check-naming.py`, which necessarily contains every spelling it hunts,
+  went unchecked until the commit that added it made it visible, and then
+  failed on itself. Named as an exemption now, with the reason. The
+  paragraph in `crates/CLAUDE.md` that failed beside it was reworded
+  instead: it can tell the history without quoting the banned spelling,
+  and a rewording beats an exemption wherever one is available.
+- **What the prefix means is now written down** where a reader of the
+  crates would look. Nothing said what `fc` stood for, which is the same
+  silence the whole change was about: a prefix that claims something
+  without saying what.
+
+Left alone, with reasons: `2026-08-28-tc-clone-design.md` keeps its
+filename — `tc-clone` reads "Total Commander clone", the allowed use, and
+renaming an archived plan would rewrite a name four documents cite; and
+the eighteen `TC`s in prose stay, because naming Total Commander is
+exactly what the owner's rule permits.

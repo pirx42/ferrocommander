@@ -49,6 +49,13 @@ ALLOWED = {
     "2026-08-28-tc-clone-design": "names the Total Commander clone the design was of",
     # The plan that removed the prefix has to quote what it removed.
     "drop-the-tc-prefix": "the rename plan, which is about the old name",
+    # This file, which cannot hunt for a spelling without containing it.
+    # It went unchecked for a different reason until 2026-09-01: the walk is
+    # over `git ls-files`, and an untracked script is not in it — so the
+    # check first saw itself on the commit that added it, and failed. A
+    # checker that cannot see itself is a checker with one blind spot the
+    # size of its own rules.
+    "check-naming.py": "the check itself, which must name what it forbids",
 }
 
 

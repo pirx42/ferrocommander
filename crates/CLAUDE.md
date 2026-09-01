@@ -5,6 +5,13 @@
 The Cargo workspace members. The split into two crates is the project's
 central boundary: **the UI never touches the filesystem directly.**
 
+**`fc` is FerroCommander.** Both crates carried a Total Commander prefix
+until 2026-09-01, from a working title — a prefix naming the program this
+one imitates rather than the one being written. `scripts/check-naming.py`
+keeps the new one honest, and still allows `TC` in prose, which is how the
+documents name Total Commander itself
+([the plan](../docs/plans/archive/2026-09-01-drop-the-tc-prefix.md)).
+
 | Crate | Kind | Contents |
 |---|---|---|
 | [fc-core](fc-core/src/CLAUDE.md) | lib | VFS, listing model, file operations, archives, search, multi-rename. **No GTK dependency** — headless-testable with `cargo test`. |
