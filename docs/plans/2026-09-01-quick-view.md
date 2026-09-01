@@ -1,6 +1,6 @@
 # Quick view — `Ctrl+Q` shows the cursor's file in the other pane
 
-Status: Draft — §2's decisions are open
+Status: Draft — decisions 1–3 settled by the owner, 2026-09-01
 
 Total Commander's `Ctrl+Q`: the opposite pane stops being a directory and
 becomes a window onto whatever the cursor is on, following it as the cursor
@@ -49,8 +49,8 @@ Three things the plan has to decide rather than discover:
 
 ## 2. Decisions before implementation
 
-1. **Can the keyboard get *into* the quick view?** Recommended: **no —
-   it is strictly a preview.** The cursor stays in the rows, `Tab` keeps
+1. **Can the keyboard get *into* the quick view?** Settled: **no — it is
+   strictly a preview.** The cursor stays in the rows, `Tab` keeps
    its meaning, and the preview always shows the head of the file. That is
    the whole gesture: arrow through files, watch content go by. `F3` is one
    key away when somebody wants to read rather than glance, and it already
@@ -58,7 +58,7 @@ Three things the plan has to decide rather than discover:
    Commander lets `Tab` move into the panel so it can be scrolled, which
    means a second focus state, a second set of key meanings, and a `Tab`
    whose behaviour depends on a mode.
-2. **Does the mode survive a restart?** Recommended: **no, it is
+2. **Does the mode survive a restart?** Settled: **no, it is
    transient.** A file manager that starts with one pane showing the head
    of a text file instead of a directory has to be explained; `Ctrl+Q` is
    cheap to press again. The cost is honest and worth naming: the settings
@@ -66,12 +66,28 @@ Three things the plan has to decide rather than discover:
    mode is one the suite can only observe indirectly (§3, phase 4).
    Alternative: persist it like `active_pane`, which buys a direct
    end-to-end assertion and a mode that outlives a restart.
-3. **What the preview shows when the cursor is not on a readable file** —
-   a directory, `..`, or a file that cannot be opened. Recommended:
-   **a short line saying so**, in the same place the content would be
-   (`(directory)`, `(cannot be read)`), so the pane never looks broken or
-   stale. Alternative: leave the previous file's content until the cursor
-   reaches another readable one, which is what a stale preview looks like.
+3. **What the preview shows when the cursor is not on a readable file.**
+   Settled, against the plan's recommendation of a placeholder line: **a
+   directory shows what it holds** — the count and the byte total
+   `Alt+Shift+Enter` already produces. `..` and a file that cannot be
+   opened still get the short line (`(cannot be read)`), because neither
+   has contents to summarise.
+
+   This is the decision that costs something, and the cost lands on the
+   cursor. Counting a folder is a *recursive walk*: `Alt+Shift+Enter`
+   exists as a deliberate, on-demand key precisely because the answer is
+   not free, and a walk started on every cursor step over a
+   directory-heavy tree is the stall the prime directive forbids. What
+   makes it affordable is that the machinery already exists and was built
+   for exactly this shape (the space-counts plan): `fc_core::sizes` walks
+   on a worker with a cancel token, and the pane already knows how to
+   recognise and drop an answer that arrives after the cursor moved on.
+   So the rule is: **the summary is asked for, never waited for.** The
+   preview shows the directory's name immediately and the figures when
+   they arrive; a cursor that moves first cancels the walk it started, and
+   a late answer is dropped rather than drawn. Phase 1 measures the step
+   that decides whether even *starting* a walk per keystroke is too much,
+   and phase 3 carries the debounce if it is.
 
 ## 3. Phases
 
@@ -85,9 +101,12 @@ unpinned enough to owe characterisation tests; what is owed is a
 **Phase 1 — the cost of following a cursor.** Before the feature: a
 benchmark for what one preview step costs — `stat` plus one 64 KiB
 windowed read — with the input layout stated as part of the claim (skill
-74), including the case that cannot flatter it: a directory of large files
-on a cold cache, and an archive member, where a "read one window" is a
-decompression. The number decides whether the preview may update straight
+74), including the two cases that cannot flatter it: an archive member, where
+a "read one window" is a decompression, and — from decision 3 — a *deep
+directory* under the cursor, where the preview starts a recursive walk.
+The second is the one that decides whether a walk may start from the key
+handler at all, or needs the delay that lets a held-down arrow key pass
+over a folder without ever asking. The number decides whether the preview may update straight
 from the key handler or has to be debounced, and it goes in
 [performance.md](../performance.md) either way.
 
@@ -99,9 +118,13 @@ quit test moves to the new key — the one existing test whose subject
 this phase moves out from under it (skill 74's re-probe rule).
 
 **Phase 3 — the preview itself.** The `gtk::Stack` in the pane, the text
-widget, and the wiring: which file the *other* pane shows is a pure
-function of the active pane's cursor, unit-tested per case from decision 3
-— a file, a directory, `..`, an empty listing. The preview updates where
+widget, and the wiring: what the *other* pane shows is a pure function of
+the active pane's cursor, unit-tested per case from decision 3 — a file,
+a directory, `..`, an unreadable file, an empty listing. The directory
+case is where the phase's weight is: the walk goes to `fc_core::sizes` on
+a worker with the pane's cancel token, the answer is matched against what
+the cursor is on *now* before it is drawn, and phase 1's measurement
+decides whether the walk starts on the keystroke or after a pause. The preview updates where
 the cursor already reports having moved, so nothing new has to remember to
 call it (the lesson the adoption plan paid for). Leaving quick view puts
 the pane back exactly as it was, because the listing was never torn down.
@@ -129,14 +152,17 @@ Corrected per skill 45; the last plans held at ~0.10.
 | Phase | Raw | Corrected |
 |---|---|---|
 | 0 pre-check | 0.25 d | 0.25 h |
-| 1 measurement | 0.5 d | 0.5 h |
+| 1 measurement | 0.75 d | 0.75 h |
 | 2 the keys | 0.5 d | 0.5 h |
-| 3 the preview | 2 d | 2 h |
+| 3 the preview | 2.5 d | 2.5 h |
 | 4 end-to-end | 1 d | 1 h |
 | 5 docs | 0.5 d | 0.5 h |
 | 6 audit | 0.5 d | 0.5 h |
 
-About five hours of work, plus a full-gate run (~15 min) per phase commit.
+About six hours of work, plus a full-gate run (~15 min) per phase commit.
+Decision 3 is what moved phases 1 and 3: a directory summary is a walk, and
+a walk behind a cursor key needs measuring and cancelling rather than just
+calling.
 
 ## 5. What would make this wrong
 
@@ -149,6 +175,12 @@ About five hours of work, plus a full-gate run (~15 min) per phase commit.
   directory on a network mount, or an archive member, is the case that can
   make the cursor feel heavy, and phase 1's benchmark has to include one
   rather than reporting the flattering number.
+- **Decision 3 puts a recursive walk behind an arrow key**, which is the
+  one thing in this plan that could make the pane feel slower than it does
+  today. The mitigations are named — worker, cancel on move, drop late
+  answers, and a delay if the measurement asks for one — but the honest
+  version is that this is the part most likely to need a second pass after
+  somebody holds `Down` through a real tree.
 - **What the suite cannot see** is the feature's whole point. The tests
   can prove the mode is on, that the pane stopped being a listing and came
   back — not that the right bytes are on the screen. The engine's own tests
