@@ -41,10 +41,28 @@ inside a changed pair, the character runs that actually differ carry a
 stronger amber. The filler line opposite a one-sided row wears that row's
 color, so a hole reads as part of the change it belongs to.
 
+Each side carries its **own file's line numbers** in a gutter beside it, so
+the two columns disagree exactly where the files do: a filler row opposite a
+line only the other side has carries no number, because there is no such line
+in that file to number. The gutter is a text view rather than a label, so its
+lines are the same height as the text beside them by construction rather than
+by matching two fonts.
+
 | Key | |
 |---|---|
 | `n` / `p` | next / previous block of differences |
+| `PgUp` / `PgDn`, `Home` / `End` | move the shared viewport |
 | `Esc` | close |
+
+The page keys had to be bound explicitly (2026-09-01): unbound, they reached
+the focused `TextView`, which answers a page key by moving its *own* cursor
+rather than scrolling the one `ScrolledWindow` both sides share — so the view
+did not move and the key looked dead.
+
+**The separator between the sides is one pixel, and lives inside the right
+half.** The box holding the two sides is homogeneous, which is what keeps
+them equal — and homogeneous means every child gets the same width, so a
+separator added as a third child was given a third of the window.
 
 The rows come from `fc-core::compare` — reading through the VFS, so a file
 inside an archive compares like any other — and the diff runs on a worker

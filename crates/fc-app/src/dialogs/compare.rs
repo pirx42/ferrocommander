@@ -10,9 +10,9 @@ use gtk::prelude::*;
 use fc_core::compare::{Row, RowKind, Side};
 
 use crate::constants::{
-    CLASS_OUTPUT, COMPARE_HEIGHT, COMPARE_TINT_CHANGED, COMPARE_TINT_LEFT_ONLY,
-    COMPARE_TINT_RIGHT_ONLY, COMPARE_TINT_SPAN, COMPARE_WIDTH, TAG_CHANGED, TAG_LEFT_ONLY,
-    TAG_RIGHT_ONLY, TAG_SPAN,
+    CLASS_OUTPUT, COMPARE_GUTTER_GAP, COMPARE_GUTTER_WIDTH, COMPARE_HEIGHT, COMPARE_TINT_CHANGED,
+    COMPARE_TINT_LEFT_ONLY, COMPARE_TINT_RIGHT_ONLY, COMPARE_TINT_SPAN, COMPARE_WIDTH, TAG_CHANGED,
+    TAG_LEFT_ONLY, TAG_RIGHT_ONLY, TAG_SPAN,
 };
 
 /// Opens the side-by-side view over rows the engine already built.
@@ -28,13 +28,22 @@ pub fn open_compare(parent: &impl IsA<gtk::Window>, title: &str, rows: &[Row]) {
     fill(&left, rows, |row| row.left.as_ref());
     fill(&right, rows, |row| row.right.as_ref());
 
+    // Two halves, and the separator lives *inside* the right one. The box is
+    // homogeneous — that is what keeps the sides equal — and homogeneous
+    // means every child gets the same width, so a separator as a third child
+    // was given a third of the window. That is the "border way too wide" of
+    // the third testing round, and it is why the line is a one-pixel child of
+    // a half rather than a half of its own.
     let pair = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .homogeneous(true)
         .build();
-    pair.append(&left);
-    pair.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-    pair.append(&right);
+    pair.append(&half(None, &numbers(rows, |row| row.left.is_some()), &left));
+    pair.append(&half(
+        Some(&gtk::Separator::new(gtk::Orientation::Vertical)),
+        &numbers(rows, |row| row.right.is_some()),
+        &right,
+    ));
 
     let scroller = gtk::ScrolledWindow::builder()
         .child(&pair)
@@ -59,9 +68,24 @@ pub fn open_compare(parent: &impl IsA<gtk::Window>, title: &str, rows: &[Row]) {
     let keys = gtk::EventControllerKey::new();
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let closing = window.clone();
+    let paging = scroller.clone();
     keys.connect_key_pressed(move |_, key, _, _| match key {
         Key::Escape => {
             closing.close();
+            glib::Propagation::Stop
+        }
+        Key::Page_Down | Key::Page_Up | Key::Home | Key::End => {
+            // The one scroller both sides share. Unbound, these reached the
+            // focused `TextView`, which answers a page key by moving its own
+            // cursor — so the view did not move and the key looked dead.
+            let adjustment = paging.vadjustment();
+            let value = match key {
+                Key::Home => adjustment.lower(),
+                Key::End => adjustment.upper() - adjustment.page_size(),
+                Key::Page_Up => adjustment.value() - adjustment.page_size(),
+                _ => adjustment.value() + adjustment.page_size(),
+            };
+            adjustment.set_value(value.max(adjustment.lower()));
             glib::Propagation::Stop
         }
         Key::n | Key::p => {
@@ -94,6 +118,64 @@ fn text_view() -> gtk::TextView {
         .hexpand(true)
         .build();
     view.add_css_class(CLASS_OUTPUT);
+    view
+}
+
+/// One side of the view: an optional separator, its line numbers, its text.
+fn half(
+    separator: Option<&gtk::Separator>,
+    gutter: &gtk::TextView,
+    text: &gtk::TextView,
+) -> gtk::Box {
+    let side = gtk::Box::new(gtk::Orientation::Horizontal, COMPARE_GUTTER_GAP);
+    if let Some(separator) = separator {
+        side.append(separator);
+    }
+    side.append(gutter);
+    side.append(text);
+    side
+}
+
+/// The line numbers for one side, as a column that scrolls with it.
+///
+/// **Each side counts its own file**, so the two gutters disagree exactly
+/// where the files do — which is the point of them. A filler row, opposite a
+/// line only the other side has, carries no number at all, because there is
+/// no such line in this file to number.
+///
+/// A `TextView` rather than a label, so the lines are the same height as the
+/// text beside them by construction rather than by matching two fonts.
+fn numbers(rows: &[Row], present: impl Fn(&Row) -> bool) -> gtk::TextView {
+    // Its own builder rather than `text_view`'s, for one property: the text
+    // views expand to fill their half and a gutter must not — sharing the
+    // builder gave the numbers half of each side and left the text pushed
+    // into the middle.
+    //
+    // Left-aligned, though right against the text is what a diff tool shows:
+    // `Justification::Right` on a view with wrapping off drew nothing at all,
+    // observed rather than explained, and a column of numbers that is there
+    // beats a tidier one that is not.
+    let view = gtk::TextView::builder()
+        .editable(false)
+        .cursor_visible(false)
+        .monospace(true)
+        .hexpand(false)
+        .width_request(COMPARE_GUTTER_WIDTH)
+        .build();
+    view.add_css_class(CLASS_OUTPUT);
+
+    let mut line = 0_usize;
+    let text: String = rows
+        .iter()
+        .map(|row| match present(row) {
+            true => {
+                line += 1;
+                format!("{line}\n")
+            }
+            false => "\n".to_string(),
+        })
+        .collect();
+    view.buffer().set_text(&text);
     view
 }
 

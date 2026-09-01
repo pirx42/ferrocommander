@@ -583,6 +583,15 @@ pub const ROW_REVISION: &str = "revision";
 /// left connected would paint the wrong row's text into it.
 pub const CELL_REPAINT: &str = "fc-cell-repaint";
 
+/// The line-number gutter beside each side of the diff, and the gap between
+/// it and the text.
+///
+/// Wide enough for a five-digit line number, which is more lines than the
+/// engine will diff before its 64 MiB ceiling stops it
+/// ([`docs/compare.md`]).
+pub const COMPARE_GUTTER_WIDTH: i32 = 44;
+pub const COMPARE_GUTTER_GAP: i32 = 4;
+
 /// How much unscrolled room still counts as room, in pixels.
 ///
 /// An adjustment's arithmetic is floating point, so "is there anything left
