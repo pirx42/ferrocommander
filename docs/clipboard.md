@@ -28,7 +28,7 @@ this does not yet write ([future-improvements.md](future-improvements.md)).
 
 ## What the encoding has to get right
 
-The encoding is `tc-core::clipboard`, pure and tested there rather than in
+The encoding is `fc-core::clipboard`, pure and tested there rather than in
 the shell — it is a wire format other programs read, so it is worth testing
 without a display server in the way.
 

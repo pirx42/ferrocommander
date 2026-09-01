@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."
 # eye: `0.1.0-121` in `dpkg -l`, `#121` in the title.
 #
 # The rule itself is in `scripts/version.sh`, shared with the Windows package;
-# `crates/tc-app/build.rs` is the one place that has to repeat it, and
+# `crates/fc-app/build.rs` is the one place that has to repeat it, and
 # `docs/packaging.md` says why.
 . scripts/version.sh
 
@@ -35,7 +35,7 @@ echo "=== packaging"
 # package — so the script would happily check and publish a version it had not
 # just built.
 deb="target/debian/ferrocommander_${version}_amd64.deb"
-cargo deb --package tc-app --no-build --deb-version "$version" --output "$deb"
+cargo deb --package fc-app --no-build --deb-version "$version" --output "$deb"
 
 # A second name for the same file, without the version in it.
 #

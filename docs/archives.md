@@ -13,7 +13,7 @@ this file keeps score of what it actually cost.
 ## The report card
 
 The plan for this phase said its own measure of success would be how few lines
-it took **outside** `tc-core::archive`, so here is the count. Added lines of
+it took **outside** `fc-core::archive`, so here is the count. Added lines of
 code, comments and blanks excluded, per step:
 
 | | Inside `archive/` | Outside | Tests |
@@ -83,7 +83,7 @@ archive was opened from, in the directory holding it, **with the cursor on the
 archive file**. That is what `..` has always meant here: where you came from.
 
 Three small things had to be true for that to work, and they are worth naming
-because they are the whole cost of this phase outside `tc-core::archive`:
+because they are the whole cost of this phase outside `fc-core::archive`:
 
 - **A read arrives with the backend it was read from.** Opening an archive is a
   full parse — a zip's central directory, or an entire `.tar.gz` — which is the

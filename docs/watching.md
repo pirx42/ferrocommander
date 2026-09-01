@@ -42,9 +42,9 @@ lost track of a directory is precisely when a re-read is worth doing.
 
 ## The watcher is coalesced, not streamed
 
-`tc-core::watch` holds one `notify` watcher per pane — inotify on Linux,
+`fc-core::watch` holds one `notify` watcher per pane — inotify on Linux,
 `ReadDirectoryChangesW` on Windows, behind one interface, which is the shape
-every platform difference in this project takes. It is in `tc-core` because
+every platform difference in this project takes. It is in `fc-core` because
 watching a directory is a filesystem concern and the UI does not reach past its
 own layer.
 

@@ -71,7 +71,7 @@ cross-references instead of duplication.
 
   | Plan | What it built |
   |---|---|
-  | [tc-clone-design](plans/archive/2026-08-28-tc-clone-design.md) | v1 itself: scope, the tc-core/tc-app split, the phases, and what the whole thing cost |
+  | [tc-clone-design](plans/archive/2026-08-28-tc-clone-design.md) | v1 itself: scope, the fc-core/fc-app split, the phases, and what the whole thing cost |
   | [phase 1 — walking skeleton](plans/archive/2026-08-28-phase1-walking-skeleton.md) | the workspace, a read-only VFS, the listing model, two panes, keyboard navigation |
   | [phase 2 — core ops](plans/archive/2026-08-28-phase2-core-ops.md) | the mutating VFS, the copy/move/delete/mkdir engine, the background queue, progress and conflicts |
   | [phase 3 — polish browsing](plans/archive/2026-08-28-phase3-polish-browsing.md) | selection, the quick filter, sorting, attributes, the settings file, the drive bar |
@@ -104,12 +104,12 @@ cross-references instead of duplication.
 
 Code directories carry their own `CLAUDE.md` beside the code:
 [crates/CLAUDE.md](../crates/CLAUDE.md) →
-[tc-core/src/](../crates/tc-core/src/CLAUDE.md) →
-[vfs/](../crates/tc-core/src/vfs/CLAUDE.md),
-[listing/](../crates/tc-core/src/listing/CLAUDE.md),
-[ops/](../crates/tc-core/src/ops/CLAUDE.md),
-[archive/](../crates/tc-core/src/archive/CLAUDE.md); and
-[tc-app/src/](../crates/tc-app/src/CLAUDE.md).
+[fc-core/src/](../crates/fc-core/src/CLAUDE.md) →
+[vfs/](../crates/fc-core/src/vfs/CLAUDE.md),
+[listing/](../crates/fc-core/src/listing/CLAUDE.md),
+[ops/](../crates/fc-core/src/ops/CLAUDE.md),
+[archive/](../crates/fc-core/src/archive/CLAUDE.md); and
+[fc-app/src/](../crates/fc-app/src/CLAUDE.md).
 
 ## Conventions
 

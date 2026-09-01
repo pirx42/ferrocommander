@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tc-core", "crates/tc-app"]
+members = ["crates/fc-core", "crates/fc-app"]
 resolver = "2"
 
 # Shared package metadata: declared once so the two crates cannot drift apart
@@ -14,7 +14,7 @@ repository = "https://github.com/pirx42/ferrocommander"
 # Every third-party version is pinned here; member crates reference them with
 # `workspace = true`, so a dependency is upgraded in exactly one place.
 [workspace.dependencies]
-tc-core = { path = "crates/tc-core" }
+fc-core = { path = "crates/fc-core" }
 tempfile = "3"
 # Percent-encoding for the `file://` URIs the clipboard carries. A path with
 # a space in it is ordinary, and encoding one by hand is the kind of small
@@ -26,10 +26,10 @@ urlencoding = "2"
 # and parsing it — a process per directory step, for a number the kernel will
 # hand over in one syscall (docs/performance.md).
 libc = "0.2"
-# Channels between a job's worker thread and whoever is watching. In tc-core
-# rather than tc-app because a channel is not a UI dependency, and because it
+# Channels between a job's worker thread and whoever is watching. In fc-core
+# rather than fc-app because a channel is not a UI dependency, and because it
 # is what lets the shell await the event stream on the GLib main loop without
-# tc-core knowing GLib exists. Its blocking and async halves cover both
+# fc-core knowing GLib exists. Its blocking and async halves cover both
 # directions: the worker waits for a conflict answer, the UI does not wait for
 # anything.
 async-channel = "2"
@@ -41,8 +41,8 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.9"
 # Telling a pane its directory changed under it. inotify on Linux and
 # ReadDirectoryChangesW on Windows behind one interface, which is exactly the
-# shape of every other platform difference in this project. In tc-core rather
-# than tc-app because watching a directory is a filesystem concern and the UI
+# shape of every other platform difference in this project. In fc-core rather
+# than fc-app because watching a directory is a filesystem concern and the UI
 # does not reach past its own layer (docs/listing.md).
 notify = { version = "8", default-features = false, features = ["macos_kqueue"] }
 # Writing that same file back without destroying it. `toml` serializes a

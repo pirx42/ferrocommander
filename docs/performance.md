@@ -59,7 +59,7 @@ relative-path `String` per file. That is also the argument against building
 the size out of `branch::walk` — it would pay the 31 ms *and* the memory to
 produce one number.
 
-Reproduced with `cargo run --release -p tc-core --example bench_branch -- <dir>`.
+Reproduced with `cargo run --release -p fc-core --example bench_branch -- <dir>`.
 
 ### Where the wins came from
 
@@ -142,7 +142,7 @@ cheaper is to not scan on every letter. Nothing about that is worth building
 today, and this row is what would say when it is.
 
 Reproduced with
-`cargo run --release -p tc-core --example bench_type_ahead`.
+`cargo run --release -p fc-core --example bench_type_ahead`.
 
 ## What a burst of `Space` presses costs
 
@@ -178,7 +178,7 @@ should be: a directory of folders each large enough to outlast a keystroke,
 which is not a shape anybody has met.
 
 Reproduced with
-`cargo run --release -p tc-core --example bench_space_counts -- <dir>`.
+`cargo run --release -p fc-core --example bench_space_counts -- <dir>`.
 
 **The list of folders still owed is kept by removing, not by asking.** The
 first version asked the listing which of the marked folders already carried a
@@ -197,7 +197,7 @@ ones unless somebody makes it not.
 
 The diff engine ([compare.md](compare.md)) was measured before anything was
 built on it, on inputs chosen to be unflattering rather than typical
-(`crates/tc-core/examples/bench_compare.rs` states the layouts as part of
+(`crates/fc-core/examples/bench_compare.rs` states the layouts as part of
 the claim). Release build, 10 000 lines per side, best of five,
 2026-08-31 on this machine:
 

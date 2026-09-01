@@ -2,7 +2,7 @@
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
-`tc-app` assembles widgets and forwards everything else to `tc-core`. It
+`fc-app` assembles widgets and forwards everything else to `fc-core`. It
 contains no filesystem access, no sorting, and no notion of what a directory
 holds — those are [vfs.md](vfs.md) and [listing.md](listing.md).
 
@@ -361,7 +361,7 @@ number, and the commit it was built from. The title bar is the one part of the
 window that survives into a screenshot or a bug report, and "which build were
 you running" is the first question either raises.
 
-Both values are stamped in at **build time** by `crates/tc-app/build.rs`,
+Both values are stamped in at **build time** by `crates/fc-app/build.rs`,
 which asks git for them: the build number is the commit count, so it goes up
 and two builds can be told apart at a glance, and the hash is short enough to
 read off a title bar and long enough to find the commit. Read from git rather
@@ -454,7 +454,7 @@ the clean smoke run said nothing. When verifying a GTK call that returns a
 
 ## End-to-end tests
 
-`crates/tc-app/tests/ui.rs` starts a private X server, launches the built
+`crates/fc-app/tests/ui.rs` starts a private X server, launches the built
 binary on it, sends real key presses through the X server, and then asserts on
 the filesystem. Nothing is mocked; the only thing standing in for a person is
 `xdotool`.
@@ -543,7 +543,7 @@ did.
 suite reached 160, in this file and in two others, each with a different
 number — which is the whole of what a documentation review is for. The
 per-test cost is the figure that holds across all of them: 3.20 s at 138,
-3.30 s at 160. Multiply it by whatever `cargo test -p tc-app --test ui`
+3.30 s at 160. Multiply it by whatever `cargo test -p fc-app --test ui`
 reports today rather than trusting the total here.
 
 Four things the harness learned the hard way, each now a check rather than a

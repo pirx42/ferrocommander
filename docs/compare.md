@@ -46,7 +46,7 @@ color, so a hole reads as part of the change it belongs to.
 | `n` / `p` | next / previous block of differences |
 | `Esc` | close |
 
-The rows come from `tc-core::compare` — reading through the VFS, so a file
+The rows come from `fc-core::compare` — reading through the VFS, so a file
 inside an archive compares like any other — and the diff runs on a worker
 thread, because the row path reads both files whole and the main loop does
 not wait on that ([performance.md](performance.md) § *What a compare by

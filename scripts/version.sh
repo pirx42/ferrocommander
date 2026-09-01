@@ -1,7 +1,7 @@
 # The version a package carries: the crate version and the commit count.
 #
 # **Sourced rather than written out again**, because it was already written
-# twice. `crates/tc-app/build.rs` computes the same commit count a third time
+# twice. `crates/fc-app/build.rs` computes the same commit count a third time
 # and cannot avoid it — it runs inside a Rust build script that has to work on
 # Windows with no shell, so it cannot call this. Two places is the fewest
 # available; a third, in a second packaging script that *could* have shared

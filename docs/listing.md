@@ -2,7 +2,7 @@
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
-`tc-core::listing` turns what a [VFS](vfs.md) returned into what a pane shows:
+`fc-core::listing` turns what a [VFS](vfs.md) returned into what a pane shows:
 ordered rows, a hidden-file filter, a `..` row, and a cursor.
 
 ## It holds no filesystem
@@ -170,7 +170,7 @@ after a job use `Listing::load` instead and start with nothing marked, which is
 right: those are a different directory, or a directory whose marks the job just
 spent.
 
-Pattern selection uses `tc-core::glob` — `*` and `?`, case-insensitive, which
+Pattern selection uses `fc-core::glob` — `*` and `?`, case-insensitive, which
 is what Total Commander accepts and what a person types. It lives outside
 `listing` because the [search](search.md) uses the same matcher.
 
@@ -236,7 +236,7 @@ Three things make that possible, and each has a price worth naming:
   walk and carried on the row, so `Ctrl+H` stays what it is everywhere else: a
   rearrangement of what is already loaded, costing no filesystem access.
 
-The walk itself is [`branch::walk`](../crates/tc-core/src/branch.rs) — over a
+The walk itself is [`branch::walk`](../crates/fc-core/src/branch.rs) — over a
 queue rather than recursion, for the reason [search.md](search.md) gives —
 and it costs about what listing the same number of files in one directory
 costs ([performance.md](performance.md)). A listing knows it came from one:
@@ -292,7 +292,7 @@ two safe together.
 ## Type-ahead
 
 A letter no binding claims moves the cursor to the next row whose name
-contains it. The rule is `Listing::find_from`, which is in `tc-core` and
+contains it. The rule is `Listing::find_from`, which is in `fc-core` and
 tested there: **case-insensitive substring of the whole name, extension
 included**, searching downwards and wrapping once.
 

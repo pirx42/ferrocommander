@@ -1,0 +1,51 @@
+[package]
+name = "fc-app"
+description = """A keyboard-centric dual-pane file manager in the style of Total Commander. Two directories side by side, every operation on a key, and no waiting."""
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# The crate is `fc-app` — its half of the fc-core/fc-app split — but what
+# gets installed is called `ferrocommander`, because `/usr/bin/fc-app` is a
+# name nobody would have typed on purpose. The crate name stays: it is what
+# `cargo run -p fc-app` and the workspace layout are about.
+[[bin]]
+name = "ferrocommander"
+path = "src/main.rs"
+
+[dependencies]
+gtk.workspace = true
+fc-core.workspace = true
+
+# What the .deb says about itself. Here rather than in the packaging script,
+# so the description of the package sits beside the crate it describes and
+# there is one place to change it.
+#
+# `depends = "$auto"` is `dpkg-shlibdeps` reading the built ELF: the runtime
+# dependencies of a GTK binary are a long list, and one maintained by hand is
+# a list that goes stale the first time a dependency moves.
+[package.metadata.deb]
+name = "ferrocommander"
+maintainer = "pirx <andreas.rose@framefield.com>"
+section = "utils"
+priority = "optional"
+depends = "$auto"
+extended-description = """A dual-pane file manager for people who would rather not touch the mouse. Two directories side by side, the Total Commander key bindings, archives that open like folders, and a search that streams. Built from scratch in Rust and GTK4."""
+assets = [
+    ["target/release/ferrocommander", "usr/bin/", "755"],
+    ["../../packaging/st.rose.Ferrocommander.desktop", "usr/share/applications/", "644"],
+    [
+        "../../packaging/st.rose.Ferrocommander.svg",
+        "usr/share/icons/hicolor/scalable/apps/",
+        "644",
+    ],
+]
+
+[dev-dependencies]
+tempfile.workspace = true
+# The end-to-end tests build an archive to walk into. Written here rather than
+# committed as a fixture, so what is in it is visible next to the assertions
+# about it.
+zip.workspace = true

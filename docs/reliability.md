@@ -57,18 +57,18 @@ suite and end to end through the real binary.
 
 | Suite | What it pins |
 |---|---|
-| `crates/tc-core/tests/ops.rs` | the engine: conservation, conflicts, cancel, the awkward corners |
-| `crates/tc-core/tests/queue.rs` | the background queue: ordering, the conflict round trip, cancelling from outside |
-| `crates/tc-core/tests/local_fs.rs` | the filesystem backend, per call |
-| `crates/tc-core/tests/trash.rs` | that a trashed file is still recoverable |
-| `crates/tc-core/tests/archive.rs` | archives: escaping names, checksums, what refuses to be written, and the pack→unpack roundtrip ([archives.md](archives.md)) |
-| `crates/tc-core/tests/rename.rs` | the multi-rename rules, as a table, plus what they refuse ([multi-rename.md](multi-rename.md)) |
-| `crates/tc-core/tests/search.rs` | the walk: every hit and no others, refusals skipped, cancellation ([search.md](search.md)) |
-| `crates/tc-core/tests/compare.rs` + the `compare::tests` module | the diff's two conservation invariants — each side's rows rebuild that side's file, a changed pair minus its spans is equal — and the binary/oversize routing ([compare.md](compare.md)) |
-| `crates/tc-core/tests/clipboard.rs` | the wire formats other file managers read — and the verb that decides whether a paste copies or **moves** ([clipboard.md](clipboard.md)) |
-| `crates/tc-app/tests/ui.rs` | the real binary, driven by real key presses — and which bindings it presses is itself a test, not a claim ([keymap.md](keymap.md)) |
+| `crates/fc-core/tests/ops.rs` | the engine: conservation, conflicts, cancel, the awkward corners |
+| `crates/fc-core/tests/queue.rs` | the background queue: ordering, the conflict round trip, cancelling from outside |
+| `crates/fc-core/tests/local_fs.rs` | the filesystem backend, per call |
+| `crates/fc-core/tests/trash.rs` | that a trashed file is still recoverable |
+| `crates/fc-core/tests/archive.rs` | archives: escaping names, checksums, what refuses to be written, and the pack→unpack roundtrip ([archives.md](archives.md)) |
+| `crates/fc-core/tests/rename.rs` | the multi-rename rules, as a table, plus what they refuse ([multi-rename.md](multi-rename.md)) |
+| `crates/fc-core/tests/search.rs` | the walk: every hit and no others, refusals skipped, cancellation ([search.md](search.md)) |
+| `crates/fc-core/tests/compare.rs` + the `compare::tests` module | the diff's two conservation invariants — each side's rows rebuild that side's file, a changed pair minus its spans is equal — and the binary/oversize routing ([compare.md](compare.md)) |
+| `crates/fc-core/tests/clipboard.rs` | the wire formats other file managers read — and the verb that decides whether a paste copies or **moves** ([clipboard.md](clipboard.md)) |
+| `crates/fc-app/tests/ui.rs` | the real binary, driven by real key presses — and which bindings it presses is itself a test, not a claim ([keymap.md](keymap.md)) |
 
-**The doubles every suite shares live in `crates/tc-core/tests/common/`** —
+**The doubles every suite shares live in `crates/fc-core/tests/common/`** —
 the tree builder, the snapshot comparison, the `delegate_vfs!` macro, and the
 two conflict resolvers: `NoConflictsExpected`, which fails the test if the
 engine asks anything at all, and `Scripted`, which answers in order and

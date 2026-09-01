@@ -2,7 +2,7 @@
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
-`tc-core::vfs` is the only way anything in this project touches a filesystem.
+`fc-core::vfs` is the only way anything in this project touches a filesystem.
 The UI never calls `std::fs`; it holds a `VirtualFs` and asks that.
 
 ## The interface
@@ -180,7 +180,7 @@ render. The original message survives in `Io` for the job log.
 ## Platform differences
 
 All of them live in `vfs/platform.rs`. Adding a platform touches exactly one
-file **here**; what it costs in `tc-app` is a different question, and
+file **here**; what it costs in `fc-app` is a different question, and
 [future-improvements.md](future-improvements.md) prices it against macOS —
 where the engine is nearly free because macOS *is* `unix`, and the keymap, the
 packaging and the end-to-end suite are not.
@@ -224,7 +224,7 @@ which is what Total Commander does.
 
 ## Testing
 
-`crates/tc-core/tests/local_fs.rs` runs against real tempdirs and asserts
+`crates/fc-core/tests/local_fs.rs` runs against real tempdirs and asserts
 invariants over the fixture — name sets, entry counts, byte sums — rather than
 hand-copied expected vectors, so a failure means the behavior changed (skill
 [52](skills/52-test-conservation-invariants.md)).
@@ -237,8 +237,8 @@ Because parts of `platform.rs` are invisible to a Linux build, the green
 gate cross-checks the other targets:
 
 ```bash
-cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings
-cargo clippy -p tc-core --all-targets --target aarch64-apple-darwin -- -D warnings
+cargo clippy -p fc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+cargo clippy -p fc-core --all-targets --target aarch64-apple-darwin -- -D warnings
 ```
 
 The Windows one is not ceremony — it caught a Windows-only build break (an
@@ -250,10 +250,10 @@ macOS branches this gate watches had to be *written* before it watched
 anything ([the groundwork plan](plans/archive/2026-08-30-macos-groundwork.md)
 is the record).
 
-The check covers `tc-core` only. Cross-checking `tc-app` would need GTK's
+The check covers `fc-core` only. Cross-checking `fc-app` would need GTK's
 `-sys` build scripts to find a target libgtk-4 through pkg-config, which a
 Linux box does not have. That is an acceptable boundary because **every
-platform-divergent *behaviour* lives in `tc-core`** — with one counted
+platform-divergent *behaviour* lives in `fc-core`** — with one counted
 exception: the three `cfg` markers in `keymap.rs` that ship the dormant macOS
 key layer, which cannot live in the engine because an `Action` is a shell
 concept the engine deliberately does not know ([config.md](config.md)). Those
@@ -261,7 +261,7 @@ three lines are therefore the only platform code no gate cross-checks. What
 keeps that honest is that the *layer itself* is data, applied and asserted
 unconditionally by tests on Linux — only the two-line wiring in
 `Keymap::default` is beyond every check, and it is named here rather than
-rounded away. (This sentence used to say `tc-app` contains no `cfg` at all,
+rounded away. (This sentence used to say `fc-app` contains no `cfg` at all,
 and was true until the layer landed.) The Windows GTK build itself was
 verified by hand on
 2026-08-30 — MSYS2 MINGW64 with GTK4 4.22.4 — and it compiles and runs; what

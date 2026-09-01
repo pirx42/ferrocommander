@@ -2,7 +2,7 @@
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
-`tc-core::config` reads and writes the settings file. It lives in `tc-core`
+`fc-core::config` reads and writes the settings file. It lives in `fc-core`
 because the UI never touches a filesystem directly, and the program's own
 settings are no exception — everything here goes through a `VirtualFs`,
 including the atomic write.
@@ -56,7 +56,7 @@ demonstrated bug.
 Both halves are covered end to end by tests that **kill** the app rather than
 closing it (`settings_survive_the_app_being_killed`,
 `a_resized_window_is_remembered_without_being_closed` in
-`crates/tc-app/tests/ui.rs`) — with a close handler in play, a save-on-exit
+`crates/fc-app/tests/ui.rs`) — with a close handler in play, a save-on-exit
 implementation would pass a test that closed politely.
 
 ## `[drives]` — where each drive was last showing
@@ -199,12 +199,12 @@ The defaults are the keymap in [keymap.md](keymap.md); a `[keys]` table in
   and `shift+` is how Shift is asked for.
 - **A binding nobody can read is named on stderr and skipped.** A misspelling
   in one line must not cost the other nineteen.
-- Action names are the `ACTION_NAMES` table in `crates/tc-app/src/keymap.rs`.
+- Action names are the `ACTION_NAMES` table in `crates/fc-app/src/keymap.rs`.
   A test walks every default binding against it, so an action that reaches a
   key but has no name — one the user could see working and could not rebind —
   fails the tests rather than shipping.
 
-**`tc-core` carries this table and never interprets it.** A key name is a GTK
+**`fc-core` carries this table and never interprets it.** A key name is a GTK
 keysym and an action is a command of the shell, neither of which the engine
 knows anything about ([crates/CLAUDE.md](../crates/CLAUDE.md)); the strings
 cross the file and the shell makes sense of them.

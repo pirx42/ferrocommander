@@ -1,6 +1,7 @@
 # `tc` means Total Commander, and nothing else
 
-Status: Draft — §2's two decisions are open
+Status: In Progress — both decisions settled by the owner, 2026-09-01:
+`fc-core` / `fc-app`, and the archived plans rewritten
 
 The crates are called `tc-core` and `tc-app`, from a working title the
 project outgrew: it is *FerroCommander*, and `tc` in a crate name says
@@ -40,7 +41,7 @@ Three details the rename has to get right rather than sed over:
 
 ## 2. Decisions before implementation
 
-1. **What the crates are called instead.** Recommended: **`fc-core` /
+1. **What the crates are called instead.** Settled: **`fc-core` /
    `fc-app`** — the exact structural twin of what is there, so every
    `-p` flag, path and `use` line keeps its shape and the diff stays
    mechanical; `fc` is FerroCommander the way `tc` was Total Commander.
@@ -48,7 +49,7 @@ Three details the rename has to get right rather than sed over:
    cryptic at the cost of four characters in every `use ferro_core::…`;
    or `ferrocommander-core` / `ferrocommander-app`, unambiguous and long
    enough to be felt on every one of the 47 code files that import it.
-2. **Whether the 127 archived-plan references change too.** Recommended:
+2. **Whether the 127 archived-plan references change too.** Settled:
    **yes, rewrite them.** A plan's reasoning is unchanged by what the
    thing is called, and a reader who greps `tc-core` should find nothing
    rather than 127 hits pointing at directories that no longer exist. The

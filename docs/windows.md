@@ -142,13 +142,13 @@ holds, and why there is a `.cmd` beside the `.exe`:
 
 ## What passes, and what does not
 
-`cargo test -p tc-core --no-fail-fast` — the `--no-fail-fast` matters, because
+`cargo test -p fc-core --no-fail-fast` — the `--no-fail-fast` matters, because
 cargo stops at the first failing test *binary* and hid four of these:
 
 | | Windows | Linux |
 |---|---|---|
-| `tc-core` | 331 / 346 | 362 / 362 |
-| `tc-app` unit tests | 120 / 120 | 120 / 120 |
+| `fc-core` | 331 / 346 | 362 / 362 |
+| `fc-app` unit tests | 120 / 120 | 120 / 120 |
 | end-to-end UI suite | cannot run | see below |
 
 Everything that fails on Windows passes on Linux, so none of it is the engine

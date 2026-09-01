@@ -118,7 +118,7 @@ the benefit of the doubt: [docs/reliability.md](docs/reliability.md).
 
 ```sh
 sudo apt install build-essential pkg-config libgtk-4-dev xvfb xdotool
-cargo run -p tc-app
+cargo run -p fc-app
 ```
 
 `xvfb` and `xdotool` are for the end-to-end tests, which drive the real binary
@@ -134,8 +134,8 @@ documentation links.
 
 | | |
 |---|---|
-| `crates/tc-core` | the engine: filesystem, listing model, file operations, archives, search. No GTK, headless-testable |
-| `crates/tc-app` | the GTK4 shell. Never touches the filesystem directly |
+| `crates/fc-core` | the engine: filesystem, listing model, file operations, archives, search. No GTK, headless-testable |
+| `crates/fc-app` | the GTK4 shell. Never touches the filesystem directly |
 | `docs/` | one file per topic, [indexed here](docs/CLAUDE.md) |
 
 The split is the project's central boundary, and what makes archives

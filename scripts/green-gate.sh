@@ -26,13 +26,13 @@ step() {
 
 step "fmt"            cargo fmt --all -- --check
 step "clippy"         cargo clippy --workspace --all-targets -- -D warnings
-step "clippy-windows" cargo clippy -p tc-core --all-targets \
+step "clippy-windows" cargo clippy -p fc-core --all-targets \
                           --target x86_64-pc-windows-gnu -- -D warnings
-step "clippy-macos"   cargo clippy -p tc-core --all-targets \
+step "clippy-macos"   cargo clippy -p fc-core --all-targets \
                           --target aarch64-apple-darwin -- -D warnings
 # `--no-fail-fast` for the reason this script exists one level up: cargo stops
 # at the first test *binary* that fails, so one broken end-to-end suite hides
-# whether tc-core passed at all. A test report had to run the two crates
+# whether fc-core passed at all. A test report had to run the two crates
 # separately to find out. A red step is worth seeing whole.
 step "tests"          cargo test --workspace --no-fail-fast
 step "release"        cargo build --release

@@ -1,0 +1,269 @@
+//! Turning a `fc-core` [`Entry`] into the strings a pane row displays.
+//!
+//! Pure and GTK-widget-free on purpose: this is the only real logic in the
+//! shell, so it is the part that gets tested. Everything around it is widget
+//! assembly.
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use fc_core::listing::split_name;
+use fc_core::vfs::Entry;
+use gtk::glib;
+
+use crate::constants::{DATE_FORMAT, DIR_SIZE_LABEL, SIZE_PARTIAL_MARKER};
+use crate::format::group_digits;
+
+/// One rendered row: four column strings plus what the UI needs to style it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Row {
+    pub name: String,
+    pub ext: String,
+    /// The name as the filesystem spells it, undivided.
+    ///
+    /// The name and ext columns are a presentation split; a rename needs the
+    /// whole thing back, and reassembling it from the two halves would have to
+    /// know when to put the dot back and when not to.
+    pub full_name: String,
+    pub size: String,
+    pub modified: String,
+    pub attributes: String,
+    pub is_dir: bool,
+    /// Whether the user has marked this row. Rendered, not decided, here.
+    pub selected: bool,
+    /// Whether this row is the one being renamed in place, so its name cell
+    /// shows an editable field instead of a label.
+    pub renaming: bool,
+}
+
+impl Row {
+    /// Renders an entry. `is_parent` marks the synthetic `..` row.
+    /// `measured` is `None` when nobody has counted this directory, and
+    /// `Some(complete)` when somebody has — `false` meaning the count is a
+    /// lower bound. Files ignore it: they have always known their size.
+    pub fn from_entry(
+        entry: &Entry,
+        is_parent: bool,
+        selected: bool,
+        measured: Option<bool>,
+    ) -> Self {
+        // A directory called `archive.tar.gz` is not a `.gz` file, so only
+        // files get their name split across the name and ext columns.
+        let (name, ext) = if entry.is_dir() {
+            (entry.name.as_str(), "")
+        } else {
+            split_name(&entry.name)
+        };
+
+        Row {
+            name: name.to_string(),
+            ext: ext.to_string(),
+            full_name: entry.name.clone(),
+            size: match (entry.is_dir(), measured) {
+                // Counted. The `+` says the number is a lower bound — a
+                // subdirectory refused to be read, or the scan was stopped —
+                // because a size nobody can trust is worse than none.
+                (true, Some(true)) => group_digits(entry.size),
+                (true, Some(false)) => format!("{}{SIZE_PARTIAL_MARKER}", group_digits(entry.size)),
+                // Nobody has counted it, which is what `<DIR>` means.
+                (true, None) => DIR_SIZE_LABEL.to_string(),
+                (false, _) => group_digits(entry.size),
+            },
+            // `..` is a navigation control, not a file: it carries no real
+            // timestamp, and printing the epoch would be a lie.
+            modified: if is_parent {
+                String::new()
+            } else {
+                format_modified(entry.modified)
+            },
+            // `..` is a navigation control and carries nobody's permissions.
+            attributes: if is_parent {
+                String::new()
+            } else {
+                fc_core::vfs::render_attributes(entry.attributes)
+            },
+            renaming: false,
+            is_dir: entry.is_dir(),
+            selected,
+        }
+    }
+}
+
+/// Formats a timestamp in the viewer's local time zone.
+fn format_modified(modified: SystemTime) -> String {
+    let seconds = modified
+        .duration_since(UNIX_EPOCH)
+        .map(|since| since.as_secs() as i64)
+        .unwrap_or_default();
+    glib::DateTime::from_unix_local(seconds)
+        .as_ref()
+        .map(format_date_time)
+        .unwrap_or_default()
+}
+
+/// The formatting itself, separated from "which time zone" so it can be
+/// tested against a fixed instant instead of wherever the machine happens
+/// to be.
+fn format_date_time(when: &glib::DateTime) -> String {
+    when.format(DATE_FORMAT)
+        .map(|text| text.to_string())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use fc_core::vfs::{EntryKind, SymlinkTarget};
+
+    use super::*;
+
+    fn file(name: &str, size: u64) -> Entry {
+        Entry {
+            name: name.to_string(),
+            kind: EntryKind::File,
+            size,
+            modified: UNIX_EPOCH,
+            attributes: Default::default(),
+            hidden: false,
+        }
+    }
+
+    fn directory(name: &str) -> Entry {
+        Entry {
+            name: name.to_string(),
+            kind: EntryKind::Dir,
+            size: 0,
+            modified: UNIX_EPOCH,
+            attributes: Default::default(),
+            hidden: false,
+        }
+    }
+
+    #[test]
+    fn a_file_name_is_split_across_the_name_and_ext_columns() {
+        let row = Row::from_entry(&file("report.txt", 0), false, false, None);
+        assert_eq!(row.name, "report");
+        assert_eq!(row.ext, "txt");
+    }
+
+    #[test]
+    fn a_directory_keeps_its_whole_name_even_when_it_looks_like_a_file() {
+        let row = Row::from_entry(&directory("archive.tar.gz"), false, false, None);
+        assert_eq!(row.name, "archive.tar.gz");
+        assert_eq!(row.ext, "");
+    }
+
+    #[test]
+    fn directories_show_a_dir_marker_instead_of_a_byte_count() {
+        assert_eq!(
+            Row::from_entry(&directory("sub"), false, false, None).size,
+            "<DIR>"
+        );
+    }
+
+    #[test]
+    fn a_symlink_to_a_directory_is_rendered_as_a_directory() {
+        let mut entry = file("link", 4096);
+        entry.kind = EntryKind::Symlink(SymlinkTarget::Dir);
+        let row = Row::from_entry(&entry, false, false, None);
+        assert_eq!(row.size, "<DIR>");
+        assert!(row.is_dir);
+    }
+
+    #[test]
+    fn a_counted_directory_shows_its_size_instead_of_the_marker() {
+        // The whole feature, at the one place it is visible.
+        let mut entry = directory("build");
+        entry.size = 1234567;
+
+        let row = Row::from_entry(&entry, false, false, Some(true));
+
+        assert_eq!(row.size, "1 234 567");
+        assert!(row.is_dir, "it is still a directory");
+    }
+
+    #[test]
+    fn a_counted_directory_of_nothing_shows_zero_not_the_marker() {
+        // Zero is a real answer for an empty folder, and the case that makes
+        // "counted" a flag rather than a non-zero size.
+        let row = Row::from_entry(&directory("empty"), false, false, Some(true));
+
+        assert_eq!(row.size, "0");
+    }
+
+    #[test]
+    fn a_partial_count_is_marked_as_a_lower_bound() {
+        let mut entry = directory("half-read");
+        entry.size = 4096;
+
+        let row = Row::from_entry(&entry, false, false, Some(false));
+
+        assert_eq!(row.size, "4 096+");
+    }
+
+    #[test]
+    fn file_sizes_are_grouped_in_threes() {
+        let cases = [
+            (0, "0"),
+            (7, "7"),
+            (999, "999"),
+            (1000, "1 000"),
+            (12345, "12 345"),
+            (1234567, "1 234 567"),
+            (u64::MAX, "18 446 744 073 709 551 615"),
+        ];
+        for (size, expected) in cases {
+            assert_eq!(
+                Row::from_entry(&file("f", size), false, false, None).size,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn the_parent_row_shows_no_timestamp() {
+        let row = Row::from_entry(&directory(".."), true, false, None);
+        assert_eq!(row.name, "..");
+        assert_eq!(row.modified, "");
+        assert_eq!(row.size, "<DIR>");
+    }
+
+    #[test]
+    fn timestamps_render_as_a_sortable_date_and_time() {
+        let epoch = glib::DateTime::from_unix_utc(0).unwrap();
+        assert_eq!(format_date_time(&epoch), "1970-01-01 00:00");
+
+        let later = glib::DateTime::from_unix_utc(1_700_000_000).unwrap();
+        assert_eq!(format_date_time(&later), "2023-11-14 22:13");
+    }
+
+    #[test]
+    fn an_ordinary_file_gets_a_timestamp() {
+        let mut entry = file("f", 1);
+        entry.modified = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        assert!(!Row::from_entry(&entry, false, false, None)
+            .modified
+            .is_empty());
+    }
+
+    #[test]
+    fn a_row_carries_whether_it_is_marked() {
+        // Rendered here, decided in the listing: the cell factory reads this
+        // to colour the row, and nothing else in the shell knows the rule.
+        let entry = file("report.txt", 10);
+        assert!(!Row::from_entry(&entry, false, false, None).selected);
+        assert!(Row::from_entry(&entry, false, true, None).selected);
+    }
+
+    #[test]
+    fn marking_changes_nothing_a_column_shows() {
+        let entry = file("report.txt", 1234);
+        let plain = Row::from_entry(&entry, false, false, None);
+        let marked = Row::from_entry(&entry, false, true, None);
+
+        assert_eq!(marked.name, plain.name);
+        assert_eq!(marked.ext, plain.ext);
+        assert_eq!(marked.size, plain.size);
+        assert_eq!(marked.modified, plain.modified);
+    }
+}

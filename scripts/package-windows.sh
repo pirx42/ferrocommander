@@ -123,7 +123,7 @@ glib-compile-schemas "$mingw/share/glib-2.0/schemas" \
 # No icon theme, and no gdk-pixbuf loaders. Not an oversight, and not a few
 # megabytes saved on a hunch: the app names no icon and loads no image — a
 # grep for `icon_name`, `IconTheme`, `Pixbuf` and `Image::` over
-# `crates/tc-app/src` finds nothing — and the iconography GTK's own widgets
+# `crates/fc-app/src` finds nothing — and the iconography GTK's own widgets
 # use is compiled into libgtk-4-1.dll as a GResource. The smoke test below is
 # what keeps that claim honest rather than merely stated.
 

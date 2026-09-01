@@ -2,7 +2,7 @@
 
 ← Parent: [CLAUDE.md](CLAUDE.md)
 
-`tc-core::ops` is what F5, F6, F7 and F8 actually do. It knows nothing about
+`fc-core::ops` is what F5, F6, F7 and F8 actually do. It knows nothing about
 threads or widgets: conflicts are answered through a `ConflictResolver`,
 progress goes to a `ProgressSink`, and stopping is a `CancelToken`. The queue
 supplies channel-backed versions of all three; every test supplies a `Vec` and
@@ -230,10 +230,10 @@ submit(job, source_fs, target_fs) ──► worker thread
         └─ cancel ─────────────────────────►  shared flag
 ```
 
-`async-channel` lives in `tc-core` rather than in the shell, because a channel
+`async-channel` lives in `fc-core` rather than in the shell, because a channel
 is not a UI dependency and because its two halves cover both directions: the
 worker *waits* for a conflict answer with the blocking half, while the shell
-awaits events on the GLib main loop with the async half — without `tc-core`
+awaits events on the GLib main loop with the async half — without `fc-core`
 knowing GLib exists.
 
 **Progress is unbounded.** A bounded channel would let a stalled UI throttle

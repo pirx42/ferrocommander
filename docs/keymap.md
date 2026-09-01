@@ -167,7 +167,7 @@ layouts on which `*` cannot be typed without Shift, not a choice, and a plain
 
 **Both are a toggle, not a set**: pressing either again on a marked row takes
 the mark back, which is the only way to unmark one row out of many. Tested at
-both layers — `toggle_selected` twice in `tc-core`, and both keys twice
+both layers — `toggle_selected` twice in `fc-core`, and both keys twice
 through the real binary.
 
 Marking acts on what is **visible**: what the hidden-file flag or a filter is
@@ -728,7 +728,7 @@ including that the prefilled value round-trips back to "into that directory".
 
 The wiring *between* a physical keypress and those functions used to have no
 automated coverage at all. It is now covered by the end-to-end suite in
-`crates/tc-app/tests/ui.rs`, where a real X server delivers real key events to
+`crates/fc-app/tests/ui.rs`, where a real X server delivers real key events to
 the real binary and the checks are on the filesystem afterwards. The cursor
 keys and Tab are used by every test to get anywhere at all, and `Ctrl+Q` is
 how the harness closes the app.

@@ -7,7 +7,7 @@ the **active pane** is showing. Total Commander has one and a hard-core user's
 fingers expect it: `chmod +x *.sh` without opening a terminal, finding the
 directory again, and coming back.
 
-The running lives in `tc-core::command`, not in the shell — the UI does not
+The running lives in `fc-core::command`, not in the shell — the UI does not
 reach past its own layer, and a process is no different from a file. It also
 makes the part that matters testable: **"did it run in the directory the pane
 was showing"** is the one claim a command line is useless without, and the one

@@ -30,12 +30,12 @@ runner sees it.
 
 | | |
 |---|---|
-| `/usr/bin/ferrocommander` | the binary. The crate is `tc-app` — its half of the tc-core/tc-app split — but `/usr/bin/tc-app` is a name nobody would have typed on purpose, so a `[[bin]]` section renames what ships without touching the crate. |
+| `/usr/bin/ferrocommander` | the binary. The crate is `fc-app` — its half of the fc-core/fc-app split — but `/usr/bin/fc-app` is a name nobody would have typed on purpose, so a `[[bin]]` section renames what ships without touching the crate. |
 | `/usr/share/applications/st.rose.Ferrocommander.desktop` | the launcher entry, named after the application id the shell already registers. |
 | `/usr/share/icons/hicolor/scalable/apps/st.rose.Ferrocommander.svg` | the icon: two panes, one brighter, because one pane always has the keyboard. |
 
 The description and the file list are `[package.metadata.deb]` in
-`crates/tc-app/Cargo.toml`, beside the crate they describe.
+`crates/fc-app/Cargo.toml`, beside the crate they describe.
 
 ## The dependencies are derived, not written
 
@@ -57,7 +57,7 @@ requirement agree.
 ## The version is the one in the title bar
 
 `0.1.0-<commit count>`: the crate version, and the same
-`git rev-list --count HEAD` that `crates/tc-app/build.rs` stamps into the
+`git rev-list --count HEAD` that `crates/fc-app/build.rs` stamps into the
 window title. So `dpkg -l` and a screenshot agree about which build somebody
 is running — `0.1.0-121` in the package list is `#121` in the title.
 
@@ -119,7 +119,7 @@ program's audience expects, because Total Commander itself ships that way.
 **No icon theme and no gdk-pixbuf loaders**, which is where a GTK bundle
 usually spends most of its megabytes. Not an oversight, and not a saving taken
 on a hunch: the app names no icon and loads no image — a grep for `icon_name`,
-`IconTheme`, `Pixbuf` and `Image::` over `crates/tc-app/src` finds nothing —
+`IconTheme`, `Pixbuf` and `Image::` over `crates/fc-app/src` finds nothing —
 and the iconography GTK's own widgets use is compiled into `libgtk-4-1.dll` as
 a GResource. The smoke test below is what stops that quietly becoming false.
 

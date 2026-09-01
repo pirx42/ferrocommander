@@ -107,7 +107,7 @@ driver problem from a code one.
 comment says "present on every Unix by definition", which is true and is
 exactly the assumption Windows breaks. There is no `$SHELL` there and no
 `/bin/sh`, so every command fails with *"the system cannot find the path"*
-before it starts. Nine of the fifteen `tc-core` failures in the first Windows
+before it starts. Nine of the fifteen `fc-core` failures in the first Windows
 test run were this one cause.
 
 The fix is a platform branch to `%COMSPEC%` (`cmd.exe`) with `/C` in place of
@@ -145,7 +145,7 @@ What genuinely remains, and each needs a person at a Mac:
 **The open question is still GTK4 itself**, and it is a product question:
 non-native chrome, no menu bar, the least maintained of GTK's backends. If
 that does not clear the bar, this entry becomes a different one — a second
-front end over the same `tc-core`, which is the one thing the crate split
+front end over the same `fc-core`, which is the one thing the crate split
 makes possible ([archives.md](archives.md) keeps the score on what the split
 is worth).
 
@@ -158,7 +158,7 @@ plan.
 ## Testing
 
 **Six engine tests assert Linux rather than the engine.**
-The first Windows run of `cargo test -p tc-core --no-fail-fast` (2026-08-30)
+The first Windows run of `cargo test -p fc-core --no-fail-fast` (2026-08-30)
 passes 331 of 346. Nine failures are the `/bin/sh` gap above. The other six
 are the suite's own assumptions:
 
@@ -233,7 +233,7 @@ composition between GTK and the model, and the phase-2 suite found two more.
 
 **Entry-building test helpers are duplicated.**
 Four test modules across both crates build `Entry` values with their own
-small constructors. Sharing them needs a `test-support` feature on `tc-core`,
+small constructors. Sharing them needs a `test-support` feature on `fc-core`,
 and today the fixtures are shaped to each test's needs — the cure costs more
 than the disease.
 *Home:* revisit when design phase 2's operation tests need the same shapes.
@@ -247,7 +247,7 @@ payload, which Nautilus, Nemo, Thunar and Caja read
 so a cut made here and pasted in Dolphin arrives as a copy, which is the safe
 direction of being wrong. Reading and writing one more small format is the
 whole of the work; nobody has asked yet.
-*Home:* beside the two formats in `tc-core::clipboard`, which is where the
+*Home:* beside the two formats in `fc-core::clipboard`, which is where the
 encoding lives and is tested.
 *From:* [clipboard.md](clipboard.md).
 

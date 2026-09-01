@@ -15,8 +15,8 @@ requirement talking ([reliability.md](reliability.md)), for the operation it
 most obviously applies to: a hundred files renamed by a rule nobody could
 inspect first.
 
-Because the engine is pure and lives in `tc-core`, the rules are table-tested
-(`crates/tc-core/tests/rename.rs`) with no display server anywhere near them.
+Because the engine is pure and lives in `fc-core`, the rules are table-tested
+(`crates/fc-core/tests/rename.rs`) with no display server anywhere near them.
 
 ## The rules
 

@@ -4,8 +4,8 @@ A keyboard-centric dual-pane file manager for Linux in the style of
 Total Commander (ghisler.com), built from scratch in Rust + GTK4.
 Design and v1 scope: [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md).
 
-**Stack:** Rust + GTK4 (gtk4-rs) · Cargo workspace: `tc-core` (UI-free
-engine: VFS, listing, file ops, archives, search, multi-rename) + `tc-app`
+**Stack:** Rust + GTK4 (gtk4-rs) · Cargo workspace: `fc-core` (UI-free
+engine: VFS, listing, file ops, archives, search, multi-rename) + `fc-app`
 (GTK shell)
 **Target platforms:** Linux (X11/Wayland) **and** Windows — both are
 supported build targets; platform differences are confined to dedicated
@@ -38,12 +38,12 @@ Details: [docs/reliability.md](docs/reliability.md).
 
 ```bash
 cargo build                # Debug build (workspace)
-cargo run -p tc-app        # Run the app (the binary is `ferrocommander`)
+cargo run -p fc-app        # Run the app (the binary is `ferrocommander`)
 cargo test --workspace     # All tests, including the end-to-end UI suite
 cargo fmt --all -- --check # Format gate
 cargo clippy --workspace --all-targets -- -D warnings  # Lint gate (CI)
-cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings  # Windows cfg branch
-cargo clippy -p tc-core --all-targets --target aarch64-apple-darwin -- -D warnings   # macOS cfg branch
+cargo clippy -p fc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings  # Windows cfg branch
+cargo clippy -p fc-core --all-targets --target aarch64-apple-darwin -- -D warnings   # macOS cfg branch
 cargo build --release      # Release build
 ```
 
@@ -79,7 +79,7 @@ LF-stored files to CRLF on checkout, and `scripts/green-gate.sh` then dies on
 its own shebang with `/usr/bin/env: 'bash\r'` — a failure that says nothing
 about what it is really about.
 
-The end-to-end suite (`cargo test -p tc-app --test ui`) drives the real
+The end-to-end suite (`cargo test -p fc-app --test ui`) drives the real
 binary with real key presses on a private X server and takes **about nine
 minutes**: 160 tests that each start an X server and an app, one at a time on
 purpose. Measured 527 s here on 2026-08-30; it costs about 3.3 s per test, so
@@ -139,14 +139,14 @@ The project is in its build-up phase; this table grows with the code.
 | How fast things are, and what is still slow | [docs/performance.md](docs/performance.md) |
 | What "reliable" means, and where the tests live | [docs/reliability.md](docs/reliability.md) |
 | Which crate — and which module — a thing belongs in | [crates/CLAUDE.md](crates/CLAUDE.md) |
-| Verify a keystroke really works end to end | `crates/tc-app/tests/ui.rs` (see [docs/ui-shell.md](docs/ui-shell.md)) |
+| Verify a keystroke really works end to end | `crates/fc-app/tests/ui.rs` (see [docs/ui-shell.md](docs/ui-shell.md)) |
 | Working rules / workflow | [docs/good-development-practices.md](docs/good-development-practices.md) + skill triggers below |
 | New plan document | `docs/plans/YYYY-MM-DD-<topic>.md` (skill [10](docs/skills/10-plan-lifecycle.md)) |
 
 ## Documentation
 
 Entry point: [docs/CLAUDE.md](docs/CLAUDE.md) — index of all doc files.
-Workspace layout and the tc-core/tc-app boundary: [crates/CLAUDE.md](crates/CLAUDE.md).
+Workspace layout and the fc-core/fc-app boundary: [crates/CLAUDE.md](crates/CLAUDE.md).
 Every directory with its own semantics gets its own `CLAUDE.md` with a
 `← Parent` link (pattern adopted from the Chimera project).
 
@@ -158,7 +158,7 @@ Every directory with its own semantics gets its own `CLAUDE.md` with a
   [17](docs/skills/17-centralize-constants.md)).
 - Comments explain the "why", not the "what"
   (skill [18](docs/skills/18-comments-explain-why.md)).
-- `tc-core` stays GTK-free and headless-testable; the UI never touches the
+- `fc-core` stays GTK-free and headless-testable; the UI never touches the
   filesystem directly.
 - Conventional commits (skill [31](docs/skills/31-conventional-commit.md)).
 

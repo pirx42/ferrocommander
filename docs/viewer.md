@@ -77,5 +77,5 @@ disk, and the editor would create it there when saved.
 ## What is where
 
 The arithmetic — where the offset goes, what the bytes say, how a hex dump is
-laid out — is `tc-core::viewer` and is tested without a window. `dialogs::Viewer`
+laid out — is `fc-core::viewer` and is tested without a window. `dialogs::Viewer`
 is the widget, the keys, and the reader the view asks for bytes.
