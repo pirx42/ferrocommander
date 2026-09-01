@@ -171,6 +171,24 @@ jobs:
           rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
           rustup default stable-x86_64-pc-windows-gnu
 
+      - name: The command tests, here where they mean something
+        # **The only tests that run on Windows**, and the reason they exist as
+        # a target of their own. Everything a command line does here is a
+        # different program with different quoting — `cmd` is not a poorer
+        # `sh`, it is another language — and three rounds of Windows fixes
+        # shipped on nothing but the smoke-start below. The third was broken
+        # in three separate ways on arrival (`docs/windows.md`).
+        #
+        # `TMP` because MSYS2 hands its shell a POSIX `/tmp`, and the test
+        # binary is a *Windows* program: `tempfile` would ask the OS for
+        # `\tmp` on the current drive and every fixture would fail to be
+        # created. `RUNNER_TEMP` is the runner's own, spelt the way Windows
+        # spells it.
+        env:
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: cargo test -p fc-core --test command
+
       - name: Package
         # Builds, gathers the GTK4 DLLs the binary actually imports, checks
         # the bundle is complete, and starts the app to see that it survives
