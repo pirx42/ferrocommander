@@ -39,6 +39,34 @@ use std::path::{Path, PathBuf};
 use super::path::VfsPath;
 use super::types::{Attributes, Entry, Mount, Space, VfsError};
 
+/// Maps a VFS path onto a native Windows path, with the separator handed in.
+///
+/// **Outside the `#[cfg(windows)]` module on purpose.** The Windows CI job
+/// packages the binary and smoke-starts it; it runs no tests at all
+/// (`docs/windows.md`), so a `#[cfg(windows)]` test would never run on any
+/// machine but the owner's. Taking the separator as an argument is what lets
+/// the Linux gate check the mapping — the same trick `parse_mount_table` uses
+/// for the mount table.
+///
+/// The first component is the drive, and the separator after it belongs to
+/// the root rather than joining anything: `C:\` is the root of drive C,
+/// while `C:` is *wherever this process happens to be on drive C*. Trimming
+/// that separator off — which this did until 2026-09-01 — is why going up
+/// from `C:\Users` landed in the application's own directory.
+#[cfg(any(windows, test))]
+fn windows_native(path: &VfsPath, separator: char) -> String {
+    let mut components = path.components();
+    let drive = components.next().unwrap_or_default();
+    let rest: Vec<&str> = components.collect();
+    format!("{drive}{separator}{}", rest.join(&separator.to_string()))
+}
+
+/// The inverse, and testable for the same reason.
+#[cfg(any(windows, test))]
+fn windows_vfs(native: &str, separator: char) -> VfsPath {
+    VfsPath::new(&native.replace(separator, "/"))
+}
+
 #[cfg(unix)]
 mod imp {
     use super::*;
@@ -420,17 +448,12 @@ mod imp {
 
     /// Maps `/C:/Users/pirx` onto `C:\Users\pirx`.
     ///
-    /// The first VFS component is the drive; `root_entries` guarantees the
-    /// root itself is never routed here, so there is always a drive to take.
+    /// The rule itself is [`windows_native`](super::windows_native), which
+    /// lives outside this module so that a machine without Windows can check
+    /// it. `root_entries` guarantees the root itself is never routed here, so
+    /// there is always a drive to take.
     pub fn to_std_path(path: &VfsPath) -> PathBuf {
-        let mut components = path.components();
-        let drive = components.next().unwrap_or_default();
-        let mut native = format!("{drive}{}", std::path::MAIN_SEPARATOR);
-        for component in components {
-            native.push_str(component);
-            native.push(std::path::MAIN_SEPARATOR);
-        }
-        PathBuf::from(native.trim_end_matches(std::path::MAIN_SEPARATOR))
+        PathBuf::from(super::windows_native(path, std::path::MAIN_SEPARATOR))
     }
 
     /// The Win32 file attributes.
@@ -514,11 +537,7 @@ mod imp {
 
     /// `C:\\Users\\pirx` becomes `/C:/Users/pirx`.
     pub fn from_std_path(path: &Path) -> VfsPath {
-        VfsPath::new(
-            &path
-                .to_string_lossy()
-                .replace(std::path::MAIN_SEPARATOR, "/"),
-        )
+        super::windows_vfs(&path.to_string_lossy(), std::path::MAIN_SEPARATOR)
     }
 
     pub fn home_dir() -> Option<PathBuf> {
@@ -589,6 +608,47 @@ mod tests {
         // somewhere other than where it was told to.
         let native = home_dir().expect("a home directory");
         assert_eq!(to_std_path(&from_std_path(&native)), native);
+    }
+
+    /// The separator is handed in, so these run on the Linux gate — which is
+    /// the only gate there is: the Windows job builds and starts the binary
+    /// and runs no tests (`docs/windows.md`).
+    const BACKSLASH: char = '\\';
+
+    #[test]
+    fn a_windows_drive_root_keeps_the_separator_that_makes_it_one() {
+        // `C:\` is the root of drive C. `C:` is *drive-relative* — Windows
+        // resolves it against the process's current directory on that drive,
+        // which for this program is wherever it was started. Going up from
+        // `C:\Users` therefore showed the application's own folder, and no
+        // amount of looking at the VFS path would have said why.
+        assert_eq!(windows_native(&VfsPath::new("/C:"), BACKSLASH), "C:\\");
+    }
+
+    #[test]
+    fn a_windows_path_below_the_drive_joins_rather_than_trails() {
+        assert_eq!(
+            windows_native(&VfsPath::new("/C:/Users"), BACKSLASH),
+            "C:\\Users"
+        );
+        assert_eq!(
+            windows_native(&VfsPath::new("/C:/Users/pirx"), BACKSLASH),
+            "C:\\Users\\pirx"
+        );
+    }
+
+    #[test]
+    fn every_windows_path_survives_the_round_trip_the_drive_root_included() {
+        // The inverse property, which the platform-agnostic round-trip test
+        // above cannot reach: it uses the home directory, which is several
+        // levels down and so never exercises the one path where the trailing
+        // separator is the whole meaning.
+        for native in ["C:\\", "C:\\Users", "C:\\Users\\pirx", "D:\\a\\b\\c"] {
+            assert_eq!(
+                windows_native(&windows_vfs(native, BACKSLASH), BACKSLASH),
+                native
+            );
+        }
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

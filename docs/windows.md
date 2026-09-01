@@ -140,6 +140,29 @@ What the bundle holds, why it holds so little of what a GTK bundle usually
 holds, and why there is a `.cmd` beside the `.exe`:
 [packaging.md](packaging.md).
 
+## `C:\` is a root; `C:` is somewhere else entirely
+
+A native Windows path ending in a drive letter and a colon, with **no**
+trailing separator, is *drive-relative*: `C:` means "wherever this process
+currently is on drive C", which for a program started from its own folder is
+that folder. `C:\` means the root of the drive. One character apart, and the
+difference is invisible in every VFS path this program holds — both are
+`/C:`.
+
+The mapping trimmed the trailing separator off every native path it built,
+which is right for `C:\Users\pirx` and wrong for exactly one path: the drive
+root. So going up from `C:\Users` — `..` or `Backspace` — put the pane in
+whatever directory the application had been started in. It was there from the
+first VFS commit and nothing noticed, because the mapping's own round-trip
+test used the home directory, which is several levels down.
+
+**And nothing here could have noticed**, which is the more useful half. The
+Windows CI job builds a package and starts it once; it runs no tests. So the
+mapping rule now lives outside the `#[cfg(windows)]` module and takes the
+separator as an argument, which puts it on the Linux gate — the same shape
+`parse_mount_table` uses. What is left that only Windows can run is the
+`std::fs` call itself.
+
 ## What passes, and what does not
 
 `cargo test -p fc-core --no-fail-fast` — the `--no-fail-fast` matters, because
