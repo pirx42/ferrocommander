@@ -1474,7 +1474,23 @@ impl PaneView {
         ))
     }
 
+    /// The folder this pane's preview is counting, if it is counting one.
+    ///
+    /// What a walk's answer is checked against before it is drawn. The pane
+    /// is asked rather than the listing re-read: the pane *is* where "which
+    /// folder is being counted" lives, and deriving it a second way is how
+    /// two answers to one question start to disagree.
+    pub fn previewing(&self) -> Option<&VfsPath> {
+        self.previewing.as_ref().map(|(folder, _)| folder)
+    }
+
     /// Stops the walk this pane's preview started, if one is running.
+    ///
+    /// Not part of `abandon_background`, which is `Escape`'s: that acts on
+    /// the pane with the keyboard, and the preview is by definition the other
+    /// one. A walk nobody asked for is also not what "stop what you are
+    /// doing" means, and stopping it would only make the next keystroke start
+    /// it again.
     fn stop_previewing(&mut self) {
         if let Some((_, cancel)) = self.previewing.take() {
             cancel.cancel();

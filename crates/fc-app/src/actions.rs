@@ -922,22 +922,22 @@ pub(crate) fn toggle_quick_view(shell: &Rc<RefCell<Shell>>) {
 /// from each action that moves it, which is the arrangement the adoption plan
 /// paid to stop repeating.
 pub(crate) fn refresh_quick_view(shell: &Rc<RefCell<Shell>>) {
-    let Some(answers) = shell.borrow_mut().refresh_quick_view() else {
+    let Some((counted, answers)) = shell.borrow_mut().refresh_quick_view() else {
         return;
     };
-    let counting = shell.clone();
+    let drawing = shell.clone();
     glib::spawn_future_local(async move {
         while let Ok((name, measured)) = answers.recv().await {
-            let state = counting.borrow_mut();
+            let state = drawing.borrow_mut();
+            let showing = state.other();
             // A cancelled walk can still deliver: `sizes` checks the token
             // between folders, not inside one, so a walk already measuring
-            // when the cursor moved sends its answer anyway. Matching the
-            // name against what the preview is showing *now* is what keeps
-            // one folder's size from appearing under another folder's title.
-            if state.previewed_folder().as_deref() != Some(name.as_str()) {
+            // when the cursor moved sends its answer anyway. Asking the pane
+            // what it is counting *now* is what keeps one folder's size from
+            // appearing under another folder's title.
+            if state.panes[showing].previewing() != Some(&counted) {
                 continue;
             }
-            let showing = state.other();
             state.panes[showing].show_preview(&folder_summary(&name, measured));
         }
     });

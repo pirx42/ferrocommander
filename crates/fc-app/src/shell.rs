@@ -193,7 +193,7 @@ impl Shell {
     /// it. The last plan in this repository paid for the other arrangement:
     /// a rule everybody has to remember is a rule that fails the week nobody
     /// does.
-    pub(crate) fn refresh_quick_view(&mut self) -> Option<Sizes> {
+    pub(crate) fn refresh_quick_view(&mut self) -> Option<(VfsPath, Sizes)> {
         // The pane with the keyboard is always a listing: `Tab` moves the
         // preview across rather than leaving one behind, which is what makes
         // the flag enough and a remembered pane index unnecessary.
@@ -219,24 +219,11 @@ impl Shell {
             // the screen survives the keystrokes that did not move the cursor.
             Preview::Folder(name) => {
                 let dir = self.panes[self.active].listing().dir().clone();
+                let counting = dir.child(&name);
                 let answers = self.panes[showing].preview_folder(dir, name.clone())?;
                 self.panes[showing].show_preview(&PREVIEW_FOLDER_COUNTING.replace("{name}", &name));
-                Some(answers)
+                Some((counting, answers))
             }
-        }
-    }
-
-    /// The folder the preview is showing, if it is showing one.
-    ///
-    /// What a walk's answer is checked against before it is drawn: the walk
-    /// that produced it may belong to a row the cursor has since left.
-    pub(crate) fn previewed_folder(&self) -> Option<String> {
-        if !self.quick_view {
-            return None;
-        }
-        match preview_for(self.panes[self.active].listing()) {
-            Preview::Folder(name) => Some(name),
-            _ => None,
         }
     }
 

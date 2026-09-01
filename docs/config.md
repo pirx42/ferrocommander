@@ -19,6 +19,11 @@ had the keyboard; the editor; the command history; where each drive was last
 showing; the favourite directories; and the user's own key bindings. Each has
 its own section below — this list is the index to them.
 
+What is deliberately *not* remembered: whether quick view was on
+([viewer.md](viewer.md)). A file manager that starts with one pane showing
+the head of a text file instead of a directory has to be explained, and
+`Ctrl+Q` is cheap to press again.
+
 ## It is written as it changes, not on the way out
 
 Every action that could change something worth remembering calls `remember`,

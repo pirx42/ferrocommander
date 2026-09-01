@@ -1,6 +1,7 @@
 # Quick view — `Ctrl+Q` shows the cursor's file in the other pane
 
-Status: Draft — decisions 1–3 settled by the owner, 2026-09-01
+Status: **Done**, 2026-09-01 — all six phases, each behind a green gate.
+Outcome in § 6.
 
 Total Commander's `Ctrl+Q`: the opposite pane stops being a directory and
 becomes a window onto whatever the cursor is on, following it as the cursor
@@ -13,7 +14,7 @@ Linux and Windows, `Cmd+Q` on macOS.
 - **The viewer engine is already what quick view needs.**
   `fc_core::viewer::View` opens by reading a file's *size* and nothing else,
   and `render` reads one 64 KiB window on demand
-  ([viewer.md](../viewer.md)). A preview that follows a cursor is the same
+  ([viewer.md](../../viewer.md)). A preview that follows a cursor is the same
   call the `F3` window already makes, so nothing about *what is shown* is
   new work — only where it is drawn.
 - **The pane is a vertical box** — path bar, filter bar, the scrolled
@@ -26,7 +27,7 @@ Linux and Windows, `Cmd+Q` on macOS.
   move is done: what changes is the default `ctrl+q` binding underneath it.
 - **The keymap gate will not let this be half-done**: a binding that no
   end-to-end test presses is red unless `UI_UNPRESSED` excuses it, and the
-  bindings and action tables in [keymap.md](../keymap.md) are checked
+  bindings and action tables in [keymap.md](../../keymap.md) are checked
   against the code.
 
 Three things the plan has to decide rather than discover:
@@ -43,7 +44,7 @@ Three things the plan has to decide rather than discover:
   anything is built on it (skill 74's rules for what the input looks like).
 - **The suite cannot read a pane's text.** The harness observes the window
   title, the log, the settings file and the filesystem — not widget
-  contents ([ui-shell.md](../ui-shell.md)). What an end-to-end test can
+  contents ([ui-shell.md](../../ui-shell.md)). What an end-to-end test can
   assert about quick view is therefore limited, and decision 2 below
   changes the answer.
 
@@ -113,7 +114,7 @@ that it still shuts down cleanly. That is the phase's real risk, and it is
 in front of it rather than behind it.
 
 **Phase 1 — the cost of following a cursor** *(done; the numbers are in
-[performance.md](../performance.md), and they settled the debounce
+[performance.md](../../performance.md), and they settled the debounce
 question: cancellation, not delay).* Before the feature: a
 benchmark for what one preview step costs — `stat` plus one 64 KiB
 windowed read — with the input layout stated as part of the claim (skill
@@ -124,7 +125,7 @@ The second is the one that decides whether a walk may start from the key
 handler at all, or needs the delay that lets a held-down arrow key pass
 over a folder without ever asking. The number decides whether the preview may update straight
 from the key handler or has to be debounced, and it goes in
-[performance.md](../performance.md) either way.
+[performance.md](../../performance.md) either way.
 
 **Phase 2 — the keys move, harness included.** `Action::Quit` rebinds to
 `Alt+F4` and `App::close()` sends that instead — the change phase 0 found,
@@ -158,14 +159,14 @@ That `Ctrl+Q` does not quit any more and `Alt+F4` does; that the pane in
 quick view stops responding to the keys that would move a listing, which
 is observable through the settings file's per-pane directory; and that a
 second `Ctrl+Q` restores the pane where it was. What no test can assert is
-the *text on screen* — that is stated in [ui-shell.md](../ui-shell.md)
+the *text on screen* — that is stated in [ui-shell.md](../../ui-shell.md)
 beside the two things the suite already cannot see, rather than left as a
 gap somebody rediscovers.
 
-**Phase 5 — docs.** [keymap.md](../keymap.md) (forced by the gate),
-a quick-view section in [viewer.md](../viewer.md) — same engine, second
+**Phase 5 — docs.** [keymap.md](../../keymap.md) (forced by the gate),
+a quick-view section in [viewer.md](../../viewer.md) — same engine, second
 surface, so one document rather than a new one (skill 29) — and
-[performance.md](../performance.md)'s number from phase 1.
+[performance.md](../../performance.md)'s number from phase 1.
 
 **Phase 6 — refactoring audit** (skill 49) and the end-of-plan ritual.
 
@@ -210,3 +211,64 @@ calling.
   back — not that the right bytes are on the screen. The engine's own tests
   carry that half, and the honest statement of the split belongs in the
   docs rather than in a commit message nobody re-reads.
+
+## 6. Outcome
+
+Six phases, six commits, six green gates. What the plan got right, and the
+four things it did not:
+
+**The measurement moved the design, as it was meant to.** Phase 1 asked what
+one preview step costs and got two answers rather than one: 0.004 ms for a
+file of any size, and 0.058 ms to *start* a directory walk whose 5.745 ms
+over 2 000 entries runs on behind the keystroke. That second pair is what
+settled decision 3's open question — cancellation, not delay — and a
+benchmark of the keystroke alone would have reported 0.058 ms and said the
+walk was free. The first version of that benchmark did exactly that by
+pointing at a 26-entry folder: 0.231 ms, 25 times flattering, and the third
+time in this repository a benchmark has had to be told what a hard case looks
+like (skill 74).
+
+**Phase 0 found the risk, and it was not in the feature.** `Ctrl+Q` was not
+pressed by a test but by the *harness*: `App::close()` quit the app with it,
+eleven tests close that way and seven relaunch afterwards to read what was
+written. So rebinding quit moved the mechanism that proves the settings
+survive at all. Isolating that in its own commit — with `Ctrl+Q` left
+unbound rather than pointed at an action that did nothing — is what kept the
+suite's verdict on it readable.
+
+**Phases 3 to 5 became one commit**, which phase 2's own text had already
+predicted: a binding no end-to-end test presses fails the gate, so the key,
+the preview and the tests that press it cannot be separate commits. The
+docs followed in the same one, as skill 28 asks.
+
+**What the plan did not foresee** is that the preview is redrawn after every
+keystroke, not only the ones that move the cursor — the direct consequence
+of hanging it beside `follow_active` instead of asking each action to
+remember, which is the arrangement the adoption plan paid for. Restarting a
+folder's walk unconditionally would therefore throw away a finished count
+and go back to "counting…" whenever anybody pressed a key. `preview_folder`
+returns `None` for the folder it is already counting. It is the one part of
+the feature no test covers, and honestly so: it is a property of what is on
+the screen, and the screen is what this suite cannot read.
+
+**Two probes, both screaming** (skill 59): a `Ctrl+Q` that does nothing, and
+a `show_listing` that stops the walk but never switches the page back. The
+test that catches both — `a_previewed_pane_has_no_rows_to_click` — works
+because a click moves a pane's cursor without giving it the keyboard, and
+`F5` on `..` opens no dialog; the copy dialog is therefore the answer to
+"did the click find a row". The other three end-to-end tests are honest
+about proving less: they say the key stopped quitting, that a previewed pane
+comes back with its cursor intact, and that the preview follows the keyboard.
+
+**The audit's one finding** was a second source of truth: the shell derived
+"which folder is being counted" from the listing while the pane already held
+it, so a late answer was matched against a recomputation rather than against
+the walk that produced it. The pane answers now, and `Shell::previewed_folder`
+is gone. Also recorded rather than left to be rediscovered: why the preview's
+walk is not part of `abandon_background` (`Escape` acts on the pane with the
+keyboard, and the preview is by definition the other one).
+
+Two unit tests were wrong before they were right, in the way this repository
+keeps finding: `/dir` has a parent, so the model offers `..` and starts the
+cursor on it — and both "the cursor is on a file" tests were quietly asserting
+about the parent row.
