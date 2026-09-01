@@ -120,6 +120,37 @@ const DISPLAY_REFUSED: &str = "Failed to open display";
 /// previous one is still shutting down.
 static NEXT_DISPLAY: AtomicU32 = AtomicU32::new(DISPLAY_BASE);
 
+/// The next display number **no X server has claimed**.
+///
+/// Counting up alone was not enough, and the way it failed is worth keeping:
+/// an `Xvfb` that is killed rather than stopped — a test that times out, a
+/// gate run interrupted — leaves `/tmp/.X<n>-lock` behind it, and the next
+/// server offered that number refuses to start. The counter would hand the
+/// dead number to whichever test happened to land on it, which then failed
+/// with `X display :183 never came up`: a message that names the symptom,
+/// says nothing about the corpse, and — because the counter is
+/// deterministic — fails *the same test every run*, which reads exactly like
+/// a real bug in whatever that test happens to cover.
+///
+/// The locks are ours, and every run makes more: teardown *kills* the
+/// server rather than asking it to stop (`self.xvfb.kill()`, twice below),
+/// which is deliberate — a killed child is a determinate one — and a killed
+/// X server never cleans up after itself. One session had accumulated 179.
+///
+/// Checking is the right layer even so, rather than merely a patch over
+/// that: a run interrupted with Ctrl-C, a crash, or another user's server
+/// leaves locks no teardown of ours could have removed, and a test harness
+/// that assumes `/tmp` is clean is a harness that fails for reasons its
+/// message cannot explain. The check costs one `stat` per app start.
+fn next_free_display() -> String {
+    loop {
+        let number = NEXT_DISPLAY.fetch_add(1, Ordering::Relaxed);
+        if !Path::new(&format!("/tmp/.X{number}-lock")).exists() {
+            return format!(":{number}");
+        }
+    }
+}
+
 /// Only one app runs at a time.
 ///
 /// Cargo runs tests in parallel by default, and sixteen X servers with
@@ -166,7 +197,7 @@ impl App {
         require("Xvfb", "xvfb");
         require("xdotool", "xdotool");
 
-        let display = format!(":{}", NEXT_DISPLAY.fetch_add(1, Ordering::Relaxed));
+        let display = next_free_display();
         let xvfb_log = home.path().join(XVFB_LOG);
         let screen = format!("{SCREEN_WIDTH}x{SCREEN_HEIGHT}x{SCREEN_DEPTH}");
         let xvfb = Command::new("Xvfb")
