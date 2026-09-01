@@ -127,6 +127,13 @@ applies — the point rather than a side effect, though it does mean a broken
 of `-c`. It ran nothing at all until 2026-09-01, because neither `$SHELL` nor
 `/bin/sh` exists there and a command failed before it started.
 
+The line reaches it through `raw_arg`, not `arg`: Rust quotes an argument for
+the **C runtime's** rules, which `cmd` does not read, so a line holding
+quotes arrived with backslashes in front of them and was taken apart into
+something else ([windows.md](windows.md)). These tests run on Windows in CI
+as of the same day, which is what makes any of this a fact rather than a
+claim.
+
 Running is not parity, and the difference is exactly what the paragraph above
 calls the reason the feature exists: **`cmd` does no `~` and no globbing.**
 Pipes and redirection work; `dir *.txt` is `cmd`'s own answer rather than a

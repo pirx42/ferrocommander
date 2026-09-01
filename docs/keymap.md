@@ -75,16 +75,20 @@ two keys. The facts are checked; the prose is written. What **is** generated
 is the [action-name table](#action-names--what-a-keys-line-may-say-on-the-right)
 further down, which is a list rather than an explanation.
 
-Activating a *file* hands it to the desktop's own handler — `xdg-open`, the
-same thing a double-click in a file manager does. `F3` still views it and `F4`
-still edits it with the editor from the settings ([viewer.md](viewer.md)):
-Enter is "open this", `F4` is "edit this", and they stay different questions
-even when one program answers both.
+Activating a *file* hands it to the desktop's own handler — `xdg-open`, `open`
+or, on Windows, the call Explorer makes for a double-click
+([windows.md](windows.md)). The path is handed over as one argument and no
+command line is built, which is the whole of why there is nothing to quote
+wrong. `F3` still views it and `F4` still edits it with the editor from the
+settings ([viewer.md](viewer.md)): Enter is "open this", `F4` is "edit this",
+and they stay different questions even when one program answers both.
 
-**Enter never executes the file**, whatever its permission bits say. Enter is
-how somebody walks a tree, the cursor lands on every row on the way past, and
-a manager that started programs when the cursor stopped on one is not one you
-could browse with.
+**Enter never executes the file itself**, whatever its permission bits say —
+it hands it over, and what the handler makes of it is the handler's answer.
+On Windows that answer starts a `.exe`, because that is what a double-click
+does there and what was asked for; `xdg-open` opens a script in an editor.
+The rule kept here is only that the decision belongs to the same handler the
+rest of the system uses, and not to a rule invented in a file manager.
 
 **An archive** is walked into as if it were a directory, and `..` or Backspace
 comes back out ([archives.md](archives.md)). Inside an archive `F3` still

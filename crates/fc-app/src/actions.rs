@@ -1231,11 +1231,13 @@ fn read_payload(stream: gtk::gio::InputStream, done: impl FnOnce(String) + 'stat
 /// settings: `F4` is "edit this", Enter is "open this", and the two are
 /// different questions even when one program answers both.
 ///
-/// It never executes the file either, whatever its permission bits say.
-/// Enter is how somebody walks a directory tree, the cursor lands on every
-/// row on the way past, and a file manager that started programs when the
-/// cursor stopped on one would be a file manager nobody could trust to
-/// browse.
+/// It never *executes* the file itself, whatever its permission bits say: it
+/// hands it over, and what the desktop makes of it is the desktop's answer.
+/// On Windows that answer starts a `.exe`, because that is what a
+/// double-click in Explorer does and what was asked for; on Linux
+/// `xdg-open` opens a script in an editor. Either way the decision belongs
+/// to the same handler the rest of the system uses, and not to a rule
+/// invented here.
 pub(crate) fn open_current_file(shell: &Rc<RefCell<Shell>>) {
     let mut state = shell.borrow_mut();
     let Some(path) = state.active_pane().current_file() else {
@@ -1254,7 +1256,7 @@ pub(crate) fn open_current_file(shell: &Rc<RefCell<Shell>>) {
         return;
     }
     drop(state);
-    fc_core::command::open_with(fc_core::config::DEFAULT_EDITOR, &path);
+    fc_core::command::open_in_desktop(&path);
 }
 
 /// F4: hand the file under the cursor to the editor from the settings.

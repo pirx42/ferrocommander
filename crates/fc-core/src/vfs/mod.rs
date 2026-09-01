@@ -13,6 +13,11 @@ use std::time::SystemTime;
 
 pub use local::LocalFs;
 pub use path::VfsPath;
+/// Re-exported for `command::desktop`, the only caller outside this module:
+/// the Win32 entry points both use want UTF-16 with a terminating NUL, and
+/// one encoding of that is enough.
+#[cfg(windows)]
+pub(crate) use platform::wide_nul;
 pub use types::{Attributes, Entry, EntryKind, Mount, Space, Store, SymlinkTarget, VfsError};
 
 /// A [`VfsPath`] as the operating system spells it.
@@ -23,6 +28,17 @@ pub use types::{Attributes, Entry, EntryKind, Mount, Space, Store, SymlinkTarget
 /// site with its own idea of what a separator is.
 pub fn to_std_path(path: &VfsPath) -> std::path::PathBuf {
     platform::to_std_path(path)
+}
+
+/// The inverse: a path the operating system gave us, as the VFS names it.
+///
+/// The one place a native path enters — a temporary directory in a test, a
+/// drive letter from the platform layer — and the reason it is public: a
+/// caller that reaches for `VfsPath::new` with a Windows path keeps the
+/// backslashes, and every read under it then goes to a directory that does
+/// not exist.
+pub fn from_std_path(path: &std::path::Path) -> VfsPath {
+    platform::from_std_path(path)
 }
 
 /// The places the drive bar offers: mounted filesystems on Unix, drives on

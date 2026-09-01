@@ -106,12 +106,20 @@ elsewhere in the file do.
 
 ## `editor` — what `Shift+F4` opens a new file in
 
-A command line, run the way a typed one is, with the path appended and quoted.
-Empty means `xdg-open`, which hands the file to whatever the desktop has
-registered for it — the only answer that can be right without being told, since
-`$EDITOR` is nearly always a terminal editor and launching one with no terminal
-fails in the common case rather than the rare one. Somebody wanting `vim`
-writes `x-terminal-emulator -e vim`.
+A command line, run the way a typed one is, with the path appended and quoted
+for whichever interpreter this platform runs. Somebody wanting `vim` writes
+`x-terminal-emulator -e vim`.
+
+**Empty means the desktop's own handler** — the same thing `Enter` does, and
+the only answer that can be right without being told, since `$EDITOR` is
+nearly always a terminal editor and launching one with no terminal fails in
+the common case rather than the rare one. Empty is literal: no command line
+is built at all, and the file is handed straight to `xdg-open`, to `open`, or
+on Windows to the call Explorer makes for a double-click
+([windows.md](windows.md)). Until 2026-09-01 this setting defaulted to the
+*name* of one of those three, pasted into a shell line — which is how `Enter`
+came to open nothing on Windows and put up a dialog about a path that existed
+on no machine.
 
 ## `compare_tool` — what `Ctrl+Shift+C` runs instead of its own view
 

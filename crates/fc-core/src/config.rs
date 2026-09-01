@@ -32,10 +32,12 @@ pub const KEYS_TABLE: &str = "keys";
 /// being told: `$EDITOR` is nearly always a terminal editor, and launching one
 /// with no terminal fails in the common case rather than the rare one.
 ///
-/// Which name that is depends on the platform, and it was `xdg-open`
-/// everywhere until 2026-09-01 — so `Enter` on a file did nothing at all on
-/// Windows *or* macOS. See [`crate::command::DESKTOP_OPENER`].
-pub const DEFAULT_EDITOR: &str = crate::command::DESKTOP_OPENER;
+/// **Not a program name any more.** It was `xdg-open` on every platform
+/// until 2026-09-01, and then one name per platform pasted into a shell
+/// line — which is what broke `Enter` on Windows. It is now the empty line
+/// that [`crate::command::DESKTOP_HANDLER`] defines: no command, no
+/// quoting, one code path with `Enter`.
+pub const DEFAULT_EDITOR: &str = crate::command::DESKTOP_HANDLER;
 
 /// How many command lines are remembered.
 ///

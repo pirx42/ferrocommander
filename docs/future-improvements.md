@@ -109,13 +109,27 @@ by definition" — true, and exactly the assumption Windows breaks. Nine of the
 fifteen `fc-core` failures in the first Windows test run were that one cause.
 
 It now runs `%ComSpec%` with `/C`, which is what makes `Enter`, `F4`, the
-compare tool and the command line work there at all. What is *not* settled is
-the half this entry was really about: `cmd` does no `~` and no globbing, and
-those are what [command-line.md](command-line.md) calls the reason the
-feature exists. Whether the answer is PowerShell, or the MSYS2 shell when one
-is present, is a product decision rather than a porting detail — and it is
-now a decision about which shell is better rather than about whether anything
-runs.
+compare tool and the command line work there at all — though it took a second
+commit the next day for that to be true rather than claimed, and a CI step
+that runs the command tests on Windows for the difference to be visible
+([windows.md](windows.md)).
+
+What is *not* settled is the half this entry was really about: `cmd` does no
+`~` and no globbing, and those are what
+[command-line.md](command-line.md) calls the reason the feature exists.
+Whether the answer is PowerShell, or the MSYS2 shell when one is present, is
+a product decision rather than a porting detail — and it is now a decision
+about which shell is better rather than about whether anything runs.
+
+**One sharp edge comes with `cmd` and is left on purpose:** it expands
+`%VAR%` inside double quotes, and there is no escape for `%` on a command
+line. So a file named `%TEMP%.txt` handed to a *configured* `F4` editor or to
+the compare tool reaches it as whatever `%TEMP%` holds. `Enter` is immune —
+it hands the path to `ShellExecuteW` as one argument and never builds a line
+— and so is the typed command line, where a `%` the user typed is theirs to
+mean. Fixing it properly means not building a line for the editor either,
+which means the `editor` setting stops being a command line, which is a
+product decision the same size as the one above.
 *Home:* with the Windows startup crash above — both want one session on
 Windows rather than two.
 *From:* the first Windows test run, 2026-08-30.
@@ -162,8 +176,10 @@ has since gone: free space is answered on Windows as of 2026-09-01
 should pass there now. Should — nothing here runs it, which is the point the
 row below its neighbours is really making.
 The first Windows run of `cargo test -p fc-core --no-fail-fast` (2026-08-30)
-passes 331 of 346. Nine failures are the `/bin/sh` gap above. The others
-are the suite's own assumptions:
+passes 331 of 346. Nine failures were the `/bin/sh` gap above, and those nine
+are the ones CI has run on Windows since 2026-09-01 — in `cmd`'s own words,
+and green. The others are the suite's own assumptions, and still nothing
+runs them there:
 
 | Test | What it assumes |
 |---|---|

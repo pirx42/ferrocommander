@@ -16,7 +16,7 @@ with a plain `cargo test`.
 | `sizes.rs` | what a folder actually holds, counted — `Alt+Shift+Enter` |
 | `rename.rs` | the multi-rename rules — pure, so the preview *is* the rename |
 | `viewer.rs` | what `F3` shows, built on `read_at` and nothing else |
-| `command.rs` | running a command line, and opening an editor |
+| `command.rs` | running a command line, and handing a file to the desktop |
 | `compare.rs` | two files as paired diff rows, or a byte verdict — compare by content |
 | `config.rs` | the settings file, read once and written as it changes |
 | `watch.rs` | noticing what another program did to a directory |

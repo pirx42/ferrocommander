@@ -86,10 +86,14 @@ test. Nothing here needed a Windows machine to catch. It needed a test.
 | # | | Commit |
 |---|---|---|
 | 1 | this plan | docs |
-| 2 | the runner: native paths, `Quoting`, `raw_arg` | fix(command) |
-| 3 | `Enter` opens without a shell; `ShellExecuteW` | feat(command) |
-| 4 | the Windows job runs the command tests | ci |
-| 5 | docs + audit | docs / refactor |
+| 2 | the runner and the opener, with the docs they change | fix(command) |
+| 3 | the Windows job runs the command tests | ci |
+| 4 | audit | refactor |
+
+Phases 2 and 3 of the list above were written as separate commits and landed
+as one: dropping `WINDOWS_OPENER` is what forces `Enter` off the shell, and a
+commit that fixed the quoting of a line the next commit deletes would be a
+commit of something nobody ever ran.
 
 ## 4. Effort
 

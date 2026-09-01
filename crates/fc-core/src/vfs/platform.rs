@@ -71,9 +71,11 @@ fn windows_vfs(native: &str, separator: char) -> VfsPath {
 /// terminating NUL.
 ///
 /// Out here with the path mapping, and for the same reason: it is the half of
-/// the free-space call that a machine without Windows can check.
+/// the free-space call that a machine without Windows can check. Its second
+/// caller is `command::desktop`, which hands a path to `ShellExecuteW` and
+/// needs the same encoding.
 #[cfg(any(windows, test))]
-fn wide_nul(text: &str) -> Vec<u16> {
+pub(crate) fn wide_nul(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 

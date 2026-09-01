@@ -140,26 +140,78 @@ What the bundle holds, why it holds so little of what a GTK bundle usually
 holds, and why there is a `.cmd` beside the `.exe`:
 [packaging.md](packaging.md).
 
-## A command runs through `cmd`, and `Enter` opens with `start`
+## A command runs through `cmd`, and `Enter` runs no command at all
 
 Every command this program runs — the command line, `F4`'s editor, the
 compare tool and `Enter` on a file — went through `$SHELL` or `/bin/sh -c`,
-which is why none of them did anything on Windows. The interpreter is now
-`%ComSpec%` with `/C` here and `$SHELL -c` elsewhere, so all four work in one
-change.
+which is why none of them did anything on Windows. The interpreter is
+`%ComSpec%` with `/C` here and `$SHELL -c` elsewhere.
 
-`Enter` hands a file to whatever the desktop opens it with, and that name is
-different on all three platforms: `xdg-open`, `open`, and on Windows `start`
-— which is not a program but a `cmd` builtin, usable only because the runner
-spawns `cmd` in the first place. **Its first quoted argument is a window
-title, not the file**, so `start ""` carries an empty pair of quotes that is
-load-bearing: leave it out and `start` takes the path for a title and opens
-nothing, with no error. That single detail is asserted from the Linux gate,
-which is the only gate there is.
+**That was shipped on 2026-09-01 and did not work**, and the three reasons
+are worth keeping, because every one of them is a *composition* bug — a
+string that was wrong, visible from Linux, with no Windows machine needed to
+see it:
 
-What that buys is Explorer's own behaviour: a `.png` opens in the system
-viewer, a `.exe` starts. The program now starts programs, which is what a
-double-click does and what was asked for.
+| | Wrong | What Windows saw |
+|---|---|---|
+| the path | `VfsPath::as_str`, not `to_std_path` | `/C:/Users/pirx/a.exe` — a leading `/`, which `cmd` reads as the start of a switch, and separators the wrong way round |
+| the quotes | POSIX `'…'` | `cmd` has no single-quote quoting, so the quotes became part of the filename |
+| the argument | `Command::arg` | it quotes for the **C runtime's** rules — wrapping in `"` and escaping inner quotes as `\"` — and `cmd` reads neither. `raw_arg` is the only way to hand `cmd` a line |
+
+So `Enter` on `C:\Users\pirx\a.exe` ran
+
+```
+cmd.exe /C "start \"\" '/C:/Users/pirx/a.exe'"
+```
+
+and Windows put up a dialog about a path that exists on no machine.
+
+**`Enter` no longer builds a line at all.** Handing a file to the desktop is
+not a command, and constructing one only to have an interpreter take it apart
+again is where all three bugs came from. It is now one call per platform with
+the path as a **single argument**: `xdg-open` or `open` spawned directly, and
+on Windows `ShellExecuteW` — the call Explorer itself makes for a
+double-click, hand-declared beside `GetDiskFreeSpaceExW` for the same reason.
+There is no quoting on that path, so there is none to get wrong. A `.png`
+opens in the system viewer, a `.exe` starts; the program starts programs,
+which is what a double-click does and what was asked for.
+
+What still builds a line is `F4` with a *configured* editor, the compare tool
+and the command line the user typed — those are command lines by definition.
+They now carry native paths in `"` quotes on Windows, and reach `cmd`
+verbatim.
+
+One sharp edge is left there, and is left on purpose: **`cmd` expands
+`%VAR%` inside double quotes**, so a file named `%TEMP%.txt` handed to a
+configured editor still goes wrong. `Enter` is immune, because it never
+builds a line. See
+[future-improvements.md](future-improvements.md).
+
+## The command tests run here, and they are the only ones that do
+
+`cargo test -p fc-core --test command` runs in the `windows` CI job, before
+the package is built. It is the answer to a question that had been asked
+three rounds running and answered the same way every time — *"the Windows
+runner cannot be tested where it runs"* — while three Windows changes shipped
+on a twenty-second smoke start, and the third arrived broken in three ways.
+
+The tests are shared, not duplicated: what each one *claims* is the same on
+both platforms, and only the wording of the line differs — `ls` / `dir /b`,
+`echo a; echo b` / `echo a& echo b`, `true` / `exit 0`. That phrasebook is a
+`mod line` at the top of `crates/fc-core/tests/command.rs`, and reading it is
+the fastest way to see what `cmd` is: not a poorer `sh` but a different
+language, in which `;` does not separate commands, there is no `true`, and a
+wildcard is expanded by the *program* rather than the interpreter.
+
+Two of them are about this platform rather than shared by both, and they are
+the ones that would have caught the bug: the composed editor line for a path
+the VFS holds as `/C:/Users/pirx/a file.txt`, and which quoting style the
+build picked.
+
+The job sets `TMP` and `TEMP` to the runner's own temporary directory. MSYS2
+hands its shell a POSIX `/tmp`, and the test binary is a *Windows* program:
+`tempfile` would ask the operating system for `\tmp` on the current drive,
+and every fixture would fail to be created.
 
 ## The free-space figure, and its one Win32 call
 
@@ -214,11 +266,15 @@ cargo stops at the first failing test *binary* and hid four of these:
 | end-to-end UI suite | cannot run | see below |
 
 Everything that fails on Windows passes on Linux, so none of it is the engine
-being wrong. Nine of the fifteen are one cause — the command line runs
-`/bin/sh`, which does not exist here — and the other six are tests that assert
-Unix semantics. Both are written up in
-[future-improvements.md](future-improvements.md); the count differs between
+being wrong. Nine of the fifteen were one cause — the command line ran
+`/bin/sh`, which does not exist here — and **those nine are the ones CI now
+runs**, in `cmd`'s own words; the other six are tests that assert Unix
+semantics and are written up in
+[future-improvements.md](future-improvements.md). The count differs between
 the columns because the symlink tests are `#[cfg(unix)]`.
+
+Those figures are from 2026-08-30 and have not been re-measured on a Windows
+machine since.
 
 **The UI suite cannot run on Windows at all**, and no package fixes it: the
 harness drives the binary through `Xvfb` and `xdotool`, which are X11, and
