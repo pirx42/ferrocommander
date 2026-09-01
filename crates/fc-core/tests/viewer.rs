@@ -166,3 +166,54 @@ fn hex_mode_shows_the_same_bytes_the_offset_is_at() {
     assert!(dump.starts_with("00000000  30 31 32"), "{dump}");
     assert_eq!(view.mode(), Mode::Hex);
 }
+
+/// A file shorter than half a read window — the case the offset arithmetic
+/// never had, and the one the third testing round reported. Three hundred
+/// short lines: too small to page, far too tall for one screen.
+fn short_file() -> (TempDir, View) {
+    let body: String = (0..300).map(|i| format!("line {i:04}\n")).collect();
+    viewing(body.as_bytes())
+}
+
+#[test]
+fn paging_a_short_file_never_walks_backwards() {
+    // It did: `last_page` is zero when the file is shorter than half a
+    // window, and the clamp to it dragged the offset to the top — so both
+    // page keys jumped to the start of the file however far down you were.
+    let (_dir, mut view) = short_file();
+    view.scroll_lines(&LocalFs, 5);
+    let five_lines_down = view.offset();
+    assert!(five_lines_down > 0, "the arrows did not move");
+
+    view.scroll_window(1);
+
+    assert_eq!(
+        view.offset(),
+        five_lines_down,
+        "a page forward moved the offset backwards"
+    );
+}
+
+#[test]
+fn a_page_back_from_the_top_of_a_short_file_stays_at_the_top() {
+    let (_dir, mut view) = short_file();
+
+    view.scroll_window(-1);
+
+    assert_eq!(view.offset(), 0);
+}
+
+#[test]
+fn paging_a_long_file_still_turns_pages() {
+    // The guard must not cost the case that always worked.
+    let (_dir, mut view) = viewing(&vec![b'x'; WINDOW_BYTES * 4]);
+
+    view.scroll_window(1);
+    let one_page = view.offset();
+    view.scroll_window(1);
+
+    assert!(one_page > 0, "a page forward moved nothing");
+    assert!(view.offset() > one_page, "the second page went nowhere");
+    view.scroll_window(-1);
+    assert_eq!(view.offset(), one_page, "a page back did not undo it");
+}

@@ -583,6 +583,13 @@ pub const ROW_REVISION: &str = "revision";
 /// left connected would paint the wrong row's text into it.
 pub const CELL_REPAINT: &str = "fc-cell-repaint";
 
+/// How much unscrolled room still counts as room, in pixels.
+///
+/// An adjustment's arithmetic is floating point, so "is there anything left
+/// to scroll" is never exactly zero at the end of a document. Less than a
+/// pixel is nothing anybody can see.
+pub const SCROLL_ROOM_EPSILON: f64 = 1.0;
+
 /// When the remembered scroll offset is put back, as a main-loop priority.
 ///
 /// **Between GTK's two idle passes, and that is the whole point.** GTK lays

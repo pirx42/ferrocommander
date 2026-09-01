@@ -112,12 +112,22 @@ impl View {
     }
 
     /// Moves a windowful, forwards or back.
+    /// **A page forward never moves backwards, and a page back never
+    /// forwards.** That reads like a tautology and is the fix for a real
+    /// bug: [`last_page`](Self::last_page) is zero for any file shorter than
+    /// half a window, so clamping to it turned either page key on a short
+    /// file into a jump to the *top* — the third testing round's report, in
+    /// its own words.
     pub fn scroll_window(&mut self, pages: i64) {
         let step = WINDOW_BYTES as i64 * pages;
-        self.offset = self
+        let target = self
             .offset
             .saturating_add_signed(step)
             .min(self.last_page());
+        self.offset = match pages >= 0 {
+            true => target.max(self.offset),
+            false => target.min(self.offset),
+        };
     }
 
     pub fn to_start(&mut self) {

@@ -34,6 +34,22 @@ A file with no newline in it at all still moves: "a line down" can only mean a
 window there, and a viewer stuck at the top of a minified file forever would be
 worse than one that guesses.
 
+**A page key means the screen first and the file second.** The offset knows
+nothing about how much of its 64 KiB window fits on screen, and those are
+different questions: a short file is *one* window — there is no page to turn
+— while the label holding it is still several screens tall. Paging the file
+alone therefore left a screenful nobody could reach. So the label is scrolled
+while it has room, and only when it runs out does the offset move; a page back
+then lands at the *bottom* of the window it arrives in, or it would skip
+everything between.
+
+That was reported (2026-09-01) as "page up/down always jumps to top", and the
+wording is what found it. Jumping to the top is not a key doing nothing: the
+furthest the offset may go is the size less half a window, which is **zero**
+for any file under 32 KiB, and the clamp to it dragged the offset back to the
+start. A page forward now never moves backwards, and a page back never
+forwards — a tautology that had to be written down as code.
+
 ## Encoding detection is a validity test
 
 Valid UTF-8 **is** UTF-8: the byte sequences that make it valid do not happen by
