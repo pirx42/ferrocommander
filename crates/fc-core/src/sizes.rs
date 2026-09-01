@@ -54,6 +54,16 @@ pub fn spawn(
                 return;
             }
             let measured = measure(fs.as_ref(), &dir.child(&name), &cancel);
+            // A cancelled walk says nothing at all. It has a number — every
+            // byte it managed to add up — but that number is a lower bound
+            // for a question nobody is asking any more, and sending it is how
+            // a folder's size came to change every time the key was pressed:
+            // the *next* press cancels this walk, and its partial answer then
+            // lands on top of the good one the new walk is about to produce
+            // (2026-09-01, the second testing round).
+            if cancel.is_cancelled() {
+                return;
+            }
             // A closed channel is the pane having moved on; there is nobody
             // left to tell.
             if sender.send_blocking((name, measured)).is_err() {

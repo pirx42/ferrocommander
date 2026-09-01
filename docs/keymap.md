@@ -200,10 +200,22 @@ at the pace of the slowest, and `Escape` stops the rest. The sizes already
 found stay: unlike a half-finished branch walk, each folder's number is its
 own and complete.
 
-**A partial count says so**, with a `+` after the number. A subdirectory that
-refused to be read, or a scan that was stopped, leaves a lower bound — and a
-size nobody can trust looking exactly like one they can is the failure worth
-one character to avoid.
+**A partial count says so**, with a `+` after the number. It means the figure
+is a **lower bound**: a subdirectory refused to be read, so its contents are
+missing from the total. A size nobody can trust looking exactly like one they
+can is the failure worth one character to avoid.
+
+**A cancelled scan is not an answer**, and says nothing at all. It has a
+number — every byte it managed to add up before the next keypress stopped it —
+and that number is discarded rather than shown, in two places: the walk drops
+it, and a listing refuses a lower bound for a folder whose size is already
+known. The two guards are separate because they fail separately, and both are
+needed: a walk cancelled a keystroke ago can already be past its own check and
+on its way back with a number for a question nobody is asking.
+
+Without them a folder's size changed every time it was asked for — the second
+testing round's report, and the one place the `+` was appearing without an
+unreadable subdirectory behind it.
 
 **Nothing is re-sorted while the answers arrive**, and **a re-read forgets
 them** ([listing.md](listing.md)). Pressing the key again counts afresh, which

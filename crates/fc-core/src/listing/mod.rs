@@ -201,6 +201,15 @@ impl Listing {
     pub fn set_measured(&mut self, name: &str, bytes: u64, complete: bool) -> Option<usize> {
         let index = self.index_of(name)?;
         let position = self.entry_index(index)?;
+        // A partial answer never beats a complete one. Both halves of that
+        // sentence matter: a walk cancelled a keystroke ago can still be on
+        // its way here, and a folder whose size is already known must not go
+        // back to being a guess because of it. The two guards are separate on
+        // purpose — `sizes::spawn` drops a cancelled walk's answer, and this
+        // refuses one that arrives anyway.
+        if !complete && self.measured[position] == Some(true) {
+            return None;
+        }
         // The bytes live on the entry and nowhere else, which is what lets
         // the status line's total and the size sort pick them up without
         // knowing this happened. Only the *fact* of the count is kept here.

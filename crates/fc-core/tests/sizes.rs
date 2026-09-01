@@ -103,6 +103,79 @@ fn a_cancelled_scan_says_its_answer_is_partial() {
 }
 
 #[test]
+fn a_walk_cancelled_while_it_runs_delivers_nothing() {
+    // Partial is what the *number* is; delivering it is a separate question,
+    // and the answer is no. The walk was cancelled because somebody pressed
+    // the key again, and the press that cancelled it is about to produce a
+    // real answer — a lower bound landing on top of that is how a folder's
+    // size came to change every time it was asked for.
+    //
+    // Cancelled **mid-walk**, which is the case that matters: a token already
+    // cancelled before the walk starts is caught by the loop's own check
+    // before anything is measured, so a test written that way passes with the
+    // guard removed. This one cancels from inside the first `read_dir`.
+    let (_dir, root) = tree();
+    let cancel = CancelToken::new();
+    let fs = std::sync::Arc::new(CancelsMidWalk {
+        inner: LocalFs,
+        cancel: cancel.clone(),
+    });
+
+    let answers = sizes::spawn(fs, root, vec!["sub".to_string()], cancel);
+
+    assert!(
+        answers.recv_blocking().is_err(),
+        "a cancelled walk sent an answer nobody asked for"
+    );
+}
+
+#[test]
+fn the_same_tree_measures_the_same_twice() {
+    // The conservation invariant behind the report: a folder's size is a
+    // property of the folder, so asking twice is asking once. What broke it
+    // was never the arithmetic — it was a cancelled walk's lower bound
+    // arriving after a complete one.
+    let (_dir, root) = tree();
+    let full = CancelToken::new();
+
+    let first = sizes::measure(&LocalFs, &root, &full);
+    let second = sizes::measure(&LocalFs, &root, &full);
+
+    assert_eq!(first, second);
+    assert!(first.complete);
+}
+
+#[test]
+fn a_partial_answer_never_replaces_a_complete_one() {
+    // The second guard, and it is not the same as the first: a walk cancelled
+    // a keystroke ago can already be past its own check and on its way here.
+    // A folder whose size is known must not go back to being a guess.
+    let (_dir, root) = tree();
+    let mut listing = Listing::load(&LocalFs, root).unwrap();
+    let row = listing.set_measured("sub", 4096, true).expect("the row");
+
+    assert_eq!(
+        listing.set_measured("sub", 12, false),
+        None,
+        "a lower bound overwrote a counted size"
+    );
+    assert_eq!(listing.get(row).expect("an entry").size, 4096);
+    assert_eq!(listing.measured_at(row), Some(true));
+}
+
+#[test]
+fn a_partial_answer_still_lands_where_nothing_is_known_yet() {
+    // The guard is about not going backwards, not about refusing lower
+    // bounds: an unreadable subtree is the honest `+` and has to show.
+    let (_dir, root) = tree();
+    let mut listing = Listing::load(&LocalFs, root).unwrap();
+
+    let row = listing.set_measured("sub", 12, false).expect("the row");
+
+    assert_eq!(listing.measured_at(row), Some(false));
+}
+
+#[test]
 fn a_measured_size_lands_on_the_row_of_that_name() {
     // Sizes arrive by name, the rule the marks already follow, so an answer
     // finds its row even after a re-sort has moved it.
@@ -290,3 +363,39 @@ impl Closed {
 }
 
 delegate_vfs!(Closed);
+
+/// A filesystem that cancels the walk reading it, from inside the read.
+///
+/// The only way to reach the case the report is about: a walk that has
+/// already started, is part way through, and is stopped by the next
+/// keystroke.
+struct CancelsMidWalk {
+    inner: LocalFs,
+    cancel: CancelToken,
+}
+
+impl CancelsMidWalk {
+    fn read_dir_impl(&self, path: &VfsPath) -> Result<Vec<Entry>, VfsError> {
+        let entries = self.inner.read_dir(path);
+        self.cancel.cancel();
+        entries
+    }
+
+    fn rename_impl(&self, from: &VfsPath, to: &VfsPath) -> Result<(), VfsError> {
+        self.inner.rename(from, to)
+    }
+
+    fn open_read_impl(&self, path: &VfsPath) -> Result<Box<dyn Read + Send>, VfsError> {
+        self.inner.open_read(path)
+    }
+
+    fn create_file_impl(&self, path: &VfsPath) -> Result<Box<dyn Write + Send>, VfsError> {
+        self.inner.create_file(path)
+    }
+
+    fn trash_impl(&self, path: &VfsPath) -> Result<(), VfsError> {
+        self.inner.trash(path)
+    }
+}
+
+delegate_vfs!(CancelsMidWalk);
