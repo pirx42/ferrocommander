@@ -44,6 +44,33 @@ pub use progress_view::ProgressView;
 pub use search::Search;
 pub use viewer::Viewer;
 
+/// The value that puts the end of the content at the bottom of the view.
+///
+/// Never below the start: a view taller than what it holds has nothing to
+/// scroll, and an "end" above the beginning would be a `clamp` that panics.
+pub(super) fn bottom(adjustment: &gtk::Adjustment) -> f64 {
+    adjustment.upper() - adjustment.page_size()
+}
+
+/// How much room is left to scroll, forwards or back, in pixels.
+pub(super) fn room(adjustment: &gtk::Adjustment, forwards: bool) -> f64 {
+    match forwards {
+        true => bottom(adjustment) - adjustment.value(),
+        false => adjustment.value() - adjustment.lower(),
+    }
+}
+
+/// Moves a view by whole screenfuls, stopping at either end.
+///
+/// Here rather than in each window because both the viewer and the diff view
+/// page, and the arithmetic — value, page size, upper, and which of them the
+/// end is — is the kind that reads as obvious and is written differently the
+/// second time.
+pub(super) fn page(adjustment: &gtk::Adjustment, pages: f64) {
+    let value = adjustment.value() + adjustment.page_size() * pages;
+    adjustment.set_value(value.min(bottom(adjustment)).max(adjustment.lower()));
+}
+
 /// A modal window with a vertical content box, parented so the window manager
 /// keeps it above the shell.
 fn shell(parent: &impl IsA<gtk::Window>, title: &str) -> (gtk::Window, gtk::Box) {

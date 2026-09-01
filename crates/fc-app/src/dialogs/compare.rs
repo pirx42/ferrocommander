@@ -79,13 +79,12 @@ pub fn open_compare(parent: &impl IsA<gtk::Window>, title: &str, rows: &[Row]) {
             // focused `TextView`, which answers a page key by moving its own
             // cursor — so the view did not move and the key looked dead.
             let adjustment = paging.vadjustment();
-            let value = match key {
-                Key::Home => adjustment.lower(),
-                Key::End => adjustment.upper() - adjustment.page_size(),
-                Key::Page_Up => adjustment.value() - adjustment.page_size(),
-                _ => adjustment.value() + adjustment.page_size(),
-            };
-            adjustment.set_value(value.max(adjustment.lower()));
+            match key {
+                Key::Home => adjustment.set_value(adjustment.lower()),
+                Key::End => adjustment.set_value(super::bottom(&adjustment)),
+                Key::Page_Up => super::page(&adjustment, -1.0),
+                _ => super::page(&adjustment, 1.0),
+            }
             glib::Propagation::Stop
         }
         Key::n | Key::p => {

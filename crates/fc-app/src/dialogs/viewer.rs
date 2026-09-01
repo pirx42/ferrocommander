@@ -112,13 +112,8 @@ impl Viewer {
     /// document should do.
     fn page(&self, pages: i64) -> glib::Propagation {
         let adjustment = self.scroller.vadjustment();
-        let room = match pages > 0 {
-            true => adjustment.upper() - adjustment.page_size() - adjustment.value(),
-            false => adjustment.value(),
-        };
-        if room > SCROLL_ROOM_EPSILON {
-            let step = adjustment.page_size() * pages as f64;
-            adjustment.set_value(adjustment.value() + step);
+        if super::room(&adjustment, pages > 0) > SCROLL_ROOM_EPSILON {
+            super::page(&adjustment, pages as f64);
             return glib::Propagation::Stop;
         }
 
@@ -135,7 +130,7 @@ impl Viewer {
         if pages < 0 {
             let landing = adjustment.clone();
             glib::idle_add_local_full(glib::Priority::from(SCROLL_RESTORE_PRIORITY), move || {
-                landing.set_value(landing.upper() - landing.page_size());
+                landing.set_value(super::bottom(&landing));
                 glib::ControlFlow::Break
             });
         }

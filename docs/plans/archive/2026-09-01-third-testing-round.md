@@ -1,6 +1,7 @@
 # Testing round three — the two viewers, and Enter
 
-Status: Draft — decisions settled by the owner, 2026-09-01
+Status: **Done**, 2026-09-01 — all four findings, each behind a green
+gate. Outcome in § 7.
 
 Four findings. Two are the same key doing nothing in two different windows,
 one is what the diff view looks like, and one is `Enter` on a file — which
@@ -26,7 +27,7 @@ was worth more than any amount of reading.
 ## 2. What the viewer is really missing
 
 The offset is the viewer's whole design: it holds a position in the file and
-reads one 64 KiB window around it ([viewer.md](../viewer.md)). What it does
+reads one 64 KiB window around it ([viewer.md](../../viewer.md)). What it does
 not have is any idea of the **screen**. A 20 KiB file is one window, so there
 is genuinely no next page to turn to — and the label holding it is still
 taller than the viewport, so there is a screenful the user cannot reach and a
@@ -50,7 +51,7 @@ bottom of one label and the top of the next.
    `command::run` gets a Windows branch and the desktop opener gets a
    per-platform answer. That makes `Enter`, `F4`'s editor, the compare tool
    and the command line work on Windows in one change — closing a gap that
-   has been in [future-improvements.md](../future-improvements.md) since the
+   has been in [future-improvements.md](../../future-improvements.md) since the
    first Windows run — and fixes `Enter` on macOS at the same time.
 
 ## 4. Phases
@@ -92,11 +93,11 @@ and is unit-tested on Linux; that a `.png` opens and an `.exe` runs is the
 owner's to confirm, and the plan says so rather than implying a green gate
 covers it.
 
-**Phase 4 — docs.** [viewer.md](../viewer.md) for what paging now means,
-[compare.md](../compare.md) for the gutter and the keys,
-[command-line.md](../command-line.md) and
-[windows.md](../windows.md) for the runner,
-[future-improvements.md](../future-improvements.md) for the gap that closes.
+**Phase 4 — docs.** [viewer.md](../../viewer.md) for what paging now means,
+[compare.md](../../compare.md) for the gutter and the keys,
+[command-line.md](../../command-line.md) and
+[windows.md](../../windows.md) for the runner,
+[future-improvements.md](../../future-improvements.md) for the gap that closes.
 
 **Phase 5 — refactoring audit** (skill 49) and the end-of-plan ritual.
 
@@ -136,3 +137,50 @@ About five hours, plus a full-gate run (~15 min) per phase commit.
 - **Running an `.exe` on `Enter` is a real action from a keystroke.** It is
   what Explorer and Total Commander both do and what was asked for, and it
   is worth writing down that the program now starts programs.
+
+## 7. Outcome
+
+Four findings, five commits, six green gates (one phase needed two).
+
+**The first one was diagnosed from a single word, and the plan says so
+because it is the transferable part.** "Page up/down does not work"
+reproduced as *working*; asking what the symptom actually looked like got
+"always jumps to top", and jumping to the top is not a key doing nothing —
+it is an offset being clamped to zero. Two rounds ago the lesson was that
+reading GTK code predicts what a widget is asked to do rather than what it
+does; this round's is one level earlier: **a report's wording is evidence,
+and the difference between "nothing happens" and "it goes to the top" was
+the whole diagnosis.**
+
+It also turned out to be two bugs wearing one symptom. The engine clamped to
+`last_page`, which is zero for a file under 32 KiB — fixed by a tautology
+that had to be written as code, that a page forward never moves backwards.
+And the widget had no notion of the screen at all: a short file is one
+window, so there is no page to turn, while its label is three screens tall.
+Neither fix alone would have made the key work.
+
+**Two of the four were visible in the code, and both were one word.** The
+diff view's separator got a third of the window because the box holding it
+is `homogeneous` and had three children. `Enter` did nothing on Windows
+because every command went through `/bin/sh -c` — which is also why the
+command line, `F4` and the compare tool did nothing there, so one platform
+branch fixed four things and revealed that `Enter` was broken on macOS too.
+
+**What the gutter cost was found by looking, not reasoning.** It needed its
+own builder, because the shared one sets `hexpand` and an expanding gutter
+takes half of each side. And `Justification::Right` on a view with wrapping
+off drew nothing at all — recorded as observed and not explained, because a
+column of numbers that is there beats a tidier one that is not.
+
+The honesty that the last two rounds earned held: `docs/command-line.md` now
+says that running is not parity, since `cmd` does no `~` and no globbing —
+the half of that gap this change does *not* close — and `docs/windows.md`
+says which line of the opener no gate here can check. `start`'s empty pair
+of quotes is the one part that fails silently, so all three openers are
+named as constants and the Linux gate asserts that detail about a platform
+it will never run.
+
+The audit found the arithmetic both windows had grown independently — value,
+page size, upper, and which of them the end is — and moved it to three
+functions in `dialogs`. The kind that reads as obvious and is written
+differently the second time.
