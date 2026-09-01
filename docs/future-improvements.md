@@ -157,15 +157,18 @@ plan.
 
 ## Testing
 
-**Six engine tests assert Linux rather than the engine.**
+**Six engine tests assert Linux rather than the engine**, and one of the six
+has since gone: free space is answered on Windows as of 2026-09-01
+([windows.md](windows.md)), so `a_real_filesystem_reports_a_total_and_something_free`
+should pass there now. Should — nothing here runs it, which is the point the
+row below its neighbours is really making.
 The first Windows run of `cargo test -p fc-core --no-fail-fast` (2026-08-30)
-passes 331 of 346. Nine failures are the `/bin/sh` gap above. The other six
+passes 331 of 346. Nine failures are the `/bin/sh` gap above. The others
 are the suite's own assumptions:
 
 | Test | What it assumes |
 |---|---|
 | `a_file_under_a_hidden_directory_is_hidden…` | a leading dot hides a directory — [vfs.md](vfs.md) says it does not on Windows |
-| `a_real_filesystem_reports_a_total_and_something_free` | free space, which is Unix-only here |
 | `removing_a_directory_as_a_file_reports_is_a_directory` | `IsADirectory`; Windows gives `PermissionDenied` |
 | `trashing_something_that_is_gone_reports_not_found` | `NotFound`; `trash` hands back a raw Win32 code |
 | `reading_a_subdirectory_is_not_a_change_to_the_directory` | inotify staying quiet on a read; `ReadDirectoryChangesW` fires |
@@ -186,7 +189,8 @@ rather than each test skipping it; the trash-of-a-missing-path test asserts
 decision written into the assertion; and the trash suite is `target_os =
 "linux"` rather than `unix`, because what it asserts is the *freedesktop
 layout* — on a Mac it would trash its fixtures into the account's real bin.
-The hidden-directory, free-space and watcher rows still wait for Windows.
+The hidden-directory and watcher rows still wait for Windows; the
+free-space one should have stopped failing on 2026-09-01, unverified.
 *Home:* whenever Windows gets a session of its own.
 *From:* the first Windows test run, 2026-08-30.
 
@@ -250,17 +254,6 @@ whole of the work; nobody has asked yet.
 *Home:* beside the two formats in `fc-core::clipboard`, which is where the
 encoding lives and is tested.
 *From:* [clipboard.md](clipboard.md).
-
-## Free space on Windows
-
-The status line's disk figure is Unix-only. `statvfs` has no Windows
-equivalent in `std`, and `GetDiskFreeSpaceExW` would need a Windows API crate
-this workspace does not otherwise want — for one number. The Windows branch
-returns `None`, so the figure is simply absent there.
-
-A status line with nothing in it is honest; one showing a made-up number is
-not. Whoever adds the crate gets the figure for free — the trait method, the
-call site and the formatting are already there and platform-agnostic.
 
 ## A window listing the running jobs
 

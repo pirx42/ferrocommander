@@ -67,6 +67,16 @@ fn windows_vfs(native: &str, separator: char) -> VfsPath {
     VfsPath::new(&native.replace(separator, "/"))
 }
 
+/// A string as Win32's wide-character entry points want it: UTF-16 with a
+/// terminating NUL.
+///
+/// Out here with the path mapping, and for the same reason: it is the half of
+/// the free-space call that a machine without Windows can check.
+#[cfg(any(windows, test))]
+fn wide_nul(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
 #[cfg(unix)]
 mod imp {
     use super::*;
@@ -557,14 +567,40 @@ mod imp {
     }
 
     /// `%APPDATA%`, where per-user settings belong on Windows.
-    /// Not answered on Windows yet.
+    /// How much room the filesystem holding `path` has, and how much is left.
     ///
-    /// `GetDiskFreeSpaceExW` is the call, and it would need a Windows API
-    /// crate this workspace does not otherwise want. A status line with no
-    /// figure in it is honest; a made-up one is not
-    /// (`docs/future-improvements.md`).
-    pub fn space(_path: &Path) -> Option<Space> {
-        None
+    /// **Declared here rather than taken from a Windows API crate.** This is
+    /// the one Win32 entry point the workspace needs, and a dependency for
+    /// one number was weighed and refused; the signature is
+    /// `GetDiskFreeSpaceExW` from `fileapi.h`, whose `W` is the
+    /// wide-character form — hence the UTF-16 name.
+    ///
+    /// The **first** out parameter, not the second free one: it is the space
+    /// available to the calling user, which is the same distinction the Unix
+    /// branch draws between `f_bavail` and `f_bfree`. The question a status
+    /// line answers is "will my copy fit".
+    ///
+    /// A zero return is a failure, and a failure is `None` — an empty figure
+    /// rather than a zero, which would read as a full disk.
+    pub fn space(path: &Path) -> Option<Space> {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetDiskFreeSpaceExW(
+                directory: *const u16,
+                free_to_caller: *mut u64,
+                total: *mut u64,
+                total_free: *mut u64,
+            ) -> i32;
+        }
+
+        let directory = super::wide_nul(&path.to_string_lossy());
+        let (mut free, mut total, mut total_free) = (0u64, 0u64, 0u64);
+        // SAFETY: `directory` is NUL-terminated and outlives the call, and the
+        // three out parameters are live for its whole duration.
+        let answered = unsafe {
+            GetDiskFreeSpaceExW(directory.as_ptr(), &mut free, &mut total, &mut total_free)
+        };
+        (answered != 0).then_some(Space { free, total })
     }
 
     pub fn config_dir() -> Option<PathBuf> {
@@ -649,6 +685,18 @@ mod tests {
                 native
             );
         }
+    }
+
+    #[test]
+    fn a_wide_string_is_utf16_and_ends_where_win32_expects() {
+        // Win32's `W` entry points read until the NUL and would otherwise walk
+        // off the end of the buffer, so the terminator is the whole contract.
+        let wide = wide_nul("C:\\Users");
+        assert_eq!(wide.last(), Some(&0), "no terminator");
+        assert_eq!(
+            String::from_utf16(&wide[..wide.len() - 1]).unwrap(),
+            "C:\\Users"
+        );
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

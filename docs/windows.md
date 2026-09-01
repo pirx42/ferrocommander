@@ -140,6 +140,24 @@ What the bundle holds, why it holds so little of what a GTK bundle usually
 holds, and why there is a `.cmd` beside the `.exe`:
 [packaging.md](packaging.md).
 
+## The free-space figure, and its one Win32 call
+
+The status line's `free of total` was blank on Windows until 2026-09-01:
+`statvfs` has no equivalent in `std`, and the branch returned nothing.
+`GetDiskFreeSpaceExW` is the call, and it is **hand-declared** — one
+`extern "system"` block beside the `libc::statvfs` the Unix branch already
+uses — rather than pulled in with a Windows API crate for a single number.
+
+Two details worth keeping: the name is UTF-16 with a terminating NUL, because
+the `W` in the entry point is the wide-character form; and the figure taken is
+the **first** out parameter, the space available to the calling user, which is
+the same distinction the Unix branch draws between `f_bavail` and `f_bfree`.
+A zero return is a failure and shows nothing at all — an empty status line is
+honest, a `0 B free` is a full disk.
+
+The UTF-16 conversion is tested on the Linux gate. The call itself is not
+tested anywhere, for the reason the next section gives.
+
 ## `C:\` is a root; `C:` is somewhere else entirely
 
 A native Windows path ending in a drive letter and a colon, with **no**
