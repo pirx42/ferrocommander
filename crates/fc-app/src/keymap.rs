@@ -138,6 +138,8 @@ pub enum Action {
     ToggleHidden,
     /// Ctrl+Shift+C — the two files side by side, or the configured tool.
     Compare,
+    /// Ctrl+Q — show what the cursor is on in the *other* pane, following it.
+    QuickView,
     Quit,
 }
 impl Action {
@@ -157,7 +159,7 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 62] = [
+    const ALL: [Action; 63] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
@@ -219,6 +221,7 @@ impl Action {
         Action::ExchangePanes,
         Action::ToggleHidden,
         Action::Compare,
+        Action::QuickView,
         Action::Quit,
     ];
 }
@@ -633,6 +636,11 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::ToggleHidden,
     },
+    Binding {
+        key: Key::q,
+        modifiers: ModifierType::CONTROL_MASK,
+        action: Action::QuickView,
+    },
     // `Alt+F4`, not `Ctrl+Q`, since 2026-09-01: quick view took `Ctrl+Q`,
     // which is the key Total Commander gives it. On a desktop this binding
     // is mostly ceremony — the window manager takes `Alt+F4` before the
@@ -732,6 +740,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("exchange_panes", Action::ExchangePanes),
     ("toggle_hidden", Action::ToggleHidden),
     ("compare", Action::Compare),
+    ("quick_view", Action::QuickView),
     ("quit", Action::Quit),
 ];
 
@@ -1113,6 +1122,7 @@ mod tests {
                 ModifierType::CONTROL_MASK.union(ModifierType::SHIFT_MASK),
                 Action::Compare,
             ),
+            (Key::q, ModifierType::CONTROL_MASK, Action::QuickView),
             (Key::F4, ModifierType::ALT_MASK, Action::Quit),
             (Key::Right, PLAIN, Action::FocusCommandLine),
             (Key::c, ModifierType::CONTROL_MASK, Action::ClipboardCopy),

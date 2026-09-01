@@ -371,11 +371,17 @@ fn wire_selection(shell: &Rc<RefCell<Shell>>, index: usize) {
     let selection = shell.borrow().panes[index].selection().clone();
     let moved = shell.clone();
     selection.connect_selection_changed(move |_, _, _| {
-        let Ok(mut state) = moved.try_borrow_mut() else {
-            // Ours, and already in the model.
-            return;
-        };
-        state.panes[index].adopt_selection();
+        {
+            let Ok(mut state) = moved.try_borrow_mut() else {
+                // Ours, and already in the model.
+                return;
+            };
+            state.panes[index].adopt_selection();
+        }
+        // A click moves the cursor as surely as an arrow key does, and the
+        // preview follows the cursor rather than the keystroke. The borrow
+        // above is closed first, because this takes its own.
+        actions::refresh_quick_view(&moved);
     });
 }
 

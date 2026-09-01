@@ -19,23 +19,26 @@ use gtk::prelude::*;
 
 use fc_core::clipboard;
 use fc_core::config;
+use fc_core::listing::Listing;
 use fc_core::ops::{DeleteMode, Destination, Job};
-use fc_core::vfs::{LocalFs, VfsError, VfsPath};
+use fc_core::sizes::Measured;
+use fc_core::vfs::{LocalFs, VfsError, VfsPath, VirtualFs};
 
 use crate::constants::{
     CLIPBOARD_IN_ARCHIVE, CLIPBOARD_READ_LIMIT, COMMAND_IN_ARCHIVE, COMPARE_DIFFER_AT,
     COMPARE_IDENTICAL, COMPARE_IN_ARCHIVE, COMPARE_NOTHING, EDIT_IN_ARCHIVE, FAVOURITE_IN_ARCHIVE,
-    LEFT_PANE, NEW_FILE_DEFAULT, OPEN_IN_ARCHIVE, PASTE_INTO_ARCHIVE, PATTERN_DEFAULT, PROMPT_COPY,
-    PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE, PROMPT_PACK, PROMPT_PATTERN, RIGHT_PANE,
-    TITLE_COMPARE, TITLE_COMPARE_VERDICT, TITLE_COPY, TITLE_CREATE_DIR, TITLE_CREATE_FILE,
-    TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY, TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT,
-    TITLE_PACK, TITLE_UNMARK_PATTERN,
+    LEFT_PANE, NEW_FILE_DEFAULT, OPEN_IN_ARCHIVE, PASTE_INTO_ARCHIVE, PATTERN_DEFAULT,
+    PREVIEW_EMPTY_DIR, PREVIEW_FOLDER_COUNTED, PREVIEW_FOLDER_PARTIAL, PREVIEW_PARENT,
+    PREVIEW_UNREADABLE, PROMPT_COPY, PROMPT_CREATE_DIR, PROMPT_CREATE_FILE, PROMPT_MOVE,
+    PROMPT_PACK, PROMPT_PATTERN, RIGHT_PANE, TITLE_COMPARE, TITLE_COMPARE_VERDICT, TITLE_COPY,
+    TITLE_CREATE_DIR, TITLE_CREATE_FILE, TITLE_DELETE, TITLE_DRIVES, TITLE_HISTORY,
+    TITLE_MARK_PATTERN, TITLE_MOVE, TITLE_OUTPUT, TITLE_PACK, TITLE_UNMARK_PATTERN, VIEWER_EMPTY,
 };
 use crate::jobs::Packing;
 use crate::keymap::Action;
 use crate::shell::{await_listing, await_listing_or, remember, resync_watches};
 use crate::shell::{submit, submit_then, Shell, Writes};
-use crate::{command_line, constants, dialogs, jobs};
+use crate::{command_line, constants, dialogs, format, jobs};
 
 /// Carries out an action.
 ///
@@ -149,6 +152,7 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::UndoRename => undo_rename(shell),
         Action::View => start_viewing(shell),
         Action::Compare => start_compare(shell),
+        Action::QuickView => toggle_quick_view(shell),
         Action::Edit => start_editing(shell),
         Action::CreateFile => start_create_file(shell),
         Action::Reread => shell.borrow_mut().active_pane().reread(),
@@ -161,6 +165,9 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
     // command line's prompt is the same story — navigation moves it, and
     // there is no arm that could not have.
     shell.borrow().follow_active();
+    // Beside `follow_active`, and for the same reason: the preview follows
+    // the cursor, and there is no arm that could not have moved it.
+    refresh_quick_view(shell);
     // A pane that moved is a pane watching the wrong directory.
     resync_watches(shell);
     remember(shell);
@@ -828,6 +835,114 @@ pub(crate) fn start_viewing(shell: &Rc<RefCell<Shell>>) {
     dialogs::Viewer::open(&window, fs, view);
 }
 
+/// What the *other* pane shows while quick view is on (`docs/viewer.md`).
+///
+/// Pure over the listing, which is the point: decision 3's cases — a file, a
+/// directory, `..`, an empty listing — are unit tests rather than a fixture
+/// and a window, and the end-to-end suite cannot read a pane's text at all
+/// ([`docs/ui-shell.md`]).
+pub(crate) enum Preview {
+    /// A file, to be read through the viewer engine.
+    File(VfsPath),
+    /// A directory, to be summarised by counting what it holds. The **name**
+    /// rather than the path, because that is what a walk's answers come back
+    /// under — the same reason [`fc_core::sizes`] takes names.
+    Folder(String),
+    /// Nothing to show, and the line that says why.
+    Nothing(&'static str),
+}
+
+/// What the cursor is on, as something to preview.
+///
+/// `..` is checked before the row is read, because the parent row *is* a
+/// directory entry and counting the directory one is about to leave is not
+/// what the gesture means.
+pub(crate) fn preview_for(listing: &Listing) -> Preview {
+    if listing.is_parent(listing.cursor()) {
+        return Preview::Nothing(PREVIEW_PARENT);
+    }
+    let Some(entry) = listing.current() else {
+        return Preview::Nothing(PREVIEW_EMPTY_DIR);
+    };
+    if entry.is_dir() {
+        return Preview::Folder(entry.name.clone());
+    }
+    Preview::File(listing.dir().child(&entry.name))
+}
+
+/// The head of a file, as `F3` would show it.
+///
+/// The same two calls the viewer window makes — open reads the size, `render`
+/// reads one window — which is why following a cursor costs what phase 1
+/// measured and not what the file weighs (`docs/performance.md`).
+/// Unreadable is a line rather than a blank, so a pane that shows nothing is
+/// always a pane that has nothing to show.
+pub(crate) fn preview_text(fs: &dyn VirtualFs, path: &VfsPath) -> String {
+    let Ok(view) = fc_core::viewer::View::open(fs, path.clone()) else {
+        return PREVIEW_UNREADABLE.to_string();
+    };
+    match view.render(fs) {
+        Ok(text) if text.is_empty() => VIEWER_EMPTY.to_string(),
+        Ok(text) => text,
+        Err(_) => PREVIEW_UNREADABLE.to_string(),
+    }
+}
+
+/// A counted folder, as the preview says it.
+///
+/// The size is substituted **before** the name: the other order would let a
+/// folder actually called `{bytes}` have the number spliced into its own
+/// title. The compare tool's template had the same hazard from the other
+/// direction (`docs/compare.md`), and a fixed order costs nothing here
+/// because a formatted size can contain no placeholder.
+fn folder_summary(name: &str, measured: Measured) -> String {
+    let template = if measured.complete {
+        PREVIEW_FOLDER_COUNTED
+    } else {
+        PREVIEW_FOLDER_PARTIAL
+    };
+    template
+        .replace("{bytes}", &format::human_bytes(measured.bytes))
+        .replace("{name}", name)
+}
+
+/// `Ctrl+Q`: the other pane becomes a preview, or a listing again.
+///
+/// Only the flag, because the drawing is [`refresh_quick_view`] at the end of
+/// every dispatch — including this one. A toggle that also painted would be
+/// the second place that knows how, and the first to fall behind.
+pub(crate) fn toggle_quick_view(shell: &Rc<RefCell<Shell>>) {
+    shell.borrow_mut().quick_view ^= true;
+}
+
+/// Redraws the preview after anything that could have moved the cursor.
+///
+/// Called from the two places a cursor move is already reported — the end of
+/// [`dispatch`] and the selection signal that hears a click — rather than
+/// from each action that moves it, which is the arrangement the adoption plan
+/// paid to stop repeating.
+pub(crate) fn refresh_quick_view(shell: &Rc<RefCell<Shell>>) {
+    let Some(answers) = shell.borrow_mut().refresh_quick_view() else {
+        return;
+    };
+    let counting = shell.clone();
+    glib::spawn_future_local(async move {
+        while let Ok((name, measured)) = answers.recv().await {
+            let state = counting.borrow_mut();
+            // A cancelled walk can still deliver: `sizes` checks the token
+            // between folders, not inside one, so a walk already measuring
+            // when the cursor moved sends its answer anyway. Matching the
+            // name against what the preview is showing *now* is what keeps
+            // one folder's size from appearing under another folder's title.
+            if state.previewed_folder().as_deref() != Some(name.as_str()) {
+                continue;
+            }
+            let showing = state.other();
+            state.panes[showing].show_preview(&folder_summary(&name, measured));
+        }
+    });
+}
+
 /// Which two files `Ctrl+Shift+C` means (`docs/compare.md`).
 ///
 /// Total Commander's cascade: exactly two marked files in the active pane
@@ -1213,8 +1328,11 @@ pub(crate) fn start_create_file(shell: &Rc<RefCell<Shell>>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{compare_pair, ComparePair};
-    use fc_core::vfs::VfsPath;
+    use super::{compare_pair, folder_summary, preview_for, preview_text, ComparePair, Preview};
+    use fc_core::listing::Listing;
+    use fc_core::sizes::Measured;
+    use fc_core::vfs::{Entry, EntryKind, LocalFs, VfsPath};
+    use std::time::SystemTime;
 
     fn p(path: &str) -> VfsPath {
         VfsPath::new(path)
@@ -1275,5 +1393,108 @@ mod tests {
     fn no_cursor_file_or_no_partner_is_no_pair() {
         assert!(compare_pair(Vec::new(), None, Some(p("/namesake")), None).is_none());
         assert!(compare_pair(Vec::new(), Some(p("/cursor")), None, None).is_none());
+    }
+
+    // One test per case of decision 3 (`docs/viewer.md`): what the other pane
+    // shows is a pure function of this listing, which is the only part of the
+    // feature any test can read — the end-to-end suite cannot see a pane's
+    // text at all.
+
+    fn entry(name: &str, kind: EntryKind) -> Entry {
+        Entry {
+            name: name.to_string(),
+            kind,
+            size: 0,
+            modified: SystemTime::UNIX_EPOCH,
+            attributes: Default::default(),
+            hidden: false,
+        }
+    }
+
+    /// A listing whose row 0 is `..`, with the cursor moved off it.
+    ///
+    /// `/dir` has a parent, so the model offers the row and starts the cursor
+    /// on it — which is the case below, and not the one these two want.
+    fn on_the_first_row(entries: Vec<Entry>) -> Listing {
+        let mut listing = Listing::new(p("/dir"), entries);
+        listing.move_cursor_by(1);
+        listing
+    }
+
+    #[test]
+    fn a_file_under_the_cursor_is_previewed_by_its_path() {
+        let shown = preview_for(&on_the_first_row(vec![entry("a.txt", EntryKind::File)]));
+        assert!(matches!(shown, Preview::File(path) if path == p("/dir/a.txt")));
+    }
+
+    #[test]
+    fn a_directory_under_the_cursor_is_previewed_by_being_counted() {
+        let shown = preview_for(&on_the_first_row(vec![entry("sub", EntryKind::Dir)]));
+        assert!(matches!(shown, Preview::Folder(name) if name == "sub"));
+    }
+
+    #[test]
+    fn the_parent_row_is_not_the_directory_being_left() {
+        // `..` is a directory entry, so it has to be taken before the kind is
+        // looked at — otherwise the preview counts the tree the cursor is on
+        // its way out of, which is a recursive walk of everything around it.
+        let listing = Listing::new(p("/dir"), vec![entry("sub", EntryKind::Dir)]);
+        assert!(listing.is_parent(listing.cursor()), "the case moved");
+        assert!(matches!(
+            preview_for(&listing),
+            Preview::Nothing(super::PREVIEW_PARENT)
+        ));
+    }
+
+    #[test]
+    fn an_empty_listing_previews_a_line_rather_than_a_blank() {
+        // The root, which is the one directory with no `..` row to stand on.
+        let listing = Listing::new(p("/"), Vec::new());
+        assert!(matches!(
+            preview_for(&listing),
+            Preview::Nothing(super::PREVIEW_EMPTY_DIR)
+        ));
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_opened_says_so() {
+        // The unreadable case lives in the reading half rather than the pure
+        // one: a listing cannot know that a row it holds has since gone.
+        let gone = p("/nonexistent-directory-for-the-quick-view-test/file.txt");
+        assert_eq!(preview_text(&LocalFs, &gone), super::PREVIEW_UNREADABLE);
+    }
+
+    #[test]
+    fn an_incomplete_count_says_it_is_incomplete() {
+        let complete = folder_summary(
+            "sub",
+            Measured {
+                bytes: 1024,
+                complete: true,
+            },
+        );
+        let partial = folder_summary(
+            "sub",
+            Measured {
+                bytes: 1024,
+                complete: false,
+            },
+        );
+        assert_ne!(complete, partial);
+        assert!(complete.contains("sub") && partial.contains("sub"));
+    }
+
+    #[test]
+    fn a_folder_named_like_the_placeholder_keeps_its_own_name() {
+        // The substitution order, pinned: names go in last, so a folder
+        // called `{bytes}` cannot have the number spliced into its title.
+        let summary = folder_summary(
+            "{bytes}",
+            Measured {
+                bytes: 0,
+                complete: true,
+            },
+        );
+        assert!(summary.contains("{bytes}"));
     }
 }

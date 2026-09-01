@@ -54,6 +54,7 @@
 | `Ctrl+F3` / `Ctrl+F4` / `Ctrl+F5` / `Ctrl+F6` | Sort by name / ext / date / size |
 | `Ctrl+H` | Show or hide the dot-files |
 | `Ctrl+Shift+C` | Compare two files by content — see [compare.md](compare.md) |
+| `Ctrl+Q` | Quick view: the other pane shows what the cursor is on — see [viewer.md](viewer.md) |
 | `Ctrl+S` | Narrow the pane as you type |
 | `Esc` | Stop a running branch walk; otherwise stop narrowing |
 | `Alt+F4` | Quit — on macOS `Cmd+Q` does it too |
@@ -586,6 +587,7 @@ the keystroke it was written from. Case and modifier order do not matter when
 | `exchange_panes` | `ctrl+u` |
 | `toggle_hidden` | `ctrl+h` |
 | `compare` | `ctrl+shift+c` |
+| `quick_view` | `ctrl+q` |
 | `quit` | `alt+F4` |
 
 <!-- /generated: action names -->

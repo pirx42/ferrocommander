@@ -94,6 +94,7 @@ on macOS yet — what a first real session should look at is written down in
 | Marking | `Space`, `Insert`, the `Num` keys, by wildcard, by extension — and `Num /` brings back what the last operation spent |
 | Archives | `Enter` on a `.zip`, `.tar` or `.tar.gz` walks into it like a folder; `Alt+F5` packs |
 | Search | `Alt+F7`, by name or content, results streaming as they are found |
+| `Ctrl+Q` | quick view: the other pane shows whatever the cursor is on |
 | `Ctrl+B` | the whole tree below a pane as one flat list |
 | `Ctrl+D` | favourite directories, maintained from inside the list |
 | `Alt+Shift+Enter` | count what the marked folders actually hold |

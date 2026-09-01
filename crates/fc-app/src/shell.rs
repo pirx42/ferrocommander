@@ -19,11 +19,13 @@ use gtk::prelude::*;
 use fc_core::config;
 use fc_core::listing::Loading;
 use fc_core::ops::{Job, JobHandle, JobQueue};
+use fc_core::sizes::Sizes;
 use fc_core::vfs::VfsPath;
 
+use crate::actions::{preview_for, preview_text, Preview};
 use crate::constants::{
-    CONFLICT_PROMPT, PANE_COUNT, PROGRESS_DELAY, SETTINGS_SAVE_DELAY, SETTINGS_UNWRITABLE,
-    TITLE_CONFLICT,
+    CONFLICT_PROMPT, PANE_COUNT, PREVIEW_FOLDER_COUNTING, PROGRESS_DELAY, SETTINGS_SAVE_DELAY,
+    SETTINGS_UNWRITABLE, TITLE_CONFLICT,
 };
 use crate::keymap::Keymap;
 use crate::pane::PaneView;
@@ -34,6 +36,16 @@ use fc_core::vfs::LocalFs;
 pub(crate) struct Shell {
     pub(crate) panes: [PaneView; PANE_COUNT],
     pub(crate) active: usize,
+    /// Whether the inactive pane is a preview rather than a listing
+    /// (`Ctrl+Q`, [`docs/viewer.md`]).
+    ///
+    /// A flag rather than a pane index, and the *inactive* pane rather than a
+    /// remembered one: `Tab` then keeps its plain meaning — the preview
+    /// simply follows the keyboard to whichever pane it is not in — and no
+    /// key needs a special case for a mode. Not persisted: a file manager
+    /// that starts with one pane showing the head of a text file has to be
+    /// explained, and the key is cheap to press again.
+    pub(crate) quick_view: bool,
     /// Every file operation goes through here, so they run one at a time and
     /// off the UI thread.
     queue: JobQueue,
@@ -101,6 +113,7 @@ impl Shell {
         let mut shell = Shell {
             panes,
             active: 0,
+            quick_view: false,
             command_line,
             queue: JobQueue::new(),
             window: window.downgrade(),
@@ -169,6 +182,62 @@ impl Shell {
         // one question.
         self.command_line
             .follow(&self.panes[self.active].shown_dir());
+    }
+
+    /// Puts what the active pane's cursor is on into the other pane, when
+    /// quick view is on.
+    ///
+    /// Called from the two places a cursor can move — the end of `dispatch`,
+    /// beside [`follow_active`](Self::follow_active), and the selection
+    /// signal that hears a click — rather than from every action that moves
+    /// it. The last plan in this repository paid for the other arrangement:
+    /// a rule everybody has to remember is a rule that fails the week nobody
+    /// does.
+    pub(crate) fn refresh_quick_view(&mut self) -> Option<Sizes> {
+        // The pane with the keyboard is always a listing: `Tab` moves the
+        // preview across rather than leaving one behind, which is what makes
+        // the flag enough and a remembered pane index unnecessary.
+        let showing = self.other();
+        self.panes[self.active].show_listing();
+        if !self.quick_view {
+            self.panes[showing].show_listing();
+            return None;
+        }
+        match preview_for(self.panes[self.active].listing()) {
+            Preview::Nothing(line) => {
+                self.panes[showing].show_preview(line);
+                None
+            }
+            Preview::File(path) => {
+                let fs = self.panes[self.active].fs();
+                self.panes[showing].show_preview(&preview_text(fs.as_ref(), &path));
+                None
+            }
+            // The name first and the figures when they land: a walk is asked
+            // for, never waited for (`docs/viewer.md`, decision 3). The text
+            // is set only when a walk actually starts, so a count already on
+            // the screen survives the keystrokes that did not move the cursor.
+            Preview::Folder(name) => {
+                let dir = self.panes[self.active].listing().dir().clone();
+                let answers = self.panes[showing].preview_folder(dir, name.clone())?;
+                self.panes[showing].show_preview(&PREVIEW_FOLDER_COUNTING.replace("{name}", &name));
+                Some(answers)
+            }
+        }
+    }
+
+    /// The folder the preview is showing, if it is showing one.
+    ///
+    /// What a walk's answer is checked against before it is drawn: the walk
+    /// that produced it may belong to a row the cursor has since left.
+    pub(crate) fn previewed_folder(&self) -> Option<String> {
+        if !self.quick_view {
+            return None;
+        }
+        match preview_for(self.panes[self.active].listing()) {
+            Preview::Folder(name) => Some(name),
+            _ => None,
+        }
     }
 
     /// What the settings file would say if it were written right now.

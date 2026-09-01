@@ -516,6 +516,29 @@ pub const VIEWER_HEIGHT: i32 = 700;
 /// like it failed to load.
 pub const VIEWER_EMPTY: &str = "(empty file)";
 
+/// The pane's two faces while quick view is on ([`docs/viewer.md`]): its own
+/// listing, or a preview of what the *other* pane's cursor is on. Named
+/// pages of a stack rather than a widget swapped in and out, so the listing
+/// keeps its selection, its scroll position and its watch while hidden —
+/// leaving quick view restores a pane rather than rebuilding one.
+pub const PANE_PAGE_LIST: &str = "list";
+pub const PANE_PAGE_PREVIEW: &str = "preview";
+
+/// What the preview says when the cursor is on something with no content to
+/// show. A line rather than a blank: a pane that has gone empty reads as
+/// broken, and a pane still showing the last file reads as stale.
+pub const PREVIEW_PARENT: &str = "(the parent directory)";
+pub const PREVIEW_UNREADABLE: &str = "(cannot be read)";
+pub const PREVIEW_EMPTY_DIR: &str = "(nothing here)";
+
+/// A folder's summary while its walk is still running, and once it lands —
+/// the owner's decision that a directory shows what it holds rather than a
+/// placeholder. The first is what a cursor passing through sees, and is why
+/// the walk is never waited for.
+pub const PREVIEW_FOLDER_COUNTING: &str = "{name}\n\ncounting…";
+pub const PREVIEW_FOLDER_COUNTED: &str = "{name}\n\n{bytes}";
+pub const PREVIEW_FOLDER_PARTIAL: &str = "{name}\n\n{bytes} (some of it unreadable)";
+
 /// The compare window's title: both files, so a person with several open
 /// knows which pair is which — and how the end-to-end suite finds it.
 pub const TITLE_COMPARE: &str = "{left} \u{2194} {right}";

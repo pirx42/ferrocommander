@@ -18,12 +18,12 @@ use fc_core::vfs::constants::SEPARATOR;
 use fc_core::vfs::{VfsPath, VirtualFs};
 
 use crate::constants::{
-    BRANCH_MARKER, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_PANE, CLASS_PANE_ACTIVE, CLASS_PATH_BAR,
-    CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT, COLUMN_TITLE_NAME,
-    COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME,
-    COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER, PAGE_OVERLAP_ROWS, PAGE_ROWS_FALLBACK,
-    PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING,
-    TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
+    BRANCH_MARKER, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_OUTPUT, CLASS_PANE, CLASS_PANE_ACTIVE,
+    CLASS_PATH_BAR, CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE, COLUMN_TITLE_EXT,
+    COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE, COLUMN_WIDTH_EXT,
+    COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER, PAGE_OVERLAP_ROWS,
+    PAGE_ROWS_FALLBACK, PANE_PAGE_LIST, PANE_PAGE_PREVIEW, PANE_SPACING, PATH_BAR_ERROR_SEPARATOR,
+    SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
@@ -245,6 +245,19 @@ pub struct PaneView {
     store: gio::ListStore,
     selection: gtk::SingleSelection,
     column_view: gtk::ColumnView,
+    /// The pane's two faces: its listing, and the quick-view preview
+    /// ([`docs/viewer.md`]). A stack rather than a swap, so the listing keeps
+    /// its selection, scroll position and watch while it is hidden.
+    pages: gtk::Stack,
+    preview: gtk::Label,
+    /// The folder this pane's *preview* is counting, and the token that stops
+    /// it. Separate from `measuring`, which belongs to this pane's own
+    /// `Alt+Shift+Enter`: one is about what this pane was asked to count, the
+    /// other about what the other pane's cursor is passing over.
+    ///
+    /// The path is carried so a redraw can tell "the cursor moved to another
+    /// folder" from "the cursor is still on this one".
+    previewing: Option<(VfsPath, CancelToken)>,
     /// Everything that belongs to *what this pane is showing* rather than to
     /// the pane itself — and therefore everything `Ctrl+U` carries across.
     shown: Contents,
@@ -407,11 +420,27 @@ impl PaneView {
             .build();
         filter_bar.add_css_class(CLASS_FILTER_BAR);
 
+        let preview = gtk::Label::builder()
+            .xalign(XALIGN_LEFT)
+            .yalign(XALIGN_LEFT)
+            .selectable(true)
+            .build();
+        preview.add_css_class(CLASS_OUTPUT);
+        let preview_scroller = gtk::ScrolledWindow::builder()
+            .child(&preview)
+            .vexpand(true)
+            .hexpand(true)
+            .build();
+
+        let pages = gtk::Stack::new();
+        pages.add_named(&scroller, Some(PANE_PAGE_LIST));
+        pages.add_named(&preview_scroller, Some(PANE_PAGE_PREVIEW));
+
         let root = gtk::Box::new(gtk::Orientation::Vertical, PANE_SPACING);
         root.add_css_class(CLASS_PANE);
         root.append(&path_bar);
         root.append(&filter_bar);
-        root.append(&scroller);
+        root.append(&pages);
         root.append(&status_line);
 
         let mut pane = PaneView {
@@ -432,6 +461,9 @@ impl PaneView {
             store,
             selection,
             column_view,
+            pages,
+            preview,
+            previewing: None,
             scroller,
             wanted: None,
             focus_on_arrival: None,
@@ -1385,6 +1417,68 @@ impl PaneView {
         // from the marks and now includes this folder in.
         self.status
             .set_text(&crate::jobs::selection_status(&self.shown.listing));
+    }
+
+    /// Shows this pane's own listing again, and stops any walk its preview
+    /// had started.
+    ///
+    /// Called on the active pane after every keystroke without first asking
+    /// whether it is a preview: the stack ignores a page it is already on,
+    /// and a question whose answer changes nothing is a question worth not
+    /// asking.
+    pub fn show_listing(&mut self) {
+        self.pages.set_visible_child_name(PANE_PAGE_LIST);
+        self.stop_previewing();
+    }
+
+    /// Shows `text` in place of this pane's listing.
+    ///
+    /// The listing is not touched — it is the stack's other page, keeping its
+    /// selection, its scroll position and its watch — so leaving quick view
+    /// is a page change and nothing else.
+    pub fn show_preview(&self, text: &str) {
+        self.preview.set_text(text);
+        self.pages.set_visible_child_name(PANE_PAGE_PREVIEW);
+    }
+
+    /// Starts counting `folder` for the preview, stopping whatever the last
+    /// cursor row started.
+    ///
+    /// **Cancellation, not delay** — the rule the measurement settled
+    /// (`docs/performance.md`): a walk costs 0.058 ms to start and runs on
+    /// behind the keystroke, so what keeps a held-down arrow key from leaving
+    /// a queue of walks churning the disk is that each move stops the last.
+    ///
+    /// `None` when this is the folder already being previewed, which is not
+    /// the same nothing: the preview is redrawn after *every* keystroke, not
+    /// only the ones that moved the cursor, so restarting unconditionally
+    /// would throw away a finished count and go back to "counting…" every
+    /// time somebody pressed a key.
+    pub fn preview_folder(&mut self, dir: VfsPath, folder: String) -> Option<Sizes> {
+        let target = dir.child(&folder);
+        if self
+            .previewing
+            .as_ref()
+            .is_some_and(|(counting, _)| *counting == target)
+        {
+            return None;
+        }
+        self.stop_previewing();
+        let cancel = CancelToken::new();
+        self.previewing = Some((target, cancel.clone()));
+        Some(sizes::spawn(
+            Arc::clone(&self.shown.fs),
+            dir,
+            vec![folder],
+            cancel,
+        ))
+    }
+
+    /// Stops the walk this pane's preview started, if one is running.
+    fn stop_previewing(&mut self) {
+        if let Some((_, cancel)) = self.previewing.take() {
+            cancel.cancel();
+        }
     }
 
     /// Stops whatever this pane has running in the background.

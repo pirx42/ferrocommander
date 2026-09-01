@@ -30,7 +30,8 @@ cross-references instead of duplication.
 - [multi-rename.md](multi-rename.md) — Ctrl+M: why the preview is the
   rename, what the rules are, and how one batch of undo works.
 - [viewer.md](viewer.md) — the F3 viewer: why it never reads the file, how
-  paging works, and what encoding detection amounts to.
+  paging works, what encoding detection amounts to, and `Ctrl+Q` quick view —
+  the same engine drawn in the other pane, following the cursor.
 - [command-line.md](command-line.md) — the command line at the bottom: how a
   typed line is run, why `cd` is read rather than spawned, and when output is
   shown.

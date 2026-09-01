@@ -486,7 +486,15 @@ meaning under Wayland at all, and `spawn_app` now pins `GDK_BACKEND` beside
 `GDK_BACKEND=wayland` in the environment and, without the pin, every test
 fails the same way.
 
-**A scroll offset is the one thing this suite cannot see.** It is not a
+**A pane's own text is invisible to it as well.** The rows are drawn by the
+widget, so what a pane *says* — a row's name, and the quick-view preview that
+replaces the whole listing ([viewer.md](viewer.md)) — can only be reached
+indirectly: through what a key pressed on it goes on to do, or through what a
+click can and cannot hit. That is a real limit on what a feature whose whole
+point is on-screen text can be proven to do here, and it is why quick view's
+five preview cases are unit-tested against the listing rather than end to end.
+
+**A scroll offset is invisible to it too.** It is not a
 window title, a file on disk or a key press, so `xdotool` has no way to read
 it — which is why the per-directory scroll memory is checked by
 `scripts/check-scroll-memory.sh` instead: it drives the real app and leaves

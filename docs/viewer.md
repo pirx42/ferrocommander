@@ -63,6 +63,61 @@ The window is titled `<name> — <percent>%`, which is both how a person tells t
 open viewers apart and the only thing about the viewer the end-to-end suite can
 see — so it is what the paging test asserts on.
 
+## Quick view — `Ctrl+Q`, the same engine in the other pane
+
+`Ctrl+Q` turns the pane *without* the keyboard into a window onto whatever
+the cursor is on, following it as it moves: arrow through a directory and
+watch the files go by. The content is the same `View::open` plus one
+`render` the `F3` window makes — same engine, second surface, which is why
+this is a section here rather than a document of its own.
+
+It is **strictly a preview**. The keyboard never enters it, `Tab` keeps its
+plain meaning, and the preview simply follows the keyboard to whichever pane
+it is not in — so there is no second focus state and no key whose meaning
+depends on a mode. `F3` is one key away when somebody wants to read rather
+than glance, and it already has the paging, the hex mode and the encodings.
+
+The mode is **transient**: a file manager that starts with one pane showing
+the head of a text file has to be explained, and the key is cheap to press
+again.
+
+The listing underneath is never torn down. The pane is a `gtk::Stack` with
+two pages, so leaving quick view restores the pane — cursor, marks, scroll
+position and directory watch — rather than rebuilding it.
+
+What the cursor is on decides what is shown, and that decision
+(`preview_for` in `actions.rs`) is a pure function with a unit test per case:
+
+| Under the cursor | The other pane shows |
+|---|---|
+| A file | its head, as `F3` would |
+| A directory | its name, then what it holds once counted |
+| `..` | a line saying so — the directory being left is not a thing to count |
+| A file that cannot be opened | a line saying so |
+| Nothing (an empty listing) | a line saying so |
+
+A directory is the case that costs something: counting one is the recursive
+walk `Alt+Shift+Enter` exists as a deliberate key for. So **the summary is
+asked for, never waited for** — the walk goes to `fc_core::sizes` on a worker,
+the name appears immediately, the figures when they land, and each cursor move
+cancels the walk the last one started. That is cancellation rather than a
+delay, and the measurement is why: starting a walk costs 0.058 ms, so a held
+arrow key is not slowed by starting them — only by letting them pile up
+([performance.md](performance.md) § *What one step of the quick view costs*).
+
+A cancelled walk can still deliver, because the token is checked between
+folders rather than inside one. So an answer is matched against the folder
+the preview is showing *now* before it is drawn, which is what keeps one
+folder's size from appearing under another folder's name.
+
+**What no test can assert is the text on the screen.** The end-to-end suite
+reads window titles, the log, the settings file and the filesystem — never a
+pane's contents ([ui-shell.md](ui-shell.md)). So the engine's own tests carry
+what is shown, the unit tests carry which of the five cases applies, and the
+end-to-end tests carry what is left: that `Ctrl+Q` stopped quitting, that a
+previewed pane has no rows to click and gets them back, and that the preview
+follows the keyboard.
+
 ## F3 works inside an archive; F4 does not
 
 The viewer is handed the pane's own backend, so `F3` on a file inside an

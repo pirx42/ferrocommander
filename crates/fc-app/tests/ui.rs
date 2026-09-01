@@ -97,6 +97,11 @@ const DEFAULT_EXT_WIDTH: i32 = 70;
 /// than imported, like every other string these tests look for.
 const STYLESHEET_REJECTED: &str = "stylesheet rule rejected";
 
+/// A point well down the *right* pane, past its first rows. The screen is
+/// 1400 wide and the two panes split it, so this is in the right half
+/// whatever the divider does with the odd pixel.
+const RIGHT_PANE_ROW: (i32, i32) = (1000, 500);
+
 /// A home with `src/` to work in and `dst/` to land in.
 fn arrange(home: &Path) {
     use std::fs;
@@ -126,6 +131,15 @@ fn with_a_tall_directory(home: &Path) {
     arrange(home);
     for index in 0..TALL_DIRECTORY_ROWS {
         std::fs::write(home.join(format!("src/row{index:03}.txt")), "x").unwrap();
+    }
+}
+
+/// Same, with the rows in `dst` instead — so the *right* pane is the one with
+/// something to click.
+fn with_a_tall_destination(home: &Path) {
+    arrange(home);
+    for index in 0..TALL_DIRECTORY_ROWS {
+        std::fs::write(home.join(format!("dst/row{index:03}.txt")), "x").unwrap();
     }
 }
 
@@ -1344,6 +1358,128 @@ fn f3_does_nothing_on_a_directory_or_on_the_parent_row() {
     app.key("F3");
     app.settle();
     assert!(!app.has_dialog("0%"), "a viewer opened on a directory");
+}
+
+// Quick view (`Ctrl+Q`, docs/viewer.md). What these can honestly assert is
+// bounded: the suite reads the window title, the log, the settings file and
+// the filesystem — never a pane's text. So the *content* of a preview is the
+// engine's tests to carry, and what is left here is that the key stopped
+// quitting, that the previewed pane comes back with its place intact, and
+// that the preview follows the keyboard instead of sticking to one side.
+
+#[test]
+fn ctrl_q_previews_instead_of_quitting() {
+    // It quit until 2026-09-01. That it does not any more is checked by the
+    // app still being there to answer the next key — and by every other test
+    // in this file, which close with `Alt+F4` through the harness.
+    let app = in_src_and_dst(arrange);
+
+    app.key("ctrl+q");
+    app.settle();
+
+    app.key("F7");
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_NEW_DIR);
+}
+
+#[test]
+fn a_previewed_pane_comes_back_where_it_was() {
+    // The listing is the other page of a stack rather than a widget torn down
+    // and rebuilt, and the cursor is what proves it: `nested` is row 1, so a
+    // pane that came back rebuilt would have its cursor on `..` and this
+    // `Return` would go to the home directory instead of into `nested`.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down"]);
+
+    // The keyboard has to be elsewhere for this pane to be the previewed one.
+    app.key("Tab");
+    app.key("ctrl+q");
+    app.settle();
+    app.key("ctrl+q");
+    app.settle();
+    app.key("Tab");
+
+    app.key("Return");
+    await_panes_at(&app, "/src/nested", "/dst");
+}
+
+#[test]
+fn a_previewed_pane_has_no_rows_to_click() {
+    // The one thing the suite *can* see about a preview being on the screen:
+    // rows that are not there cannot be clicked. Both halves are in one test,
+    // because either alone would pass against a `Ctrl+Q` that did nothing at
+    // all — which is the shape of test this repository has twice caught
+    // itself writing.
+    //
+    // A click moves the clicked pane's cursor without giving it the keyboard,
+    // and `F5` on `..` with nothing marked opens no dialog. So the dialog is
+    // the answer to "did the click find a row".
+    let app = in_src_and_dst(with_a_tall_destination);
+
+    app.click(RIGHT_PANE_ROW);
+    app.key("Tab");
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_COPY);
+
+    // The right pane back on `..`, and the keyboard back on the left — which
+    // makes the right one the preview.
+    app.key("Home");
+    app.key("Tab");
+    app.key("ctrl+q");
+    app.settle();
+
+    app.click(RIGHT_PANE_ROW);
+    // Tab hands the right pane the keyboard, and with it its listing back —
+    // with the cursor exactly where the click could not move it.
+    app.key("Tab");
+    app.key("F5");
+    app.settle();
+    assert!(
+        !app.has_dialog(DIALOG_COPY),
+        "the click reached a row of a pane that was supposed to be a preview"
+    );
+
+    // And the rows come back. Without this the test would pass just as well
+    // against a pane that never stopped being a preview, which is the same
+    // hole from the other side.
+    app.key("ctrl+q");
+    app.settle();
+    app.key("Tab");
+    app.click(RIGHT_PANE_ROW);
+    app.key("Tab");
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_COPY);
+}
+
+#[test]
+fn the_preview_follows_the_keyboard_rather_than_a_pane() {
+    // `Tab` keeps its plain meaning: the preview is simply whichever pane the
+    // keyboard is not in. So both panes stay drivable while the mode is on,
+    // one after the other — which is also what says the pane that stopped
+    // being a preview stopped being one.
+    let app = in_src_and_dst(|home| {
+        arrange(home);
+        std::fs::create_dir(home.join("dst/inner")).unwrap();
+    });
+
+    app.key("ctrl+q");
+    app.settle();
+
+    // The right pane takes the keyboard, and with it its own rows back.
+    app.key("Tab");
+    app.keys(&["Home", "Down", "Return"]);
+    await_panes_at(&app, "/src", "/dst/inner");
+
+    // And the left one, which has spent that time as the preview.
+    app.key("Tab");
+    app.keys(&["Home", "Down", "Return"]);
+    await_panes_at(&app, "/src/nested", "/dst/inner");
 }
 
 #[test]
