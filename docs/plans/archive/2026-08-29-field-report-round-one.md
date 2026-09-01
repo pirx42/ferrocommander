@@ -140,7 +140,7 @@ is that a setting the app owns is written as it changes — five more of them
 is not new machinery.
 
 The job manager is now the largest item, and the only one with genuine
-design in it. The queue already exists in `tc-core` and already runs jobs one
+design in it. The queue already exists in `fc-core` and already runs jobs one
 after another, so what is missing is a window over it, not an engine under
 it — but "several at once" is a change to the queue's own shape, and the
 rule that closing the window leaves jobs running is the part that has to be

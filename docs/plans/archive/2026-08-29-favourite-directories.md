@@ -137,7 +137,7 @@ for `favourites` is **"the add never reaches the file"**. That is what phase
 
 **The two-column row is a deliberate blind spot.** The end-to-end suite can
 press keys and look at the filesystem; it cannot read the text in a label
-(`crates/tc-app/tests/harness/`), which is the same limit the architecture
+(`crates/fc-app/tests/harness/`), which is the same limit the architecture
 review recorded in its § 5. So when the row builder comes out of `choose_one`,
 what stays covered is the part with logic in it — which value each row maps to
 — by the existing drive tests and the new favourites ones. That a row *shows*
@@ -146,7 +146,7 @@ rather than papered over.
 
 ### Phase 1 — the setting
 
-`tc-core::config`: a `Favourite { name, path }`, `Settings::favourites` as a
+`fc-core::config`: a `Favourite { name, path }`, `Settings::favourites` as a
 `Vec`, and `remember_favourite` / `forget_favourite` beside
 `remember_command`, whose de-duplication rule they follow. Round-trip tests,
 the hand-written-file test, the malformed-entry test. `config.md` gains the
@@ -254,7 +254,7 @@ state than a note explaining that there is nothing above it.
 Re-reading the four commits as one diff found three things, all now fixed:
 
 - **Two stale counts.** `dialogs/` held four windows with state of their own
-  and now holds five; `crates/tc-app/src/CLAUDE.md` and
+  and now holds five; `crates/fc-app/src/CLAUDE.md` and
   [ui-shell.md](../../ui-shell.md) both said four. The dialog inventory in
   ui-shell.md had no row for `Ctrl+D` either.
 - **A rationale written twice.** `favourites.rs` restated `choose_one`'s
@@ -264,5 +264,5 @@ Re-reading the four commits as one diff found three things, all now fixed:
   `RefCell` and then called a hook while the guard was alive — including
   `*list.borrow_mut() = (hook)(…)`, where the place expression is evaluated
   first. All safe today, and all exactly the shape
-  `crates/tc-app/src/CLAUDE.md` says this crate does not write, which is the
+  `crates/fc-app/src/CLAUDE.md` says this crate does not write, which is the
   point: the rule is what keeps it safe tomorrow.

@@ -81,7 +81,7 @@ the next key somebody binds cannot silently take a text field's.
 | B2 | `command-line.md:18` | "A printable key that no binding claims starts a command … the only way in from the keyboard" | `→` is the way in; letters search |
 | B3 | `command-line.md:83` | "`Ctrl+C` is the entry's own — the keymap does not bind it" | the keymap binds it, which is finding A1 |
 | B4 | `vfs.md:11` | the `VirtualFs` listing | omits `fn space()` |
-| B5 | `tc-core/src/CLAUDE.md` | the module table | omits `clipboard.rs` |
+| B5 | `fc-core/src/CLAUDE.md` | the module table | omits `clipboard.rs` |
 | B6 | `ui-shell.md:11` | the widget tree | omits the drive bar, the command line, the filter bar and the status line; shows `ApplicationWindow → Paned`, but the window's child is a `Box` |
 | B7 | `ui-shell.md:56` | progress dialog answers "cancel" | cancel **or** Background |
 | B8 | `archives.md:234` | what an archive refuses | omits `Enter`, `Ctrl+C`, `Ctrl+X` and `Ctrl+V` |
@@ -133,7 +133,7 @@ findings: a grep cannot tell a claim from a reference.
 | B10 | `ops.md:278` | the probe table names `a_move_within_one_filesystem_reads_no_bytes` | the test is `a_move_within_one_filesystem_neither_reads_nor_walks` |
 | B11 | `ops.md:15` | the Jobs table: `Copy`, `Move`, `Delete`, `CreateDir` | `Job::CreateFile` is missing — `Shift+F4`, which `keymap.md` documents at length |
 | B12 | `vfs/CLAUDE.md` | "**Only** `to_std_path`, `mount_points`, `render_attributes` and the two `unix_mode` bridges escape it" | fourteen functions leave `platform`, including `space`, `config_dir`, `trash_error` and `root_entries` |
-| B13 | `ui-shell.md:387` | `./target/release/tc-app` | the binary is `ferrocommander` — `packaging.md` explains the `[[bin]]` rename two files away |
+| B13 | `ui-shell.md:387` | `./target/release/fc-app` | the binary is `ferrocommander` — `packaging.md` explains the `[[bin]]` rename two files away |
 | B14 | `ui-shell.md:274` | "Both panes open at the user's home directory. Remembering the last directory is config persistence — phase 3" | phase 3 shipped; the panes open where they were left |
 | B15 | `ui-shell.md:277` | "Phase D puts the reason in the path bar" | it is in the path bar (`PATH_BAR_ERROR_SEPARATOR`), and `keymap.md` documents the rendering |
 | B16 | `vfs.md:69` | "Phase 6's archives **will** not [have a recycle bin]" | they shipped, and they do not |
@@ -199,8 +199,8 @@ which is the argument for generating the list rather than typing it.
 Recorded because a review that only lists faults says nothing about its own
 coverage:
 
-- **Every module table.** `tc-app/src/`, `vfs/`, `listing/`, `ops/` and
-  `archive/` list exactly the files that are there. Only `tc-core/src/` is
+- **Every module table.** `fc-app/src/`, `vfs/`, `listing/`, `ops/` and
+  `archive/` list exactly the files that are there. Only `fc-core/src/` is
   wrong, and only by `clipboard.rs` (B5).
 - **The skills index and the trigger table.** Every file in `docs/skills/` is
   named by `docs/skills/CLAUDE.md` *and* by the root trigger table, both
@@ -275,7 +275,7 @@ row, and an action added in code with no row; the round trip goes red when
 
 **Phase 5 — the measurement.** **Done**, in a section of its own in
 `performance.md` and reproducible with
-`cargo run --release -p tc-core --example bench_type_ahead`.
+`cargo run --release -p fc-core --example bench_type_ahead`.
 
 It turned out to be fine, which was the expectation and is not the point:
 **0.2 µs for a hit a few rows down, 1.2 ms for a letter that matches nothing**

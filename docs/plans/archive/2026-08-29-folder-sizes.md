@@ -71,7 +71,7 @@ listing with the one method that sets it, the key, and the arrival loop.
 
 ### The third walk
 
-This would be the **third** breadth-first `read_dir` loop in `tc-core`, after
+This would be the **third** breadth-first `read_dir` loop in `fc-core`, after
 `search` and `branch`. Two was a considered decision — the
 [branch-view plan](2026-08-29-branch-view.md) recorded why they stayed
 separate — and three is not the same question. Two similar loops are a
@@ -158,7 +158,7 @@ differ.
 
 ### Phase 1 — the size, and the listing that holds it
 
-`tc-core`: the summing walk, cancellable, reporting per folder; the
+`fc-core`: the summing walk, cancellable, reporting per folder; the
 `measured` flag beside `selected`; the one method that records an answer by
 name; and `reload` forgetting them by construction. Headless tests, including
 the empty-folder-measures-zero case.
@@ -259,7 +259,7 @@ closure, a per-entry closure and a control-flow enum, which is more shape than
 the duplication costs.
 
 So **the reasoning is shared instead of the code**: the walk shape and its
-three rules are written once, in `crates/tc-core/src/CLAUDE.md`, and each of
+three rules are written once, in `crates/fc-core/src/CLAUDE.md`, and each of
 the three modules points at it and states only what is particular to it. That
 replaced three paragraphs that had been restating the same argument at each
 other.

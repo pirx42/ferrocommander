@@ -18,18 +18,18 @@ Commits 525b96b (0) / dfd4cbc (A) / 2c8bc2d (B) / 57a7660 (C) / c09aaf0 (D) /
 
 ## 1. Scope
 
-**One sentence:** a runnable `tc-app` window with two panes that list real
-directories from a `tc-core` local VFS, navigable with Tab / arrows / Enter /
+**One sentence:** a runnable `fc-app` window with two panes that list real
+directories from a `fc-core` local VFS, navigable with Tab / arrows / Enter /
 Backspace — nothing else.
 
 ### In scope
 
-- Cargo workspace `tc-core` + `tc-app`, toolchain pinned, green gate runnable.
-- `tc-core::vfs` — `VirtualFs` trait limited to **reading a directory**, plus
+- Cargo workspace `fc-core` + `fc-app`, toolchain pinned, green gate runnable.
+- `fc-core::vfs` — `VirtualFs` trait limited to **reading a directory**, plus
   the `LocalFs` implementation.
-- `tc-core::listing` — directory model: entries, sort order, cursor position,
+- `fc-core::listing` — directory model: entries, sort order, cursor position,
   parent entry, hidden-file flag. Pure, headless-tested.
-- `tc-app` — one `ApplicationWindow`, two pane widgets (`gtk::ColumnView`)
+- `fc-app` — one `ApplicationWindow`, two pane widgets (`gtk::ColumnView`)
   with columns name / ext / size / date, a path label per pane, active-pane
   highlight.
 - Keyboard: Tab (switch pane), Up/Down/Home/End (cursor), Enter (descend into
@@ -43,7 +43,7 @@ selection, Ctrl+S filter, drive bar, config persistence (phase 3) · viewer
 bar, mouse interaction, icons, and any writing to the filesystem — phase 1
 is strictly read-only.
 
-**Read-only is a hard invariant of this phase.** `tc-core` phase 1 contains
+**Read-only is a hard invariant of this phase.** `fc-core` phase 1 contains
 no code path that creates, renames or deletes anything; that keeps the first
 runnable build harmless to test against a real home directory.
 
@@ -52,7 +52,7 @@ runnable build harmless to test against a real home directory.
 Not applicable — greenfield, there is no existing behavior to characterize.
 The substitute contract: every sub-phase A–D lands its own behavioral tests
 in the same commit (skills [23](../../skills/23-tests-accompany-commits.md),
-[26](../../skills/26-behavioral-tests.md)), and `tc-core` sub-phases A/B must be
+[26](../../skills/26-behavioral-tests.md)), and `fc-core` sub-phases A/B must be
 fully testable without a display server.
 
 ## 3. Environment gate (blocking, before phase 0)
@@ -85,22 +85,22 @@ build never compiles the `cfg(windows)` half, the gate carries a fifth
 command:
 
 ```bash
-cargo clippy -p tc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+cargo clippy -p fc-core --all-targets --target x86_64-pc-windows-gnu -- -D warnings
 ```
 
 `cargo check`-style verification needs no Windows linker, so this runs on the
 Linux box. It is not ceremony — it caught a Windows-only build break on its
 first run in sub-phase A.
 
-Scoped to `tc-core` since sub-phase C: cross-checking `tc-app` would require
+Scoped to `fc-core` since sub-phase C: cross-checking `fc-app` would require
 GTK's `-sys` build scripts to find a mingw libgtk-4 via pkg-config, which this
 box has no way to provide. The boundary is acceptable because every
-platform-divergent line lives in `tc-core`; `tc-app` has no `cfg` branches.
+platform-divergent line lives in `fc-core`; `fc-app` has no `cfg` branches.
 A real Windows or mingw toolchain is what would verify the GTK build.
 
 ### 0 — Workspace bootstrap
 
-*Commit:* `chore(workspace): initialize cargo workspace tc-core + tc-app`
+*Commit:* `chore(workspace): initialize cargo workspace fc-core + fc-app`
 
 - Root `Cargo.toml` with `[workspace]`, `resolver = "2"`, shared
   `[workspace.package]` (edition, rust-version, license) and
@@ -108,7 +108,7 @@ A real Windows or mingw toolchain is what would verify the GTK build.
   (skill [17](../../skills/17-centralize-constants.md) applied to dependencies).
 - `rust-toolchain.toml` pinning the stable channel + `rustfmt`, `clippy`
   components, so the green gate means the same thing on every machine.
-- `crates/tc-core/` (lib) and `crates/tc-app/` (bin) with placeholder
+- `crates/fc-core/` (lib) and `crates/fc-app/` (bin) with placeholder
   modules; `.gitignore` for `target/`.
 - One smoke test per crate so `cargo test --workspace` is meaningful from
   commit one.
@@ -118,11 +118,11 @@ A real Windows or mingw toolchain is what would verify the GTK build.
 *Exit criterion:* the four gate commands pass on an empty workspace.
 
 **Done.** The smoke tests are deliberately wired across the crate boundary —
-`tc-app` renders its banner from `tc_core::version()` — so they fail if the
+`fc-app` renders its banner from `fc_core::version()` — so they fail if the
 workspace dependency edge breaks, rather than asserting a constant against
 itself.
 
-### A — `tc-core::vfs`: trait + `LocalFs` (read side)
+### A — `fc-core::vfs`: trait + `LocalFs` (read side)
 
 *Commit:* `feat(vfs): read-only VirtualFs trait with local filesystem backend`
 
@@ -188,7 +188,7 @@ fails with `NotFound` rather than omitting the vanished entry. Skipping it
 would need an injection seam to be testable at all, so the version with no
 untested code shipped; phase 3's refresh logic is where this belongs.
 
-### B — `tc-core::listing`: directory model
+### B — `fc-core::listing`: directory model
 
 *Commit:* `feat(listing): sorted directory model with cursor and parent entry`
 
@@ -243,14 +243,14 @@ bottom. Every key ends in a name tiebreak, which makes the order total and
 turns "descending is the exact reverse of ascending within each group" into an
 invariant the tests assert directly rather than a claim in a comment.
 
-### C — `tc-app`: window with two panes
+### C — `fc-app`: window with two panes
 
 *Commit:* `feat(app): dual-pane main window listing directories`
 
 - `main.rs` — `gtk::Application`, one `ApplicationWindow`, `gtk::Paned`
   splitting two `PaneView`s 50/50.
 - `PaneView` — path label + `gtk::ColumnView` over a
-  `gtk::gio::ListStore` of a `PaneEntry` GObject wrapping a `tc-core`
+  `gtk::gio::ListStore` of a `PaneEntry` GObject wrapping a `fc-core`
   `Entry`; columns name / ext / size / modified with a shared factory.
 - `app::constants` — window default size, pane split ratio, column widths,
   size/date display formats. No literal numbers in widget code.
@@ -266,7 +266,7 @@ large directories and is what the archive-as-folder phase will reuse
 unchanged.
 
 *Tests:* the GTK layer stays thin by construction — the only logic in
-`tc-app` is formatting, so `size/date` formatting and the `Entry` →
+`fc-app` is formatting, so `size/date` formatting and the `Entry` →
 `PaneEntry` mapping are unit-tested headlessly; window construction is
 covered by a manual smoke run, per the design doc's testing section.
 
@@ -286,7 +286,7 @@ the baseline `load_from_data` is used instead.
 other pane.* In a dual-pane manager the inactive side must stay fully
 readable: at that moment its entire job is to show where a copy would land.
 
-*Phase-0 scaffolding retired as planned.* `tc-app`'s banner function and its
+*Phase-0 scaffolding retired as planned.* `fc-app`'s banner function and its
 test existed to prove the workspace dependency edge before there was a UI.
 The real window replaces them, and `row.rs` now carries the crate's tests.
 
@@ -309,7 +309,7 @@ The real window replaces them, and `row.rs` now carries the crate's tests.
 *Tests:* the keymap table and the action-dispatch function are pure and
 tested headlessly (key + modifier → expected `Action`, including "unbound key
 yields no action"); the reload-on-activate path is tested through
-`tc-core::listing` against a tempdir.
+`fc-core::listing` against a tempdir.
 
 *Docs:* [docs/keymap.md](../../keymap.md) — the binding table, the capture
 phase, and the failed-navigation behavior.
@@ -340,7 +340,7 @@ keyboard.
 in the same phase. 71 tests green (74 minus three deleted alongside the code
 they covered); behavior unchanged, verified by re-running the binary.
 
-**Dead scaffolding.** `tc_core::version()` lost its only caller when
+**Dead scaffolding.** `fc_core::version()` lost its only caller when
 sub-phase C replaced the phase-0 banner with the real window. Removed, with
 its test. This is precisely the failure mode skill 49 names: nothing is
 visible per phase, only in the overall view.
@@ -367,16 +367,16 @@ would need no new switching logic. The `Column` enum keeps the *mapping*, so
 adding a column is still one variant.
 
 **Redundancy.** A third copy of "a backend works through a trait object" in
-`navigation.rs` — `tc-core` already asserts it twice. Removed.
+`navigation.rs` — `fc-core` already asserts it twice. Removed.
 
 **Architecture: clean.** No `gtk`/`glib`/`gdk` reference exists anywhere in
-`tc-core`, and no `std::fs` or `std::path` in `tc-app` production code. The
-one `std::fs` in `tc-app` is inside test fixtures, which need it because
-`tc-core` has no write API until phase 2.
+`fc-core`, and no `std::fs` or `std::path` in `fc-app` production code. The
+one `std::fs` in `fc-app` is inside test fixtures, which need it because
+`fc-core` has no write API until phase 2.
 
 **Accepted without change.** Entry-building helpers are duplicated across four
 test modules in two crates. Sharing them needs a `test-support` feature on
-`tc-core`, and the fixtures are small and shaped to each test's needs — the
+`fc-core`, and the fixtures are small and shaped to each test's needs — the
 cure costs more than the disease today. Revisit when phase 2's operation
 tests need the same shapes.
 
@@ -411,7 +411,7 @@ environment gate (section 3), which is owner-side setup.
   isolates the divergence, the VFS root is the drive list on Windows, and the
   gate cross-compiles the Windows branch. Still unverified on real hardware:
   nothing here has been *run* on Windows. Since sub-phase C the cross-check
-  covers `tc-core` only — GTK's `-sys` crates cannot be cross-compiled without
+  covers `fc-core` only — GTK's `-sys` crates cannot be cross-compiled without
   a mingw libgtk-4 — so **the Windows GTK build is entirely unverified** and
   needs a Windows or mingw toolchain to confirm.
 - **Branch workflow.** Skill [10](../../skills/10-plan-lifecycle.md) prescribes a
@@ -424,7 +424,7 @@ environment gate (section 3), which is owner-side setup.
 
 ## 7. Definition of done
 
-- `cargo run -p tc-app` opens a window with two working panes.
+- `cargo run -p fc-app` opens a window with two working panes.
 - Tab, arrows, Enter, Backspace behave as specified in sub-phase D.
 - `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -D warnings`,
   `cargo test --workspace`, `cargo build --release` all green.

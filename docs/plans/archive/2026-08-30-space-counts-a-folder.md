@@ -40,7 +40,7 @@ it.
 
 | | |
 |---|---|
-| `tc-core::sizes::measure` | the walk, over a queue, cancel checked per directory |
+| `fc-core::sizes::measure` | the walk, over a queue, cancel checked per directory |
 | `sizes::spawn` | it on a worker, streaming one answer per folder |
 | `Listing::set_measured` | the answer into the entry's own `size`, so the status total and the sort pick it up for free |
 | the `+` suffix | a partial count says so ([keymap.md](../../keymap.md)) |
@@ -118,7 +118,7 @@ set, because everything finished is filtered out — but it is a real cost and
 ## 6. Phases — one phase, one commit
 
 **Phase 0 — coverage pre-check** (skill 43). What holds the scan today:
-`crates/tc-core/tests/sizes.rs` pins the walk, the partial answer and the
+`crates/fc-core/tests/sizes.rs` pins the walk, the partial answer and the
 cancel; end to end,
 `alt_shift_enter_counts_the_marked_folders_and_the_sort_can_see_it` drives the
 real key.

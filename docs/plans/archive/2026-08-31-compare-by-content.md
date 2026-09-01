@@ -15,7 +15,7 @@ because anyone who outgrows it writes one config line.
 
 - **The external-tool precedent is `editor`** ([config.md](../../config.md) §
   `editor`): a command line in settings, run like a typed one,
-  `tc_core::command::open_with` appending one quoted path. The compare tool
+  `fc_core::command::open_with` appending one quoted path. The compare tool
   cannot append — two paths must land in caller-chosen positions — so it
   substitutes placeholders instead: `%1` and `%2`, Total Commander's own
   spelling, each replaced by a shell-quoted path. `command.rs` already owns
@@ -25,7 +25,7 @@ because anyone who outgrows it writes one config line.
   by the end-to-end suite — so a compare window is a known quantity to test,
   not a first.
 - **The engine boundary holds**: the diff itself is text in, rows out — a
-  `tc-core` module with no GTK in it, unit-testable headless, reading both
+  `fc-core` module with no GTK in it, unit-testable headless, reading both
   files through the VFS so a file inside an archive compares like any other.
 - **The keymap gate works for us**: a new action and binding force
   keymap.md's generated table and checked bindings table to follow in the
@@ -94,7 +94,7 @@ per binding), the settings round-trip (the editor-preservation e2e), the
 viewer window's open/close (e2e). No characterization tests owed — every
 seam is already pinned; the new code brings its own.
 
-**Phase 1 — the engine** (`crates/tc-core/src/compare.rs`). Read both
+**Phase 1 — the engine** (`crates/fc-core/src/compare.rs`). Read both
 files via VFS; detect binary/oversize and answer with the verdict variant;
 otherwise produce paired rows (`Same`, `Changed`, `LeftOnly`, `RightOnly`)
 from `similar` — and for each `Changed` pair, the differing character spans

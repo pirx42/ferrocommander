@@ -47,18 +47,18 @@ manager whose prime directive is speed does not get to freeze while
 | pick one row from a list | `dialogs::choose_place`, built for the drive selector — **generalise the name**, it is not about places |
 | await a worker on the GLib loop | `watch`, which does it for jobs over `async-channel` |
 | both panes re-read after something changed them | `Shell::reload_all` |
-| settings that persist and survive hand-editing | `tc_core::config` |
+| settings that persist and survive hand-editing | `fc_core::config` |
 
 Genuinely new: running a process and capturing its output, and the history.
 
 ## 4. Sub-phases
 
-### A. Running a command — `tc-core::command`
+### A. Running a command — `fc-core::command`
 
 `run(shell, directory, line) -> Outcome { status, output }`, spawning
 `$SHELL -c <line>` with the working directory set and stdout+stderr captured.
 
-In `tc-core`, not the shell: the UI never touches the filesystem directly and
+In `fc-core`, not the shell: the UI never touches the filesystem directly and
 a process is no different, and it makes the whole thing headless-testable —
 which matters here, because "did it run in the right directory" is exactly the
 sort of claim that is easy to get wrong and impossible to see.

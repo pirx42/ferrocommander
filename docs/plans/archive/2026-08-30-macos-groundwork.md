@@ -28,7 +28,7 @@ Owner, 2026-08-30, on the four questions the proposal raised:
 
 Three facts were established before this plan was written, and each moved it:
 
-- **`tc-core` is already clippy-clean for `aarch64-apple-darwin`.** The
+- **`fc-core` is already clippy-clean for `aarch64-apple-darwin`.** The
   target installs with one `rustup` command and the check runs in **7.6 s**
   warm — every dependency compiles, `trash` and `notify` included. So the
   engine "nearly compiles for macOS" understates it: it compiles today.
@@ -63,9 +63,9 @@ Stated up front, because "prepared without a Mac" has a boundary:
   branch had before 2026-08-30, and that day found two real gaps and a
   renderer crash that no amount of cross-checking had seen. Expect the same
   class of surprise; the point of this plan is to make them *small*.
-- **`tc-app` stays unchecked for the target**, as it is for Windows: GTK's
+- **`fc-app` stays unchecked for the target**, as it is for Windows: GTK's
   `-sys` build scripts need a macOS libgtk-4 via pkg-config that a Linux box
-  cannot provide. Every platform-divergent line stays in `tc-core`, which is
+  cannot provide. Every platform-divergent line stays in `fc-core`, which is
   what makes that boundary acceptable ([vfs.md](../../vfs.md)).
 - **The end-to-end driver is out of scope.** Xvfb and xdotool are X11-only;
   the macOS equivalent needs a real GUI session. `future-improvements.md`
@@ -153,8 +153,8 @@ line count it touched.
 - **The libc premise was wrong** (§ 0's correction): the dependency this plan
   "added" had been there since the disk figure.
 - **And the plan itself falsified a documented claim without noticing.** The
-  Cmd layer put three `cfg` markers into `tc-app`'s `keymap.rs` while
-  `vfs.md` still said `tc-app` contains no `cfg` at all — caught only when
+  Cmd layer put three `cfg` markers into `fc-app`'s `keymap.rs` while
+  `vfs.md` still said `fc-app` contains no `cfg` at all — caught only when
   the owner asked, after the audit, whether conditionals had spread. The
   sentence now counts its one exception and names the two lines no gate can
   reach. A plan whose whole subject was documentation-checked platform

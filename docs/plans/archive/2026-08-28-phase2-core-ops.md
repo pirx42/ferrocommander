@@ -20,25 +20,25 @@ Commits 2ac3018 (0) / cf93979 (A) / a271527 (B) / 70bdc9d (C) / 967d2f5 (D) /
 
 **One sentence:** the panes stop being read-only — F5 copies, F6 moves or
 renames, F7 creates a directory and F8/Del deletes, executed by a background
-job engine in `tc-core` that reports progress, asks about conflicts, and can
+job engine in `fc-core` that reports progress, asks about conflicts, and can
 be cancelled without leaving half-written files behind.
 
 ### In scope
 
-- **`tc-core::vfs`** — the mutating half of `VirtualFs`: `create_dir`,
+- **`fc-core::vfs`** — the mutating half of `VirtualFs`: `create_dir`,
   `remove_dir`, `remove_file`, `rename`, `open_read`, `create_file`,
   `set_modified`, `trash`. Implemented by `LocalFs`, with the error variants
   the operations actually produce.
-- **`tc-core::ops`** — the operation engine: `Job` (`Copy`, `Move`, `Delete`,
+- **`fc-core::ops`** — the operation engine: `Job` (`Copy`, `Move`, `Delete`,
   `CreateDir`), a scan pass that turns sources into a flat task list with
   honest totals, an execute pass that streams bytes through the VFS, a
   per-file error log, conflict resolution, cancellation with rollback of the
   file in flight.
-- **`tc-core::ops::queue`** — `JobQueue`: jobs run one at a time on a worker
+- **`fc-core::ops::queue`** — `JobQueue`: jobs run one at a time on a worker
   thread, progress and conflict requests flow out over channels, the answer
   flows back in. Headless-testable with a scripted resolver — no GTK, no
   main loop.
-- **`tc-app`** — F5 / F6 / F7 / F8 / Del / Shift+Del / Shift+F8 bindings, the
+- **`fc-app`** — F5 / F6 / F7 / F8 / Del / Shift+Del / Shift+F8 bindings, the
   target dialog (F5/F6), the name dialog (F7), the delete confirmation, the
   progress window with a cancel button, and the conflict dialog
   (overwrite / skip / rename / abort, each with *apply to all*).
@@ -61,7 +61,7 @@ job can be cancelled), TC's Shift+F5 same-directory duplicate, and Alt+F5
 pack.
 
 **The read-only invariant of phase 1 ends here.** From sub-phase A on,
-`tc-core` can destroy data. Two consequences are treated as requirements, not
+`fc-core` can destroy data. Two consequences are treated as requirements, not
 as good intentions: every destructive path is exercised against a tempdir and
 never against a real home directory, and delete goes to the freedesktop trash
 unless the user explicitly asked for a permanent one.
@@ -99,9 +99,9 @@ Phase 1 was implemented on a box with rustc **1.98.0** and GTK **4.22.4**.
 The container this plan was written in has neither:
 
 ```
-$ cargo check -p tc-core
+$ cargo check -p fc-core
 error: rustc 1.94.1 is not supported by the following package:
-  tc-core@0.1.0 requires rustc 1.98
+  fc-core@0.1.0 requires rustc 1.98
 $ pkg-config --modversion gtk4
 Package gtk4 was not found in the pkg-config search path
 ```
@@ -134,7 +134,7 @@ on, were checked rather than assumed
 Each sub-phase is independently green (`cargo fmt --all -- --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`, `cargo build --release`, plus the Windows
-cross-target check on `tc-core`) and ends in a conventional commit
+cross-target check on `fc-core`) and ends in a conventional commit
 (skill [31](../../skills/31-conventional-commit.md)).
 
 ### 0 — Coverage pre-check: a pane whose directory vanishes
@@ -164,7 +164,7 @@ it with the directory-replaced-by-a-file case keeps the point (two distinct
 failure modes, told apart before the code branches) and covers something a
 file operation can actually *do*, which a permission change is not.
 
-### A — `tc-core::vfs`: the mutating surface
+### A — `fc-core::vfs`: the mutating surface
 
 *Commit:* `feat(vfs): mutating VirtualFs surface with local backend`
 
@@ -265,7 +265,7 @@ handle to one). Files keep their date, which is what the date column shows.
 `Send + Sync` constraint on future backends, and trash as a backend
 capability.
 
-### B — `tc-core::ops`: the synchronous engine
+### B — `fc-core::ops`: the synchronous engine
 
 *Commit:* `feat(ops): copy, move, delete and mkdir with conflict and cancel handling`
 
@@ -379,16 +379,16 @@ UI has one; phase 6 is where a cross-store move has to be told apart.
 event vocabulary, the conflict protocol, and what cancel does and does not
 undo.
 
-### C — `tc-core::ops::queue`: the background queue
+### C — `fc-core::ops::queue`: the background queue
 
 *Commit:* `feat(ops): background job queue with progress and conflict channels`
 
 - `JobQueue::spawn(job, fs_source, fs_target) -> JobHandle`. Jobs run FIFO on
   one worker thread; `JobHandle` carries the progress receiver, the conflict
   channel pair and the cancel token.
-- `async-channel` in **`tc-core`**, not in `tc-app`: it is a plain channel,
+- `async-channel` in **`fc-core`**, not in `fc-app`: it is a plain channel,
   not a UI dependency, and putting it here is what lets the UI `await` the
-  event stream on the GLib main loop without `tc-core` knowing GLib exists.
+  event stream on the GLib main loop without `fc-core` knowing GLib exists.
 - The conflict round trip is a request with a bounded(1) reply channel. The
   worker blocks on the reply.
 - **A dropped reply channel means `Abort`.** If the UI dies, or a dialog is
@@ -414,7 +414,7 @@ undo.
 *Docs:* [ops.md](../../ops.md) — the threading model, the channel shapes, and
 the dropped-reply rule.
 
-### D — `tc-app`: keys, dialogs, and refresh
+### D — `fc-app`: keys, dialogs, and refresh
 
 *Commit:* `feat(app): file operations on F5, F6, F7 and F8`
 
@@ -441,12 +441,12 @@ the dropped-reply rule.
     is the only dialog whose default button is the cancelling one.
 - The dialog decisions — what F6's target string means, which confirmation
   text applies, what a job's sources are given a cursor row — are pure
-  functions in `tc-app`, unit tested headlessly, exactly as `navigation.rs`
+  functions in `fc-app`, unit tested headlessly, exactly as `navigation.rs`
   is. The widgets stay assembly.
 - **Both panes reload when a job finishes**, because a copy changes the
   target pane and a move changes both. A pane whose own directory no longer
   exists falls back to the nearest surviving ancestor via a new
-  `Listing::load_nearest` in `tc-core` (the root always succeeds), which is
+  `Listing::load_nearest` in `fc-core` (the root always succeeds), which is
   the sub-phase 0 characterization being deliberately superseded — the test
   written there is updated in this commit, with the old contract quoted in
   the message.
@@ -459,7 +459,7 @@ decisions and `Listing::load_nearest` are unit tested.
 the biggest deviation in this plan.* The implementation environment turned out
 to have `Xvfb` and `xdotool`, so a smoke script drove the real binary with
 real X key events and checked the filesystem afterwards (superseded shortly
-after by the `cargo test` suite in `crates/tc-app/tests/ui.rs`) — Tab, the
+after by the `cargo test` suite in `crates/fc-app/tests/ui.rs`) — Tab, the
 cursor keys and Enter in passing, F5, F7 and F8 with their dialogs directly.
 It earned its keep on the first run by finding a defect no test could see: the
 conflict dialog opened with no focused button and could only be answered with
@@ -489,7 +489,7 @@ the mouse. What it still does not reach is listed in
 move · [ui-shell.md](../../ui-shell.md) — the dialogs and the refresh rule ·
 [listing.md](../../listing.md) — `load_nearest`.
 
-### E — `tc-app`: progress window and conflict dialog
+### E — `fc-app`: progress window and conflict dialog
 
 *Commit:* `feat(app): progress window with cancel and conflict resolution`
 
@@ -535,10 +535,10 @@ dialog, and where the event loop is attached.
 in the same phase. 157 tests green; behavior unchanged, verified by re-running
 all five mutation probes and the smoke script afterwards.
 
-**Architecture: clean.** No `gtk`/`glib`/`gdk` anywhere in `tc-core`; no
-`std::fs`, `std::path` or `PathBuf` in `tc-app` production code (the one
-`std::fs` is inside a `#[cfg(test)]` module); no `cfg` branch in `tc-app` at
-all, and none in `tc-core` outside `vfs/platform.rs`. The invariants phase 1
+**Architecture: clean.** No `gtk`/`glib`/`gdk` anywhere in `fc-core`; no
+`std::fs`, `std::path` or `PathBuf` in `fc-app` production code (the one
+`std::fs` is inside a `#[cfg(test)]` module); no `cfg` branch in `fc-app` at
+all, and none in `fc-core` outside `vfs/platform.rs`. The invariants phase 1
 established survived a phase that doubled the code.
 
 **Redundancy.** The four-arm conflict dispatch existed twice — in `make_dir`
@@ -576,10 +576,10 @@ in a dialog. One assertion per template — no leftover brace in the rendered
 string — now covers all of them, in `jobs.rs` and `progress.rs`.
 
 **Accepted without change.** `Entry`-building helpers are still duplicated
-across test modules in *both* crates. `tests/common/` cannot reach `tc-app`,
+across test modules in *both* crates. `tests/common/` cannot reach `fc-app`,
 so sharing those would need the `test-support` feature phase 1 declined, and
 the fixtures remain small and shaped to each test. The reasoning has not
-changed; only the `tc-core` half of the problem was worth solving.
+changed; only the `fc-core` half of the problem was worth solving.
 
 ## 5. Effort
 

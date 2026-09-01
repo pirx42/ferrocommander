@@ -62,7 +62,7 @@ Checked against the repository rather than guessed
 |---|---|
 | Any CI at all | **None.** There is no `.github/` directory. This is the first workflow, and `CLAUDE.md` already calls clippy "the lint gate (CI)" — a claim nothing has been making true. |
 | A verifiable build sequence | **Exists**, `scripts/green-gate.sh`, six steps, already the rule before every commit. |
-| A build number | **Exists.** `crates/tc-app/build.rs` computes `git rev-list --count HEAD` and stamps it into the window title. The package version reuses **that** number, so a title bar and a `dpkg -l` line agree about which build somebody is running. |
+| A build number | **Exists.** `crates/fc-app/build.rs` computes `git rev-list --count HEAD` and stamps it into the window title. The package version reuses **that** number, so a title bar and a `dpkg -l` line agree about which build somebody is running. |
 | An application id | **Exists**, `st.rose.Ferrocommander`, in `constants.rs`. |
 | An icon | **Does not exist.** Nothing in the repository is an image. One has to be drawn. |
 | A `.desktop` file | Does not exist. |
@@ -70,14 +70,14 @@ Checked against the repository rather than guessed
 
 **Three things are wrong today and are found by trying to package them:**
 
-1. **The binary is called `tc-app`.** That is the crate's name, and a fine
-   name for a crate; as `/usr/bin/tc-app` it is a name nobody typed on
+1. **The binary is called `fc-app`.** That is the crate's name, and a fine
+   name for a crate; as `/usr/bin/fc-app` it is a name nobody typed on
    purpose. It becomes `ferrocommander`, which costs a `[[bin]]` section and
-   a change in the end-to-end harness, where `CARGO_BIN_EXE_tc-app` names it.
+   a change in the end-to-end harness, where `CARGO_BIN_EXE_fc-app` names it.
 2. **`repository` in the workspace manifest is wrong** —
    `github.com/pirx/ferrocommander`, where the remote is `pirx42/`. It would
    have gone straight into the package's `Homepage` field.
-3. **There is no description fit for a package.** `tc-app`'s is "GTK4 shell:
+3. **There is no description fit for a package.** `fc-app`'s is "GTK4 shell:
    dual-pane window, dialogs, viewer", which describes a crate to a
    developer. `apt show` wants a sentence about what the program is for.
 
@@ -126,7 +126,7 @@ the one thing the rename can break.
 ### Phase 1 — the package, built by a script
 
 `packaging/st.rose.Ferrocommander.desktop`, an icon, `[package.metadata.deb]`
-in `crates/tc-app/Cargo.toml`, and `scripts/package-deb.sh` that produces the
+in `crates/fc-app/Cargo.toml`, and `scripts/package-deb.sh` that produces the
 `.deb`. Run here, installed here, started here.
 
 **The icon is drawn rather than borrowed** — a two-pane mark, as an SVG, at

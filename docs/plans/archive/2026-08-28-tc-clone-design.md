@@ -56,7 +56,7 @@ custom columns.
 Cargo workspace with two layers:
 
 ```
-tc-core (lib crate, no GTK dependency)
+fc-core (lib crate, no GTK dependency)
 ├── vfs        — VirtualFs trait: list, stat, open/read/write, rename, mkdir, remove
 │   ├── local  — std::fs/rustix implementation
 │   └── archive— zip/tar backends behind the same trait (read + write-on-close)
@@ -66,7 +66,7 @@ tc-core (lib crate, no GTK dependency)
 ├── rename     — multi-rename rule engine (pure functions: rules × names → preview)
 └── listing    — directory model: entries, sort orders, filter (Ctrl+S), selection
 
-tc-app (bin crate, GTK4 via gtk4-rs)
+fc-app (bin crate, GTK4 via gtk4-rs)
 ├── main window: two PaneViews (GtkColumnView), command bar, function-key bar
 ├── dialogs: progress/queue, conflict, search, multi-rename, options
 ├── viewer window (F3): text/hex
@@ -74,7 +74,7 @@ tc-app (bin crate, GTK4 via gtk4-rs)
 ```
 
 **Key boundary:** the UI never touches the filesystem directly — everything goes
-through `tc-core`. That makes archive-as-folder free at the UI level (a pane just
+through `fc-core`. That makes archive-as-folder free at the UI level (a pane just
 shows a `VirtualFs`), lets copy *between* local and archive fall out of one code
 path, and makes the whole engine testable with plain `cargo test` on tempdirs.
 
@@ -107,7 +107,7 @@ is set).
 
 ## 5. Testing
 
-- `tc-core` is fully unit/integration tested headless: tempdir fixtures, archive
+- `fc-core` is fully unit/integration tested headless: tempdir fixtures, archive
   round-trips, conflict scenarios, rename-engine table tests.
 - UI: kept thin enough that manual testing plus a few `gtk::test` smoke tests
   suffice for v1.
@@ -235,7 +235,7 @@ quietly dropped:
 
 The design's central bet was that a `VirtualFs` between the UI and the disk
 would make archives browsable folders for free. It was collected and counted
-in phase 6: **16 lines outside `tc-core::archive`** for a pane that lists a
+in phase 6: **16 lines outside `fc-core::archive`** for a pane that lists a
 zip, a viewer that reads inside one and a search that walks it; **0** for the
 two formats after the first. The full report card is in
 [archives.md](../../archives.md).

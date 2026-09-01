@@ -31,7 +31,7 @@ What already exists and is reused rather than rewritten:
 | split a name from its extension | `listing::name::split_name` |
 | pane ordering / hidden flag survive a reload | `PaneView::adopt`, `state`, `restore` |
 | send a pane somewhere | `PaneView::go_to` |
-| settings file, atomic write | `tc_core::config` |
+| settings file, atomic write | `fc_core::config` |
 
 What is genuinely new: a files-only inversion, selection by extension, a
 selection that can be restored after an operation, cursor moves that mark as
@@ -72,7 +72,7 @@ owner's chosen layout safe rather than a trap.
 
 Each is one commit with its tests and its doc changes (skills 11, 23, 28).
 
-### A. Selection primitives in `tc-core`
+### A. Selection primitives in `fc-core`
 
 - `Listing::invert_selection_files()` — inverts visible **file** rows only,
   leaving directories and `..` alone. The existing `invert_selection` keeps
@@ -144,10 +144,10 @@ makes the marks and the cursor come along for free.
 
 ### D. The configurable keymap
 
-- **`tc-core`** gains `Settings::keys: BTreeMap<String, String>` — plain
+- **`fc-core`** gains `Settings::keys: BTreeMap<String, String>` — plain
   strings on both sides. It parses no key names and knows no actions, because
-  a key name is a `gdk::Key` and `tc-core` stays GTK-free ([crates/CLAUDE.md](../../../crates/CLAUDE.md)).
-- **`tc-app`** owns both halves of the translation:
+  a key name is a `gdk::Key` and `fc-core` stays GTK-free ([crates/CLAUDE.md](../../../crates/CLAUDE.md)).
+- **`fc-app`** owns both halves of the translation:
   - a key spec `"ctrl+shift+kp_add"` → `(Key, ModifierType)`, case-insensitive,
     modifiers in any order;
   - an action name `"invert_marks"` → `Action`, through **one** table that a

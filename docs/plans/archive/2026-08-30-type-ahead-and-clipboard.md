@@ -204,7 +204,7 @@ claim standing.
 ### What the audit found
 
 The plain-text encoder was in the shell while its two siblings were in
-tc-core. Moved.
+fc-core. Moved.
 
 And a real one, found by asking what the API promises rather than by a test:
 `read_bytes_async` reads *up to* its limit, so a full buffer and a truncated

@@ -148,7 +148,7 @@ where it will bite.
 
 ### Phase 1 — the walk, and a listing made of it
 
-`tc-core`: a cancellable walk yielding `(relative path, Entry)`, and
+`fc-core`: a cancellable walk yielding `(relative path, Entry)`, and
 `Listing::branch` / `spawn_branch` built from it. `reload` re-walks in branch
 mode rather than re-reading one directory. Hidden inheritance. The `name`
 invariant re-documented.

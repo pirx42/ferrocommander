@@ -37,6 +37,11 @@ step "clippy-macos"   cargo clippy -p fc-core --all-targets \
 step "tests"          cargo test --workspace --no-fail-fast
 step "release"        cargo build --release
 step "links"          python3 scripts/check-links.py
+# `tc` is allowed only where it names Total Commander. The rename that made
+# that true was 441 substitutions, and every one of them was written by
+# somebody copying the spelling in the file next to them — so the rule is
+# checked rather than remembered.
+step "naming"         python3 scripts/check-naming.py
 
 printf '\n===============================\n'
 if [ ${#failed[@]} -eq 0 ]; then

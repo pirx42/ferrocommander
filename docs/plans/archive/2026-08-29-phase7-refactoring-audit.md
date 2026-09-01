@@ -42,11 +42,11 @@ Measured rather than guessed, at the end of phase 6 — 13 843 lines of code and
 
 | | Lines | What is in it |
 |---|---|---|
-| `tc-app/src/main.rs` | 1530 | the `Shell`, the settings, `dispatch`, every `start_*` handler, the window, the watcher wiring |
-| `tc-app/src/pane.rs` | 1328 | one widget, one model, the archive stack, the watch, the inline rename |
-| `tc-app/src/keymap.rs` | 1220 | 505 of table and code, 715 of tests |
-| `tc-app/src/dialogs.rs` | 969 | six functions and four windows |
-| `tc-core/src/ops/mod.rs` | 798 | `Job`, `run`, and three executors |
+| `fc-app/src/main.rs` | 1530 | the `Shell`, the settings, `dispatch`, every `start_*` handler, the window, the watcher wiring |
+| `fc-app/src/pane.rs` | 1328 | one widget, one model, the archive stack, the watch, the inline rename |
+| `fc-app/src/keymap.rs` | 1220 | 505 of table and code, 715 of tests |
+| `fc-app/src/dialogs.rs` | 969 | six functions and four windows |
+| `fc-core/src/ops/mod.rs` | 798 | `Job`, `run`, and three executors |
 
 `main.rs` and `dialogs.rs` are the two whose names have stopped describing
 their contents. The others are large but coherent — `keymap.rs` is mostly a

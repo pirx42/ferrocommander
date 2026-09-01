@@ -103,7 +103,7 @@ One test asserting the cursor lands on the same named entry after a sort
 change, a hidden toggle and a reload — the invariant sub-phase A's selection
 remapping shares a code path with.
 
-### A — `tc-core`: selection, and a wildcard matcher
+### A — `fc-core`: selection, and a wildcard matcher
 
 *Commit:* `feat(listing): selection with wildcard select and deselect`
 
@@ -123,7 +123,7 @@ remapping shares a code path with.
 - **Selection survives a reload by name**, exactly as the cursor does: a job
   that changed one file must not silently drop the marks on the others.
   Vanished names fall out; new names arrive unselected.
-- New `tc-core::glob` — `*` and `?` only, table-tested. Phase 5's search needs
+- New `fc-core::glob` — `*` and `?` only, table-tested. Phase 5's search needs
   the same matcher, so it is written where both can reach it rather than
   twice ([44](../../skills/44-no-redundancy.md)).
 - **The vanished-entry gap closes here.** `read_dir` currently fails the whole
@@ -138,7 +138,7 @@ keeps the marks on surviving names and drops the rest; `..` cannot be
 selected by any route including `select_all` and `invert`; glob table
 (`*.txt`, `a?c`, `*`, no wildcard, empty pattern, a name containing `*`).
 
-### B — `tc-app`: selection keys, and operations that use it
+### B — `fc-app`: selection keys, and operations that use it
 
 *Commit:* `feat(app): select files and operate on the selection`
 
@@ -158,7 +158,7 @@ selection, one selected, many selected, and a selection that includes the
 cursor; the delete prompt for many; end-to-end UI cases for Insert-then-F5
 and `Ctrl+A`-then-F8.
 
-### C — `tc-core` + `tc-app`: the quick filter
+### C — `fc-core` + `fc-app`: the quick filter
 
 *Commit:* `feat(listing): quick filter narrowing the visible rows`
 
@@ -177,7 +177,7 @@ exactly the previous view; the filter composes with hidden files and with
 sort; the cursor never lands on a filtered-out row; UI case for
 `Ctrl+S`-narrow-`Esc`.
 
-### D — `tc-app`: sorting and hidden files from the keyboard
+### D — `fc-app`: sorting and hidden files from the keyboard
 
 *Commit:* `feat(app): sort from the header or the keyboard, and toggle hidden files`
 
@@ -191,7 +191,7 @@ sort; the cursor never lands on a filtered-out row; UI case for
 current one" function, including the flip-on-repeat rule; a UI case that
 sorts by size and checks the top row changed.
 
-### E — `tc-core`: attributes, and copies that keep them
+### E — `fc-core`: attributes, and copies that keep them
 
 *Commit:* `feat(vfs): entry attributes, preserved across a copy`
 
@@ -213,11 +213,11 @@ broken copy, and today every copy does that
 (`#[cfg(unix)]`); attributes survive a `stat` round trip; a copy where
 `set_attributes` fails reports it and keeps the file; the rendering table.
 
-### F — `tc-core`: config persistence
+### F — `fc-core`: config persistence
 
 *Commit:* `feat(config): remember directories, sort order and geometry`
 
-- `tc-core::config` — a `Settings` value plus `load`/`save`. In `tc-core`
+- `fc-core::config` — a `Settings` value plus `load`/`save`. In `fc-core`
   because the UI never touches a filesystem directly, and the same rule
   applies to its own settings file.
 - `serde` + `toml`. A hand-rolled parser would save a dependency and cost
@@ -236,7 +236,7 @@ broken copy, and today every copy does that
 defaults plus a warning when it is malformed; the temporary file is gone
 afterwards; an interrupted save leaves the previous config intact.
 
-### G — `tc-app`: the drive and mount bar
+### G — `fc-app`: the drive and mount bar
 
 *Commit:* `feat(app): drive bar for switching the active pane between mounts`
 
@@ -255,10 +255,10 @@ system, so the test does not depend on the box it runs on; the filter rules
 **Done.** 270 tests green; behaviour unchanged, verified by re-running every
 mutation probe from phases 2 and 3 and re-measuring the performance claims.
 
-**Architecture: clean.** No `gtk`/`glib`/`gdk` anywhere in `tc-core`; no
-`std::fs` or `PathBuf` in `tc-app` production code (the one `std::fs` is
-inside a `#[cfg(test)]` module); no `cfg` branch in `tc-app`, and none in
-`tc-core` outside `vfs/platform.rs` — through a phase that added a
+**Architecture: clean.** No `gtk`/`glib`/`gdk` anywhere in `fc-core`; no
+`std::fs` or `PathBuf` in `fc-app` production code (the one `std::fs` is
+inside a `#[cfg(test)]` module); no `cfg` branch in `fc-app`, and none in
+`fc-core` outside `vfs/platform.rs` — through a phase that added a
 platform-specific attribute model *and* a platform-specific mount table.
 
 **API ahead of its caller.** Two items were reachable from outside with

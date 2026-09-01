@@ -25,7 +25,7 @@ Concretely, what a Total Commander user expects:
 needs one line of special case in the pane, in the listing, in the viewer or in
 `ops`, the abstraction did not hold and the honest thing is to say so in the
 plan rather than to spread the special case around. The measure of this phase
-is how little outside `tc-core::archive` has to change.
+is how little outside `fc-core::archive` has to change.
 
 **The write side cannot be.** `VirtualFs` promises `rename`, `remove_file`, and
 a `create_file` that can be called on any path in any order. A zip is a
@@ -81,7 +81,7 @@ silent gap.
 
 ## 5. Sub-phases
 
-### A. `tc-core::archive` — the index and the read backend, zip first
+### A. `fc-core::archive` — the index and the read backend, zip first
 
 `Archive::open(fs, path) -> Result<Archive, VfsError>` reads the container's
 directory once and builds a path → entry map. `ArchiveFs` wraps it and
@@ -177,7 +177,7 @@ The tests that matter here are conservation, not value asserts:
 [performance.md](../../performance.md) and
 [future-improvements.md](../../future-improvements.md); then skill
 [49](../../skills/49-final-phase-refactoring-audit.md) — which for this phase has
-a specific question to answer: **how many lines outside `tc-core::archive` did
+a specific question to answer: **how many lines outside `fc-core::archive` did
 it take?** That number is the design's report card and belongs in the doc.
 
 ## 6. Risks
@@ -210,7 +210,7 @@ largest phase in the project.
 ## 8. Outcome
 
 Implemented across five commits (`b60c401`…`760ef1a`). The plan's own question
-— how many lines outside `tc-core::archive` — is answered in
+— how many lines outside `fc-core::archive` — is answered in
 [archives.md](../../archives.md); the short version is 16 for browsing a zip,
 0 for the two formats after it, and 204 for walking in and out, which is all
 shell.
@@ -239,7 +239,7 @@ What the plan did not foresee:
   readable ancestor, and the settings are rewritten to say where it really is.
 - **Sub-phase G found the repository not following its own rule** that every
   directory with its own semantics carries a `CLAUDE.md`. Four were missing
-  under `crates/tc-core/src/`; they are there now.
+  under `crates/fc-core/src/`; they are there now.
 
 Effort was close to the estimate: roughly a full day against the corrected
 ~10 h, with sub-phase A the largest by some way.

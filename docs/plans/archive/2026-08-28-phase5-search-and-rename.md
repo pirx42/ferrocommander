@@ -46,7 +46,7 @@ Genuinely new: the streaming walk, the content matcher, and the rename rules.
 
 ## 4. Sub-phases
 
-### A. `tc-core::search` — the walk
+### A. `fc-core::search` — the walk
 
 `search::spawn(fs, roots, criteria, cancel) -> Receiver<Found>`: a thread walks
 and sends each hit as it is found.
@@ -71,7 +71,7 @@ cancelling stops it; the results are the same whatever order the walk takes.
 as results arrive. Enter on a result sends the active pane to the file's
 directory and puts the cursor on it.
 
-### C. `tc-core::rename` — the rule engine
+### C. `fc-core::rename` — the rule engine
 
 Pure: `rename::preview(rules, names) -> Vec<Renamed>`. A template with
 placeholders, plus an optional search-and-replace:

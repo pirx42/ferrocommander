@@ -1,15 +1,17 @@
-# CLAUDE.md — TC Clone Linux
+# CLAUDE.md — FerroCommander
 
-A keyboard-centric dual-pane file manager for Linux in the style of
-Total Commander (ghisler.com), built from scratch in Rust + GTK4.
+A keyboard-centric dual-pane file manager for Linux, Windows and macOS in
+the style of Total Commander (ghisler.com), built from scratch in Rust +
+GTK4.
 Design and v1 scope: [docs/plans/archive/2026-08-28-tc-clone-design.md](docs/plans/archive/2026-08-28-tc-clone-design.md).
 
 **Stack:** Rust + GTK4 (gtk4-rs) · Cargo workspace: `fc-core` (UI-free
 engine: VFS, listing, file ops, archives, search, multi-rename) + `fc-app`
 (GTK shell)
-**Target platforms:** Linux (X11/Wayland) **and** Windows — both are
-supported build targets; platform differences are confined to dedicated
-`platform` modules (see [docs/vfs.md](docs/vfs.md))
+**Target platforms:** Linux (X11/Wayland), Windows, and macOS (Apple
+Silicon) — all three are supported build targets, each packaged on every
+commit ([docs/packaging.md](docs/packaging.md)); platform differences are
+confined to dedicated `platform` modules (see [docs/vfs.md](docs/vfs.md))
 **Language:** everything in this repository is English — docs, code,
 comments, commit messages.
 
@@ -94,10 +96,17 @@ and fails loudly if any failed. Typing the chain by hand is how a red clippy
 gets hidden behind a green test run — that has happened, which is why the
 script exists.
 
-**Documentation links** are checked by `python3 scripts/check-links.py`, which
-reports every relative Markdown link in the repository that goes nowhere. Not
-part of the green gate — it needs no toolchain and takes a second — but run it
-whenever a doc moves. Documentation rots by moving, not by being wrong.
+**Two checks need no toolchain and take a second each**, and the gate runs
+both at the end:
+
+- `python3 scripts/check-links.py` — every relative Markdown link in the
+  repository that goes nowhere. Documentation rots by moving, not by being
+  wrong, so run it whenever a doc moves rather than waiting for the gate.
+- `python3 scripts/check-naming.py` — every `tc` that does not name Total
+  Commander. The crates are `fc-core` and `fc-app`; `TC` in prose is how the
+  documents name the program this one imitates, and is what the check allows.
+  It exists because the rename was 441 substitutions and nothing would have
+  noticed one coming back.
 
 ## Search Defaults (Grep/Glob/Find)
 

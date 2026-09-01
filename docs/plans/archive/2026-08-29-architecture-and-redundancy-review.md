@@ -20,7 +20,7 @@ and looks for what it did not catch.
 
 Listed first, and specifically, so that nobody "fixes" it:
 
-- **The central invariant holds.** The only `std::fs` anywhere in `tc-app` is
+- **The central invariant holds.** The only `std::fs` anywhere in `fc-app` is
   inside a `#[cfg(test)]` module. The UI genuinely does not touch the
   filesystem.
 - **No panic paths in shipped code**, with one deliberate exception: seven
@@ -29,7 +29,7 @@ Listed first, and specifically, so that nobody "fixes" it:
   [19](../../skills/19-no-defensive-programming.md) applied correctly, not an
   oversight.
 - **No duplicated helper functions** between the crates, and exactly one
-  unused constant in 149 + tc-core's own (§ 3.7).
+  unused constant in 149 + fc-core's own (§ 3.7).
 - **The keymap's three parallel lists agree.** `Action`, `BINDINGS` and
   `ACTION_NAMES` are consistent and two tests hold them so.
 - **`ops/mod.rs` is large but cohesive.** Twenty-four methods on `Run`, and
@@ -47,7 +47,7 @@ Listed first, and specifically, so that nobody "fixes" it:
 
 ### 2.1 `listing` names a concrete backend — the one claim the crate makes
 
-`crates/tc-core/src/listing/mod.rs` opens with `use crate::archive::ArchiveFs;`
+`crates/fc-core/src/listing/mod.rs` opens with `use crate::archive::ArchiveFs;`
 so that `Listing::spawn_enter` can open an archive on the worker thread. That
 is the directory model — the thing the `VirtualFs` trait exists to keep
 backend-agnostic — importing one backend by name. Every other module is clean:
@@ -67,7 +67,7 @@ pub fn spawn_from(
 ```
 
 `spawn_load` and `spawn_load_nearest` become two-line callers of it, and
-`spawn_enter` moves to `archive` (or to `tc-app`'s `navigation`, which already
+`spawn_enter` moves to `archive` (or to `fc-app`'s `navigation`, which already
 decides that a file *is* an archive). `listing` then imports nothing but `vfs`
 and `glob`, and the claim in
 [crates/CLAUDE.md](../../../crates/CLAUDE.md) is true without a footnote.
