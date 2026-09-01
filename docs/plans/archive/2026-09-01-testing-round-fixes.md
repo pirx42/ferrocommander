@@ -1,6 +1,7 @@
 # Testing round, 2026-09-01 — five findings
 
-Status: Draft — the three decisions settled by the owner, 2026-09-01
+Status: **Done**, 2026-09-01 — all five findings fixed, each behind a
+green gate. Outcome in § 7.
 
 Five things a person found by *using* the program rather than testing it:
 two panes that scroll when nothing asked them to, a Windows drive root that
@@ -19,8 +20,8 @@ not the line it looks like.
 | Going back to the parent flickers: `..` at the top for a moment, then the remembered position | `restore_scroll` runs on a **default-priority idle**, which GTK schedules *after* its own layout and paint — so the frame at offset 0 is drawn before the offset is put back | `pane.rs`, since 2026-08-29 |
 | `Space` on a view scrolled away from the cursor jumps the list to the top | every marking operation ends in `sync_cursor`, which scrolls the cursor into view **whether or not the cursor moved** | `pane.rs`, since 2026-08-29 |
 | On Windows, `..` out of `C:/Users` lands in the application's start folder | `to_std_path` trims the trailing separator off every native path, which turns the drive root `C:\` into `C:` — a **drive-relative** path Windows resolves against the process's current directory | `vfs/platform.rs`, since the first VFS commit |
-| No free/total figure at the bottom of a pane | the Windows branch of `space()` returns `None`; `GetDiskFreeSpaceExW` was never called | `vfs/platform.rs`, documented in [future-improvements.md](../future-improvements.md) |
-| A backgrounded job runs with nothing to show for it | there is no indicator, and `Background` closes the only window a job ever has | `dialogs/progress_view.rs`, documented in [future-improvements.md](../future-improvements.md) |
+| No free/total figure at the bottom of a pane | the Windows branch of `space()` returns `None`; `GetDiskFreeSpaceExW` was never called | `vfs/platform.rs`, documented in [future-improvements.md](../../future-improvements.md) |
+| A backgrounded job runs with nothing to show for it | there is no indicator, and `Background` closes the only window a job ever has | `dialogs/progress_view.rs`, documented in [future-improvements.md](../../future-improvements.md) |
 
 **None of the five comes from the quick-view work** that shipped hours
 earlier: the two scroll lines date to 2026-08-29, the path trim to the first
@@ -46,7 +47,7 @@ line — all of which are already platform-agnostic and already right.
 **Windows CI runs no tests at all.** The `windows` job packages and
 smoke-starts the binary; the gate is the Linux job's, because Xvfb and
 xdotool have no meaning against MSYS2's Win32-backend GTK
-([windows.md](../windows.md)). So a `#[cfg(windows)]` unit test would never
+([windows.md](../../windows.md)). So a `#[cfg(windows)]` unit test would never
 run anywhere, on any machine but the owner's. That single fact shapes phases
 2 and 3 more than either bug does.
 
@@ -85,7 +86,7 @@ seams, and what cannot:
 
 - *The two scroll bugs.* Nothing automated, and nothing can be: a scroll
   offset is not a window title, a file or a key press, so the end-to-end
-  suite cannot see it ([ui-shell.md](../ui-shell.md)). The existing check is
+  suite cannot see it ([ui-shell.md](../../ui-shell.md)). The existing check is
   `scripts/check-scroll-memory.sh`, which drives the real app and leaves
   screenshots for a person. The marking half is a *new* case for it.
 - *The Windows drive root.* `platform.rs`'s own tests cover the root
@@ -93,7 +94,7 @@ seams, and what cannot:
   platform runs them, and no platform that runs them is Windows.
 - *Free space on Windows.* Untested by construction — `space()` returning
   `None` is what the current test expectations were written around
-  ([future-improvements.md](../future-improvements.md) lists the row).
+  ([future-improvements.md](../../future-improvements.md) lists the row).
 - *The job indicator.* The `Meter` behind it is unit-tested in
   `progress.rs`; the window it feeds is not, and neither is `Background`.
 
@@ -171,10 +172,10 @@ window closes, so the phase carries a test that a job still finishes, still
 reports its failures and still reloads both panes when the window is not
 open at all.
 
-**Phase 5 — docs.** [ui-shell.md](../ui-shell.md) for the indicator and the
-rule about who moves the viewport, [windows.md](../windows.md) and
-[future-improvements.md](../future-improvements.md) for the two gaps that
-close, [ops.md](../ops.md) for the way back to a backgrounded job.
+**Phase 5 — docs.** [ui-shell.md](../../ui-shell.md) for the indicator and the
+rule about who moves the viewport, [windows.md](../../windows.md) and
+[future-improvements.md](../../future-improvements.md) for the two gaps that
+close, [ops.md](../../ops.md) for the way back to a backgrounded job.
 
 **Phase 6 — refactoring audit** (skill 49) and the end-of-plan ritual.
 
@@ -221,3 +222,67 @@ About six hours, plus a full-gate run (~15 min) per phase commit.
   window resize and a filter that shortens the list all leave the cursor
   somewhere the view is not; what phase 1 settles is that a keystroke which
   moves nothing must not move the view either.
+
+## 7. Outcome
+
+Five findings, four commits, four green gates. What the plan got right, and
+the three things it got wrong — two of them about the same bug.
+
+**The `Space` jump was not what this plan said it was.** § 1 named
+`sync_cursor` scrolling an off-screen cursor into view, and the fix followed
+from that: stop scrolling when the cursor did not move. That fix is in the
+commit and it is correct, and it did not fix the bug. Turning the scroll off
+through `ScrollInfo` changed nothing; skipping the `scroll_to` call entirely
+changed nothing; holding the offset across the repaint changed nothing.
+
+Instrumenting the adjustment is what said why. The offset survived every
+line of ours at 828 px and was reset inside `gtk_adjustment_configure`,
+under `gtk_widget_allocate` — after every idle a caller could hook. What
+repainting a mark actually did was **replace** the row's object, and
+`GtkListBase` anchors its scroll position on an *item*: splice a new object
+over the anchored one and the next allocation reconfigures the adjustment
+from nothing. So the row is rewritten in place now, through a `revision`
+property the cell watches, and the model does not change at all. Three
+wrong fixes, each of which would have shipped looking plausible, and one
+measurement that ended the argument.
+
+The lesson is the plan's own § 6 turned around: it worried about the fix
+resting on GTK's idle priorities, and the priorities were fine. What it did
+not question was its own diagnosis.
+
+**The flicker was exactly what the plan said**, and the A/B is in the frame
+log both ways: coming back out of a directory painted one frame at 39 px —
+the cursor row — before landing at the remembered 828, and at a priority
+between GTK's layout and its redraw it goes straight to 828.
+
+**Phase 0's finding shaped both Windows phases**, as intended. The Windows
+job runs no tests at all, so the drive-root mapping and the UTF-16
+conversion moved out of `#[cfg(windows)]` into pure functions the Linux gate
+checks — the shape `parse_mount_table` already used. Both new drive-root
+tests fail against the old trimming line, checked by putting it back. What
+is left uncovered is two Win32-facing lines, and `docs/windows.md` says so
+rather than letting a green gate imply otherwise.
+
+**The indicator cost a bug the plan half-predicted.** § 6 said moving the
+progress window's ownership was "the kind of change that quietly alters when
+the window closes". It altered something else: the first version handed the
+meter to the shell by value, and a `Meter::clone` per event — with a
+`RefCell` borrow where there had been none — left the main loop with so
+little that a keypress on `Background` was never processed. A copy of two
+hundred files sends about **55 000** progress events, counted by logging
+every call. The end-to-end suite caught it as a window that would not close,
+which took three wrong guesses to read correctly.
+
+**And one test was written and taken out again.** The click that reopens the
+window needs a job running with no modal dialog up, and neither half stands
+still: twenty thousand cached files copy in the moment between backgrounding
+and clicking, and the one lever that stops a job — an unanswered conflict —
+puts a modal dialog over the main window, where GTK's grab discards the
+click. It passed twice and failed once in a full-suite run. What it proved
+while it passed is recorded in `docs/ui-shell.md` beside the other things
+this suite cannot see; what it would have been is a flake, which this
+repository does not keep.
+
+The audit found one thing: "has this job had its window" lived in the future
+draining the events while everything else about the job lived in the shell.
+It moved, and the future's loop became one line.

@@ -45,6 +45,14 @@ struct Running {
     cancel: CancelToken,
     meter: Meter,
     view: Option<dialogs::ProgressView>,
+    /// Whether this job has ever had its window up.
+    ///
+    /// Not the same question as `view.is_some()`, and that is the point:
+    /// after `Background` there is no view and the window must **not** come
+    /// back on the next progress event, or the button would mean nothing.
+    /// It lives here rather than in the future draining the events, so that
+    /// everything about one running job is in one place.
+    shown_once: bool,
 }
 
 /// The two panes, which of them keystrokes go to, and the jobs they started.
@@ -266,6 +274,7 @@ impl Shell {
             cancel,
             meter: Meter::default(),
             view: None,
+            shown_once: false,
         });
     }
 
@@ -278,13 +287,15 @@ impl Shell {
     /// about how the whole program feels while a copy runs
     /// ([`docs/performance.md`]).
     ///
-    /// Returns whether the job has now earned a window: real work, and long
-    /// enough to be worth interrupting for. The indicator obeys the same rule
-    /// rather than having a second one — a bar that flashes for thirty
-    /// milliseconds is exactly the noise that rule exists to prevent.
-    pub(crate) fn job_advanced(&mut self, event: &Progress, elapsed: Duration) -> bool {
+    /// A job earns its window once it has proved it will take a moment: real
+    /// work, and longer than [`PROGRESS_DELAY`]. Checked as events arrive
+    /// rather than on a timer, so a job that finishes first simply never
+    /// opens one. The indicator obeys the same rule rather than having a
+    /// second one — a bar that flashes for thirty milliseconds is exactly
+    /// the noise that rule exists to prevent.
+    pub(crate) fn job_advanced(&mut self, event: &Progress, elapsed: Duration) {
         let Some(running) = &mut self.running else {
-            return false;
+            return;
         };
         running.meter.apply(event);
         // The clock is read here, not by the meter: what the events add up to
@@ -297,13 +308,16 @@ impl Shell {
             running.view = None;
         }
         if !worth_showing {
-            return false;
+            return;
         }
         if let Some(view) = &running.view {
             view.update(&running.meter);
         }
         self.indicator.show(&running.meter);
-        true
+        if !running.shown_once {
+            running.shown_once = true;
+            self.show_progress_window();
+        }
     }
 
     /// Opens the running job's window if it is not already up.
@@ -478,20 +492,8 @@ pub(crate) fn watch(shell: &Rc<RefCell<Shell>>, handle: JobHandle, done: impl Fn
     let showing = shell.clone();
     glib::spawn_future_local(async move {
         let started = std::time::Instant::now();
-        let mut opened = false;
         while let Ok(event) = progress.recv().await {
-            // A job earns its window only once it has proved it is going to
-            // take a moment. Checked as events arrive rather than on a timer:
-            // a job that finishes first simply never opens one, and a job
-            // that moves no bytes at all never qualifies.
-            let worth_showing = showing.borrow_mut().job_advanced(&event, started.elapsed());
-            // Opened once, and never reopened behind the user's back: after
-            // `Background` the indicator is the way back, and a window that
-            // let itself in again would make that button meaningless.
-            if worth_showing && !opened {
-                opened = true;
-                showing.borrow_mut().show_progress_window();
-            }
+            showing.borrow_mut().job_advanced(&event, started.elapsed());
         }
         showing.borrow_mut().job_finished();
     });
