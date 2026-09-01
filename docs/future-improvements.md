@@ -102,21 +102,20 @@ driver problem from a code one.
 *From:* the first Windows run, 2026-08-30 ([ui-shell.md](ui-shell.md),
 [windows.md](windows.md)).
 
-**The command line does not run anything on Windows.**
-`command.rs` reads `$SHELL` and falls back to `/bin/sh` — a constant whose own
-comment says "present on every Unix by definition", which is true and is
-exactly the assumption Windows breaks. There is no `$SHELL` there and no
-`/bin/sh`, so every command fails with *"the system cannot find the path"*
-before it starts. Nine of the fifteen `fc-core` failures in the first Windows
-test run were this one cause.
+**Which interpreter the Windows command line should use.**
+It ran nothing at all until 2026-09-01: `command.rs` read `$SHELL` and fell
+back to `/bin/sh`, a constant whose own comment said "present on every Unix
+by definition" — true, and exactly the assumption Windows breaks. Nine of the
+fifteen `fc-core` failures in the first Windows test run were that one cause.
 
-The fix is a platform branch to `%COMSPEC%` (`cmd.exe`) with `/C` in place of
-`-c`, which belongs in `vfs::platform` beside every other such difference. It
-is not merely swapping the name: the section it would break is
-[command-line.md](command-line.md)'s "through a shell, on purpose" — pipes,
-globs and `~` are the reason the feature exists, and `cmd.exe` does not do
-`~` or globbing. Whether the answer is PowerShell instead, or the MSYS2 shell
-when one is present, is a product decision rather than a porting detail.
+It now runs `%ComSpec%` with `/C`, which is what makes `Enter`, `F4`, the
+compare tool and the command line work there at all. What is *not* settled is
+the half this entry was really about: `cmd` does no `~` and no globbing, and
+those are what [command-line.md](command-line.md) calls the reason the
+feature exists. Whether the answer is PowerShell, or the MSYS2 shell when one
+is present, is a product decision rather than a porting detail — and it is
+now a decision about which shell is better rather than about whether anything
+runs.
 *Home:* with the Windows startup crash above — both want one session on
 Windows rather than two.
 *From:* the first Windows test run, 2026-08-30.

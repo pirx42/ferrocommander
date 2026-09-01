@@ -14,14 +14,54 @@ use std::process::Command;
 
 use crate::vfs::VfsPath;
 
-/// Environment variable naming the user's shell.
+/// Environment variable naming the interpreter to run a line with.
+///
+/// `$SHELL` on Unix; `%ComSpec%` on Windows, which is how that platform
+/// names the same thing and is what a program should use rather than
+/// assuming where `cmd.exe` lives.
+#[cfg(not(windows))]
 const SHELL_VARIABLE: &str = "SHELL";
+#[cfg(windows)]
+const SHELL_VARIABLE: &str = "ComSpec";
 
-/// Used when `$SHELL` says nothing. Present on every Unix by definition.
+/// Used when the variable says nothing. Present on every installation of its
+/// platform by definition.
+#[cfg(not(windows))]
 const FALLBACK_SHELL: &str = "/bin/sh";
+#[cfg(windows)]
+const FALLBACK_SHELL: &str = "cmd.exe";
 
-/// Tells the shell the rest is a command rather than a file to run.
+/// Tells the interpreter the rest is a command rather than a file to run.
+#[cfg(not(windows))]
 const SHELL_COMMAND_FLAG: &str = "-c";
+#[cfg(windows)]
+const SHELL_COMMAND_FLAG: &str = "/C";
+
+/// What hands a file to whatever the desktop opens it with — the same thing
+/// a double-click does.
+///
+/// One name per platform, and none of them is portable: `xdg-open` is
+/// freedesktop's, `open` is macOS's, and on Windows it is `start`, which is
+/// not a program at all but a `cmd` builtin. That is only usable because
+/// [`run`] spawns `cmd` in the first place, which ties these two constants
+/// together more tightly than they look.
+///
+/// `start`'s first quoted argument is a window **title**, not the file — so
+/// the empty pair of quotes is load-bearing, and leaving it out opens
+/// something else entirely.
+/// All three are named here rather than only the one this build uses, so the
+/// two it does not can still be checked by the gate that runs — which is the
+/// Linux one, always.
+pub const WINDOWS_OPENER: &str = "start \"\"";
+pub const MACOS_OPENER: &str = "open";
+pub const FREEDESKTOP_OPENER: &str = "xdg-open";
+
+#[cfg(target_os = "windows")]
+pub const DESKTOP_OPENER: &str = WINDOWS_OPENER;
+#[cfg(target_os = "macos")]
+pub const DESKTOP_OPENER: &str = MACOS_OPENER;
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+pub const DESKTOP_OPENER: &str = FREEDESKTOP_OPENER;
 
 /// How much output is kept.
 ///

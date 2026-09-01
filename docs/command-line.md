@@ -123,11 +123,17 @@ and the reason the feature exists. It also means the user's shell startup
 applies — the point rather than a side effect, though it does mean a broken
 `.zshrc` shows up here.
 
-**On Windows this runs nothing at all.** Neither `$SHELL` nor `/bin/sh`
-exists there, so a command fails before it starts. What should take their
-place is a product question and not just a constant, because `cmd.exe` does
-not do `~` or globbing — the things the paragraph above calls the reason the
-feature exists ([future-improvements.md](future-improvements.md)).
+**On Windows the interpreter is `cmd`**, from `%ComSpec%` with `/C` in place
+of `-c`. It ran nothing at all until 2026-09-01, because neither `$SHELL` nor
+`/bin/sh` exists there and a command failed before it started.
+
+Running is not parity, and the difference is exactly what the paragraph above
+calls the reason the feature exists: **`cmd` does no `~` and no globbing.**
+Pipes and redirection work; `dir *.txt` is `cmd`'s own answer rather than a
+shell's expansion, and `~` is just a character. Whether the right answer is
+PowerShell, or the MSYS2 shell when one is present, is still a product
+question ([future-improvements.md](future-improvements.md)) — what changed is
+that a typed line now runs.
 
 ## Nothing blocks
 

@@ -31,7 +31,11 @@ pub const KEYS_TABLE: &str = "keys";
 /// The desktop's own answer, which is the only one that can be right without
 /// being told: `$EDITOR` is nearly always a terminal editor, and launching one
 /// with no terminal fails in the common case rather than the rare one.
-pub const DEFAULT_EDITOR: &str = "xdg-open";
+///
+/// Which name that is depends on the platform, and it was `xdg-open`
+/// everywhere until 2026-09-01 — so `Enter` on a file did nothing at all on
+/// Windows *or* macOS. See [`crate::command::DESKTOP_OPENER`].
+pub const DEFAULT_EDITOR: &str = crate::command::DESKTOP_OPENER;
 
 /// How many command lines are remembered.
 ///

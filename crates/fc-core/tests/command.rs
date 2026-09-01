@@ -159,3 +159,45 @@ fn a_command_that_does_not_exist_reports_rather_than_vanishing() {
     assert!(outcome.worth_showing());
     assert!(!outcome.output.is_empty(), "said nothing about why");
 }
+
+#[test]
+fn windows_opener_keeps_the_empty_title_that_makes_it_work() {
+    // `start` is a `cmd` builtin whose first *quoted* argument is a window
+    // title, not a file. Without the empty pair of quotes it takes the path
+    // as the title and opens nothing — a failure with no error, which is why
+    // this is asserted from a platform that will never run it.
+    assert!(fc_core::command::WINDOWS_OPENER.starts_with("start "));
+    assert!(
+        fc_core::command::WINDOWS_OPENER.contains("\"\""),
+        "the empty title is gone, and `start` would take the path for one"
+    );
+}
+
+#[test]
+fn every_platform_has_an_opener_and_this_one_is_freedesktop() {
+    // Each is a real name on its own platform; none of them is portable,
+    // which is the whole reason this is three constants and not one.
+    for opener in [
+        fc_core::command::WINDOWS_OPENER,
+        fc_core::command::MACOS_OPENER,
+        fc_core::command::FREEDESKTOP_OPENER,
+    ] {
+        assert!(!opener.is_empty());
+    }
+    assert_eq!(
+        fc_core::command::DESKTOP_OPENER,
+        fc_core::command::FREEDESKTOP_OPENER,
+        "the gate runs on Linux, so this is the one it can check"
+    );
+}
+
+#[test]
+fn opening_a_file_and_editing_one_use_the_same_default() {
+    // `Enter` and an unconfigured `F4` are the same gesture with different
+    // names, and they drifted apart once already — the editor default was
+    // still `xdg-open` on every platform when the opener stopped being.
+    assert_eq!(
+        fc_core::config::DEFAULT_EDITOR,
+        fc_core::command::DESKTOP_OPENER
+    );
+}

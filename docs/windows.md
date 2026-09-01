@@ -140,6 +140,27 @@ What the bundle holds, why it holds so little of what a GTK bundle usually
 holds, and why there is a `.cmd` beside the `.exe`:
 [packaging.md](packaging.md).
 
+## A command runs through `cmd`, and `Enter` opens with `start`
+
+Every command this program runs — the command line, `F4`'s editor, the
+compare tool and `Enter` on a file — went through `$SHELL` or `/bin/sh -c`,
+which is why none of them did anything on Windows. The interpreter is now
+`%ComSpec%` with `/C` here and `$SHELL -c` elsewhere, so all four work in one
+change.
+
+`Enter` hands a file to whatever the desktop opens it with, and that name is
+different on all three platforms: `xdg-open`, `open`, and on Windows `start`
+— which is not a program but a `cmd` builtin, usable only because the runner
+spawns `cmd` in the first place. **Its first quoted argument is a window
+title, not the file**, so `start ""` carries an empty pair of quotes that is
+load-bearing: leave it out and `start` takes the path for a title and opens
+nothing, with no error. That single detail is asserted from the Linux gate,
+which is the only gate there is.
+
+What that buys is Explorer's own behaviour: a `.png` opens in the system
+viewer, a `.exe` starts. The program now starts programs, which is what a
+double-click does and what was asked for.
+
 ## The free-space figure, and its one Win32 call
 
 The status line's `free of total` was blank on Windows until 2026-09-01:
