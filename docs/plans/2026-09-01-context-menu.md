@@ -44,9 +44,9 @@ Finder.
    cursor there*; holding the right button (TC: about a second) opens the
    context menu on that row. The owner chose TC's button over Explorer's,
    and the long press is part of what TC's button does — it is how a
-   right-button-marks user reaches the menu with the mouse at all. Stated
-   here as TC's behaviour from memory, not from a running copy; the
-   cursor-moves half is the part to confirm.
+   right-button-marks user reaches the menu with the mouse at all. The
+   cursor-moves half was confirmed by the owner against a running copy
+   (2026-09-01); the long press is from memory.
 2. **The menu acts on the marked set when the row is marked, and on the
    row alone when it is not.** Explorer's rule and TC's; it is what makes
    "mark five, right-hold, delete" work, and it means a stray right-hold on
@@ -188,9 +188,6 @@ holds nothing else back.
   button, and a plan that dropped that would leave the mouse with no way
   to the menu at all — but it was not asked for in those words. One line
   to strike if unwanted.
-- **Whether TC's right click moves the cursor** is stated from memory
-  (§ 3.1). If it only marks, phase 2 is one line shorter; the tests pin
-  whichever is chosen, so the choice is cheap now and expensive later.
 - **The Windows half is the largest block of platform code this program
   has, and the popup cannot be tested here.** The last round's lesson is
   applied structurally: the COM plumbing is a Windows CI test, the
