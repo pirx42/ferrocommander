@@ -19,6 +19,13 @@ path = "src/main.rs"
 gtk.workspace = true
 fc-core.workspace = true
 
+# Explorer's own context menu, and the window handle it is shown from. The
+# Linux gate never compiles these; the Windows CI job does, and the crate
+# behind the first is type-checked from Linux on its own.
+[target.'cfg(windows)'.dependencies]
+fc-shellmenu.workspace = true
+gdk4-win32.workspace = true
+
 # What the .deb says about itself. Here rather than in the packaging script,
 # so the description of the package sits beside the crate it describes and
 # there is one place to change it.

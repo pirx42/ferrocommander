@@ -341,7 +341,7 @@ fn wire_row_gestures(shell: &Rc<RefCell<Shell>>, index: usize) {
         actions::refresh_quick_view(&hooked);
         match gesture {
             pane::RowGesture::Click(_) => {}
-            pane::RowGesture::Hold(_) => menu::open_for_cursor_row(&hooked),
+            pane::RowGesture::Hold(_) => menu::open_for_cursor_row(&hooked, menu::Origin::Pointer),
             pane::RowGesture::Background(x, y) => menu::open_background_at(&hooked, x, y),
         }
     });

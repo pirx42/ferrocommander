@@ -213,6 +213,56 @@ hands its shell a POSIX `/tmp`, and the test binary is a *Windows* program:
 `tempfile` would ask the operating system for `\tmp` on the current drive,
 and every fixture would fail to be created.
 
+## The context menu is Explorer's
+
+A right button held on a row, `Shift+F10` or `Menu` on Windows shows
+**the shell's own menu** — the one Explorer shows, with every verb and
+every shell extension the machine has — and a right button on the empty
+space below the rows shows the folder's background menu, *New ▸* and
+*Paste* included. The program's own GTK menu ([ui-shell.md](ui-shell.md))
+is what remains for an archive's entries, which have no path on the disk,
+and what anything gets when the shell declines.
+
+The conversation with the shell lives in its own crate, `fc-shellmenu`,
+and the crate's shape is the point: it has no GTK in it, so
+`cargo clippy -p fc-shellmenu --target x86_64-pc-windows-gnu` type-checks
+every line from the Linux gate — GTK for Windows cannot be built there,
+so a `#[cfg(windows)]` module inside `fc-app` would be checked by nothing
+until the Windows job ran — and its tests run on the Windows CI job without
+building the application in test mode. What they check is everything up
+to the popup: a real temporary file becomes a PIDL, the PIDL's folder hands
+out an `IContextMenu` for it, the menu fills an `HMENU`, and *delete* is
+among the verbs in it; the same for two files of one folder, and for a
+folder's background through its `IShellView`. `TrackPopupMenuEx` and
+`InvokeCommand` are the two calls that need a desktop, and the two the
+owner tries.
+
+Three details of the plumbing, each the answer to a way this goes wrong:
+
+- **The popup is owned by a hidden window of ours**, not by GTK's. A
+  popup's owner receives `WM_INITMENUPOPUP`, `WM_MEASUREITEM`, `WM_DRAWITEM`
+  and `WM_MENUCHAR`, and the owner-drawn submenus — *Send to*, *Open with*
+  — draw themselves only if those reach `IContextMenu3::HandleMenuMsg2`.
+  A window procedure of our own forwards them; subclassing GTK's window for
+  the life of a popup would reach into a toolkit's window, which this
+  program does not do. The hidden window is made the foreground window
+  first, or the popup does not dismiss on a click elsewhere — the
+  documented tray-icon dance.
+- **The GTK main loop stops while the menu is up.** `TrackPopupMenuEx` is
+  modal and pumps its own messages, on the UI thread; a job's progress bar
+  holds still for the second the menu is open, as Explorer's own window
+  does. A second thread would need foreground-window games that differ
+  between Windows versions.
+- **The shell hands out menus per folder**, so a branch view (`Ctrl+B`),
+  whose marked rows may live in several, asks for the cursor row alone
+  rather than pretending with desktop-relative PIDLs.
+
+The `windows` crate is the same crate at the same version `trash` already
+pulls in, pinned once in the workspace so the two cannot become two copies.
+`gdk4-win32` gives the application its window's `HWND`, for the menu's
+placement and for the shell's own dialogs — *Properties* — to be parented
+on.
+
 ## The free-space figure, and its one Win32 call
 
 The status line's `free of total` was blank on Windows until 2026-09-01:

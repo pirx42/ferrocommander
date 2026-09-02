@@ -100,6 +100,9 @@ The row menu carries an **Open with ▸** submenu listing the applications
 the desktop has registered for the file's type, which is the closest thing
 Linux and macOS have to Explorer's menu ([ui-shell.md](ui-shell.md)).
 
+On Windows the menu is Explorer's own, for anything with a path on the disk
+([windows.md](windows.md)).
+
 **On the empty space below the last row** there is nothing to mark, so a
 click and a hold are the same thing: the background menu — Paste, New
 folder, Refresh, Show hidden files, and the four sort orders. The header

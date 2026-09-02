@@ -179,6 +179,11 @@ jobs:
         # shipped on nothing but the smoke-start below. The third was broken
         # in three separate ways on arrival (`docs/windows.md`).
         #
+        # The second line is the shell menu up to the popup: the PIDLs, the
+        # folder, the `IContextMenu`, the filled `HMENU` and the verbs in
+        # it, for a real temporary file and folder. Only the popup itself
+        # and the invocation need a desktop.
+        #
         # `TMP` because MSYS2 hands its shell a POSIX `/tmp`, and the test
         # binary is a *Windows* program: `tempfile` would ask the OS for
         # `\tmp` on the current drive and every fixture would fail to be
@@ -187,7 +192,9 @@ jobs:
         env:
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: cargo test -p fc-core --test command
+        run: |
+          cargo test -p fc-core --test command
+          cargo test -p fc-shellmenu
 
       - name: Package
         # Builds, gathers the GTK4 DLLs the binary actually imports, checks

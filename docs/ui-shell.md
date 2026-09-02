@@ -412,8 +412,13 @@ launched, not on what was shown. GIO reads `mimeapps.list` directly, with
 no compiled `mimeinfo.cache`, which is what makes that fixture two files
 rather than a dependency on `update-desktop-database`.
 
-The platform's own menu on Windows is the rest of
-[the plan](plans/2026-09-01-context-menu.md).
+**On Windows, Explorer's own menu comes first.** For anything with a path
+on the disk the shell's menu is shown instead of this one — verbs, *Send
+to*, *Properties*, every shell extension — through the `fc-shellmenu`
+crate ([windows.md](windows.md)); the menu above is what an archive's
+entries get, and what anything gets when the shell declines. `menu.rs`
+asks with a `bool` back, and every reason the shell might say no lands on
+this program's own menu rather than on nothing.
 
 ## Active pane
 

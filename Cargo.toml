@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/fc-core", "crates/fc-app"]
+members = ["crates/fc-core", "crates/fc-app", "crates/fc-shellmenu"]
 resolver = "2"
 
 # Shared package metadata: declared once so the two crates cannot drift apart
@@ -15,6 +15,24 @@ repository = "https://github.com/pirx42/ferrocommander"
 # `workspace = true`, so a dependency is upgraded in exactly one place.
 [workspace.dependencies]
 fc-core = { path = "crates/fc-core" }
+fc-shellmenu = { path = "crates/fc-shellmenu" }
+# The Win32 and COM surface the Windows shell menu talks to. The same crate
+# and version `trash` already pulls in, so it costs no second copy; pinned
+# here so the two cannot drift apart into two.
+windows = { version = "0.56", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
+# The one thing the application itself needs from Win32: the window's
+# `HWND`, which the shell menu is placed relative to and the shell's own
+# dialogs are parented on.
+gdk4-win32 = "0.11"
 tempfile = "3"
 # Percent-encoding for the `file://` URIs the clipboard carries. A path with
 # a space in it is ordinary, and encoding one by hand is the kind of small

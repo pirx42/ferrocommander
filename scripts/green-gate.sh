@@ -26,7 +26,7 @@ step() {
 
 step "fmt"            cargo fmt --all -- --check
 step "clippy"         cargo clippy --workspace --all-targets -- -D warnings
-step "clippy-windows" cargo clippy -p fc-core --all-targets \
+step "clippy-windows" cargo clippy -p fc-core -p fc-shellmenu --all-targets \
                           --target x86_64-pc-windows-gnu -- -D warnings
 step "clippy-macos"   cargo clippy -p fc-core --all-targets \
                           --target aarch64-apple-darwin -- -D warnings

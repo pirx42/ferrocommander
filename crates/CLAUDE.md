@@ -16,6 +16,7 @@ documents name Total Commander itself
 |---|---|---|
 | [fc-core](fc-core/src/CLAUDE.md) | lib | VFS, listing model, file operations, archives, search, multi-rename. **No GTK dependency** — headless-testable with `cargo test`. |
 | [fc-app](fc-app/src/CLAUDE.md) | bin | GTK4 shell: main window with two panes, dialogs, viewer, keymap, config. |
+| fc-shellmenu | lib | Explorer's own context menu over COM, for the Windows build. Empty on every other platform; its own crate so it can be type-checked from Linux without GTK for Windows, and tested on the Windows CI job without the application. |
 
 ## Why the split
 

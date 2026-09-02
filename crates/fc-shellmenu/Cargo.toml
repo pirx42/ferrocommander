@@ -1,0 +1,21 @@
+[package]
+name = "fc-shellmenu"
+description = "Explorer's own context menu, for the Windows build of FerroCommander."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Windows only, and empty everywhere else: the crate exists so this COM code
+# can be type-checked from Linux with `--target x86_64-pc-windows-gnu` and
+# tested on the Windows CI job without building the GTK application there in
+# test mode. `windows` is already in the tree as `trash`'s dependency, at
+# this version, so nothing new is compiled for it. The features are exactly
+# the modules the conversation with the shell touches — `Ole` only because
+# `IShellView` inherits `IOleWindow`.
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

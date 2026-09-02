@@ -9,7 +9,9 @@
 //!
 //! What the menu *is* differs by platform ([`docs/ui-shell.md`]): on Windows
 //! Explorer's own menu takes this one's place for anything with a path on
-//! the disk. That half is not here yet.
+//! the disk — the `windows` module below, over the `fc-shellmenu` crate —
+//! and this menu is what remains for an archive's entries, and what every
+//! platform gets when the shell has no answer.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -28,9 +30,27 @@ use crate::shell::Shell;
 /// The menu model's attribute a popover reads the shortcut to show from.
 const ACCEL_ATTRIBUTE: &str = "accel";
 
+/// What asked for a menu, which decides where it is drawn: a key means the
+/// row it is about, the mouse means the pointer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Keyboard,
+    Pointer,
+}
+
 /// Opens the row menu on the active pane's cursor row — `Shift+F10`, `Menu`,
 /// and a held right button.
-pub(crate) fn open_for_cursor_row(shell: &Rc<RefCell<Shell>>) {
+///
+/// On Windows the shell's own menu comes first, for anything with a path on
+/// the disk; the menu below is what an archive's entries get, and what
+/// anything gets when the shell declines.
+pub(crate) fn open_for_cursor_row(shell: &Rc<RefCell<Shell>>, origin: Origin) {
+    #[cfg(windows)]
+    if windows::shell_menu_for_rows(shell, origin) {
+        return;
+    }
+    #[cfg(not(windows))]
+    let _ = origin;
     let (rows, at, model) = {
         let state = shell.borrow();
         let pane = &state.panes[state.active];
@@ -111,6 +131,10 @@ fn launch(shell: &Rc<RefCell<Shell>>, content_type: &str, id: &str) {
 /// Opens the background menu on the active pane, at a point of its rows
 /// widget — where the right button landed on empty space.
 pub(crate) fn open_background_at(shell: &Rc<RefCell<Shell>>, x: f64, y: f64) {
+    #[cfg(windows)]
+    if windows::shell_menu_for_background(shell) {
+        return;
+    }
     let (rows, model) = {
         let state = shell.borrow();
         let rows = state.panes[state.active].rows().clone();
@@ -220,6 +244,109 @@ fn show(
         glib::idle_add_local_once(move || popover.unparent());
     });
     popover.popup();
+}
+
+/// Explorer's menu, where there is one.
+///
+/// Everything here is a question to `fc-shellmenu` and a `bool` back: `true`
+/// means the shell showed its menu and the matter is closed, `false` means
+/// draw ours. The shell declines for an entry in an archive (no path on the
+/// disk), for the `..` row (nothing to act on), and whenever it fails to
+/// build a menu — and in each case this program's own menu is a better
+/// answer than none.
+#[cfg(windows)]
+mod windows {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use gtk::prelude::*;
+
+    use fc_shellmenu::{Menu, Where};
+
+    use super::{cursor_row_bounds, Origin};
+    use crate::jobs;
+    use crate::shell::Shell;
+
+    pub(super) fn shell_menu_for_rows(shell: &Rc<RefCell<Shell>>, origin: Origin) -> bool {
+        let (paths, handle, at) = {
+            let state = shell.borrow();
+            let pane = &state.panes[state.active];
+            if pane.in_archive() {
+                return false;
+            }
+            let listing = pane.listing();
+            // The shell hands out menus per folder, so a branch view — whose
+            // marked rows may live in several — asks for the cursor row alone.
+            let sources = match listing.is_branch() {
+                true => listing.current_path().into_iter().collect(),
+                false => jobs::sources(listing),
+            };
+            let paths: Vec<std::path::PathBuf> =
+                sources.iter().map(fc_core::vfs::to_std_path).collect();
+            let Some(window) = state.window() else {
+                return false;
+            };
+            let Some(handle) = window_handle(&window) else {
+                return false;
+            };
+            let at = match origin {
+                Origin::Pointer => Where::Pointer,
+                Origin::Keyboard => {
+                    // The row's bottom-left corner, in the window's
+                    // coordinates — which on Windows are the client area's.
+                    let rows = pane.rows();
+                    let bounds = cursor_row_bounds(Some(&window), rows);
+                    let corner = gtk::graphene::Point::new(
+                        bounds.x() as f32,
+                        (bounds.y() + bounds.height()) as f32,
+                    );
+                    let point = rows.compute_point(&window, &corner).unwrap_or(corner);
+                    Where::Client {
+                        x: point.x() as i32,
+                        y: point.y() as i32,
+                    }
+                }
+            };
+            (paths, handle, at)
+        };
+        if paths.is_empty() {
+            return false;
+        }
+        let refs: Vec<&std::path::Path> = paths.iter().map(|path| path.as_path()).collect();
+        let Ok(menu) = Menu::for_items(&refs) else {
+            return false;
+        };
+        // What the verb did is the shell's business; the watcher sees the
+        // result. An invocation that failed said so in the shell's own words.
+        let _ = menu.track(handle, at);
+        true
+    }
+
+    pub(super) fn shell_menu_for_background(shell: &Rc<RefCell<Shell>>) -> bool {
+        let (folder, handle) = {
+            let state = shell.borrow();
+            let pane = &state.panes[state.active];
+            if pane.in_archive() || pane.listing().is_branch() {
+                return false;
+            }
+            let Some(handle) = state.window().as_ref().and_then(window_handle) else {
+                return false;
+            };
+            (fc_core::vfs::to_std_path(&pane.directory()), handle)
+        };
+        let Ok(menu) = Menu::for_background(&folder) else {
+            return false;
+        };
+        let _ = menu.track(handle, Where::Pointer);
+        true
+    }
+
+    /// The window's `HWND`, through GDK's Win32 surface.
+    fn window_handle(window: &gtk::ApplicationWindow) -> Option<isize> {
+        let surface = window.surface()?;
+        let surface = surface.downcast::<gdk4_win32::Win32Surface>().ok()?;
+        Some(surface.handle().0 as isize)
+    }
 }
 
 #[cfg(test)]

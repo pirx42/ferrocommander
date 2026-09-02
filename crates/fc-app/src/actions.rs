@@ -153,7 +153,9 @@ pub(crate) fn dispatch(shell: &Rc<RefCell<Shell>>, action: Action) {
         Action::View => start_viewing(shell),
         Action::Compare => start_compare(shell),
         Action::QuickView => toggle_quick_view(shell),
-        Action::ContextMenu => crate::menu::open_for_cursor_row(shell),
+        Action::ContextMenu => {
+            crate::menu::open_for_cursor_row(shell, crate::menu::Origin::Keyboard)
+        }
         Action::Edit => start_editing(shell),
         Action::CreateFile => start_create_file(shell),
         Action::Reread => shell.borrow_mut().active_pane().reread(),

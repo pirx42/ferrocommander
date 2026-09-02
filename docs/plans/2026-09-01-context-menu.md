@@ -1,6 +1,6 @@
 # The context menu — the right button, and what the platform puts in it
 
-Status: **In progress**, 2026-09-01 — phases 1–4 done, phase 5 next.
+Status: **In progress**, 2026-09-01 — phases 1–5 done, phase 6 next.
 
 > display the context menu like in windows explorer when click with right
 > mouse button on an item (folder or file)
@@ -273,3 +273,20 @@ is one `Down` away, which the first draft of the test did not know. The
 fixture registers one application through `mimeapps.list` alone — checked
 with `gio mime` first — and its `Exec` writes the path it was given, so
 the test asserts on the launch.
+
+**Phase 5 — the Windows shell menu.** Its own crate, `fc-shellmenu`, and
+that shape was the decision that mattered: the gate cannot build GTK for
+Windows, so a `#[cfg(windows)]` module in `fc-app` would have been
+checked by nothing, while a GTK-free crate is clippy-checked for the
+Windows target from Linux (the gate's `clippy-windows` step now covers it)
+and its tests run on the Windows CI job — the PIDLs, the folder, the
+`IContextMenu`, the filled `HMENU` and its verbs, for a real file, two
+files and a folder's background. The popup is owned by a hidden window of
+our own so `IContextMenu3` gets its menu messages without subclassing
+GTK's; the GTK loop stops while it is up. `fc-app`'s side is a `bool`:
+the shell showed its menu, or draw ours — and an archive entry, the `..`
+row, a branch view's marks and any failure all land on ours. `windows`
+is the crate `trash` already builds, pinned once in the workspace;
+`gdk4-win32` yields the `HWND`. The two calls no test here can run —
+`TrackPopupMenuEx` and `InvokeCommand` — are named as such, and the first
+Windows round will say what they do.
