@@ -321,11 +321,18 @@ impl App {
     ///
     /// A popover is a window of its own to X, so the app's visible windows go
     /// from one to two when one opens — and *that* is waited for, rather than
-    /// a settle. The CI runner is slower than a developer's machine by enough
-    /// that keys sent straight after `Shift+F10` reached the pane before the
-    /// popover had the keyboard: `Return` on a file row then opened it with
-    /// the runner's browser, which is how a `firefox` window came to be in a
-    /// failure message. Six green gate runs here never once saw it.
+    /// a settle, because a settle is a guess about a machine and this is the
+    /// thing itself.
+    ///
+    /// **It is not what fixed the CI failure it was written for.** Three
+    /// menu tests failed on the runner and passed here, and the browser
+    /// window in the failure message read as a race — keys arriving before
+    /// the popover had the keyboard. It was not: the runner has
+    /// applications installed, so the row menu had an *Open with* row this
+    /// machine's menu did not, and counting `Down` presses reached *Edit*
+    /// instead of *Copy*. The fixtures settle the menu's shape now
+    /// (`register_an_application_for_text`). This stays because waiting for
+    /// the window is still better than waiting for a duration.
     pub fn menu_after(&self, open: impl FnOnce(&App)) {
         let before = self.visible_app_windows();
         open(self);

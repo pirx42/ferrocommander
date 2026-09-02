@@ -414,12 +414,18 @@ submenu, for the reason `F4` refuses there. GTK draws a submenu as a page
 with a back row at the top, and that row has the focus on arrival — one
 `Down` reaches the first application.
 
-The end-to-end test registers one application for `text/plain` in the
-private home's `mimeapps.list` — a `.desktop` file whose `Exec` is a script
-that writes down the path it was given — so the assertion is on what was
-launched, not on what was shown. GIO reads `mimeapps.list` directly, with
-no compiled `mimeinfo.cache`, which is what makes that fixture two files
-rather than a dependency on `update-desktop-database`.
+**Every end-to-end fixture registers one application for `text/plain`** in
+the private home's `mimeapps.list` — a `.desktop` file whose `Exec` is a
+script that writes down the path it was given. Two things come of that: the
+*Open with* test asserts on what was actually launched rather than on what
+was shown, and — the reason it is in *every* fixture — the row menu has one
+shape everywhere. A menu that carries *Open with* only where the machine
+has applications installed is a menu whose entries sit at different
+positions on different machines, and a test that reaches one by counting
+`Down` presses reaches a different entry on each. That cost a CI round:
+three tests that passed here chose *Edit* on the runner and opened the file
+in its browser. What the machine has registered can still add rows inside
+the submenu, where the private association outranks them.
 
 **On Windows, Explorer's own menu comes first.** For anything with a path
 on the disk the shell's menu is shown instead of this one — verbs, *Send

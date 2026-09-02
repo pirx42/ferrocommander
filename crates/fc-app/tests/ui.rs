@@ -117,6 +117,48 @@ fn arrange(home: &Path) {
     fs::write(home.join("src/notes.txt"), SOURCE_TEXT).unwrap();
     fs::write(home.join("src/data.bin"), vec![9u8; 4096]).unwrap();
     fs::write(home.join("src/nested/inner.txt"), "deep").unwrap();
+    register_an_application_for_text(home);
+}
+
+/// Registers exactly one application for `text/plain` in the private home,
+/// and it is in **every** fixture on purpose.
+///
+/// The row menu carries an *Open with* submenu only when the desktop knows
+/// an application for the row's type — so without this, the menu has one
+/// shape on a machine with no applications installed and another on a
+/// machine with some, and a test that reaches an entry by counting `Down`
+/// presses reaches a different entry on each. That is not hypothetical: it
+/// is how three tests passed here and failed on the CI runner, where
+/// `Down`×3 landed on *Edit* instead of *Copy* and opened `notes.txt` in
+/// the runner's browser.
+///
+/// One application, always present, in the home the test owns: the menu's
+/// shape is then the fixture's to state rather than the machine's to
+/// decide. What the *machine* has registered can still add rows **inside**
+/// the submenu, which is why the one test that opens it puts its own
+/// association in `mimeapps.list`, where it outranks them.
+///
+/// `mimeapps.list` rather than a compiled `mimeinfo.cache`: GIO reads the
+/// former directly, and `update-desktop-database` is not on every machine
+/// that runs this suite — checked on 2026-09-02 with `gio mime` before this
+/// was written.
+fn register_an_application_for_text(home: &Path) {
+    write_private_program(home, OPENER_PROGRAM, OPENED_WITH);
+    let applications = home.join(DATA_HOME).join("applications");
+    std::fs::create_dir_all(&applications).unwrap();
+    std::fs::write(
+        applications.join("fake-opener.desktop"),
+        format!(
+            "[Desktop Entry]\nType=Application\nName=Fake Opener\nExec={} %f\nMimeType=text/plain;\n",
+            home.join(PRIVATE_BIN).join(OPENER_PROGRAM).display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        applications.join("mimeapps.list"),
+        "[Added Associations]\ntext/plain=fake-opener.desktop;\n",
+    )
+    .unwrap();
 }
 
 /// Same, with `src/bundle.zip` holding two files and a nested directory.
@@ -150,44 +192,10 @@ fn with_a_tall_destination(home: &Path) {
     }
 }
 
-/// Where the stand-in application writes the path it was launched with.
+/// Where the stand-in application writes the path it was launched with, and
+/// what it is called in the private bin.
 const OPENED_WITH: &str = "opened-with";
-
-/// Same, with one application registered for `text/plain` in the private
-/// home's own application registry — a `.desktop` file whose `Exec` is a
-/// script that writes the path it was given — so *Open with* has exactly
-/// one answer, and choosing it leaves evidence.
-///
-/// `mimeapps.list` rather than a compiled `mimeinfo.cache`: GIO reads the
-/// former directly, and `update-desktop-database` is not on every machine
-/// that runs this suite — checked on 2026-09-02 with `gio mime` before
-/// this fixture was written.
-fn with_a_fake_opener(home: &Path) {
-    arrange(home);
-    write_private_program(home, "fake-opener", OPENED_WITH);
-    let applications = home.join(DATA_HOME).join("applications");
-    std::fs::create_dir_all(&applications).unwrap();
-    std::fs::write(
-        applications.join("fake-opener.desktop"),
-        format!(
-            "[Desktop Entry]
-Type=Application
-Name=Fake Opener
-Exec={} %f
-MimeType=text/plain;
-",
-            home.join(PRIVATE_BIN).join("fake-opener").display()
-        ),
-    )
-    .unwrap();
-    std::fs::write(
-        applications.join("mimeapps.list"),
-        "[Added Associations]
-text/plain=fake-opener.desktop;
-",
-    )
-    .unwrap();
-}
+const OPENER_PROGRAM: &str = "fake-opener";
 
 /// Same, with a second `.txt` so the extension keys have something to pick
 /// from and something to leave behind.
@@ -347,8 +355,13 @@ fn choose_menu_entry(app: &App, index: usize) {
     app.key("Return");
 }
 
-/// Where `Copy…` sits in the row menu: fourth, after Open, View and Edit.
-const MENU_COPY: usize = 3;
+/// Where `Copy…` sits in the row menu: after Open, Open with, View and Edit.
+///
+/// *Open with* is there because every fixture registers an application for
+/// `text/plain` and every row these tests open the menu on is a `.txt` —
+/// see [`register_an_application_for_text`], which is where the whole
+/// reason this constant can be a constant is written down.
+const MENU_COPY: usize = 4;
 
 #[test]
 fn shift_f10_opens_a_menu_whose_entry_runs_like_its_key() {
@@ -402,7 +415,7 @@ fn open_with_lists_the_desktops_applications_and_launches_the_chosen_one() {
     // it, and choosing it must launch it with the file's path — which the
     // stand-in writes down, so the assertion is on what was actually opened
     // rather than on what was shown.
-    let app = in_src_and_dst(with_a_fake_opener);
+    let app = in_src_and_dst(arrange);
     cursor_on_notes(&app);
 
     app.menu_after(|app| app.key("shift+F10"));
