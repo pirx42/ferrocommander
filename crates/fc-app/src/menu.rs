@@ -18,7 +18,10 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
 use crate::actions::dispatch;
-use crate::constants::{BACKGROUND_MENU, MENU_ACTION_GROUP, MENU_ACTION_RUN, ROW_MENU};
+use crate::constants::{
+    BACKGROUND_MENU, MENU_ACTION_GROUP, MENU_ACTION_OPEN_WITH, MENU_ACTION_RUN, MENU_OPEN_WITH,
+    MENU_OPEN_WITH_POSITION, ROW_MENU,
+};
 use crate::keymap::{action_named, Keymap};
 use crate::shell::Shell;
 
@@ -30,11 +33,79 @@ const ACCEL_ATTRIBUTE: &str = "accel";
 pub(crate) fn open_for_cursor_row(shell: &Rc<RefCell<Shell>>) {
     let (rows, at, model) = {
         let state = shell.borrow();
-        let rows = state.panes[state.active].rows().clone();
+        let pane = &state.panes[state.active];
+        let rows = pane.rows().clone();
         let at = cursor_row_bounds(state.window().as_ref(), &rows);
-        (rows, at, build(ROW_MENU, &state.keymap))
+        let model = build(ROW_MENU, &state.keymap);
+        if let Some(applications) = pane.current_content_type().and_then(open_with_menu) {
+            let first = model
+                .item_link(0, gio::MENU_LINK_SECTION)
+                .and_downcast::<gio::Menu>()
+                .expect("the row menu's first section is a Menu");
+            first.insert_submenu(MENU_OPEN_WITH_POSITION, Some(MENU_OPEN_WITH), &applications);
+        }
+        (rows, at, model)
     };
     show(shell, &rows, at, model);
+}
+
+/// The applications the desktop has registered for `content_type`, as a
+/// submenu — or nothing, when it has none.
+///
+/// `gio` is what makes this native without a Finder or an Explorer to
+/// borrow from: on Linux it reads the freedesktop registry a double-click
+/// consults, on macOS Launch Services, on Windows the registry's
+/// associations. Each entry's parameter is the application's id, which is
+/// how the choice finds its application again at launch — see
+/// [`launch`].
+fn open_with_menu(content_type: String) -> Option<gio::Menu> {
+    let applications = gio::AppInfo::all_for_type(&content_type);
+    if applications.is_empty() {
+        return None;
+    }
+    let menu = gio::Menu::new();
+    let target = format!("{MENU_ACTION_GROUP}.{MENU_ACTION_OPEN_WITH}");
+    for application in applications {
+        // An application without an id cannot be found again; the list
+        // from `all_for_type` is of installed ones, which always have one.
+        let Some(id) = application.id() else {
+            continue;
+        };
+        let item = gio::MenuItem::new(Some(&application.display_name()), None);
+        item.set_action_and_target_value(
+            Some(&target),
+            Some(&(content_type.as_str(), id.as_str()).to_variant()),
+        );
+        menu.append_item(&item);
+    }
+    Some(menu)
+}
+
+/// Opens the active pane's cursor file with the application `id`, found
+/// among those registered for `content_type`.
+///
+/// Looked up again rather than kept: an `AppInfo` is not a value a menu
+/// model can carry, and the registry answers the same question in a
+/// microsecond. The file goes over as a `gio::File` built from the native
+/// path — a value, never a line, which is the whole `Enter` lesson.
+fn launch(shell: &Rc<RefCell<Shell>>, content_type: &str, id: &str) {
+    let path = {
+        let mut state = shell.borrow_mut();
+        state.active_pane().current_file()
+    };
+    let Some(path) = path else {
+        return;
+    };
+    let Some(application) = gio::AppInfo::all_for_type(content_type)
+        .into_iter()
+        .find(|application| application.id().is_some_and(|found| found == id))
+    else {
+        return;
+    };
+    let file = gio::File::for_path(fc_core::vfs::to_std_path(&path));
+    // Nothing comes back, for `open_in_desktop`'s reason: an application
+    // that fails to start says so itself, on its own terms.
+    let _ = application.launch(&[file], None::<&gio::AppLaunchContext>);
 }
 
 /// Opens the background menu on the active pane, at a point of its rows
@@ -123,8 +194,21 @@ fn show(
         };
         dispatch(&running, action);
     });
+    let open_with = gio::SimpleAction::new(
+        MENU_ACTION_OPEN_WITH,
+        Some(glib::VariantTy::new("(ss)").expect("a pair of strings is a type")),
+    );
+    let launching = shell.clone();
+    open_with.connect_activate(move |_, parameter| {
+        let Some((content_type, id)) = parameter.and_then(|value| value.get::<(String, String)>())
+        else {
+            return;
+        };
+        launch(&launching, &content_type, &id);
+    });
     let group = gio::SimpleActionGroup::new();
     group.add_action(&run);
+    group.add_action(&open_with);
     parent.insert_action_group(MENU_ACTION_GROUP, Some(&group));
 
     let popover = gtk::PopoverMenu::from_model(Some(&model));

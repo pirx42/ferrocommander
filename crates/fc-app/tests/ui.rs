@@ -13,7 +13,7 @@ mod harness;
 use std::path::Path;
 
 use fc_core::vfs::{LocalFs, VfsPath};
-use harness::{App, PRIVATE_BIN};
+use harness::{App, DATA_HOME, PRIVATE_BIN};
 
 /// Contents of the file most tests move around, so an assertion can tell the
 /// copy apart from whatever was at the destination.
@@ -148,6 +148,45 @@ fn with_a_tall_destination(home: &Path) {
     for index in 0..TALL_DIRECTORY_ROWS {
         std::fs::write(home.join(format!("dst/row{index:03}.txt")), "x").unwrap();
     }
+}
+
+/// Where the stand-in application writes the path it was launched with.
+const OPENED_WITH: &str = "opened-with";
+
+/// Same, with one application registered for `text/plain` in the private
+/// home's own application registry — a `.desktop` file whose `Exec` is a
+/// script that writes the path it was given — so *Open with* has exactly
+/// one answer, and choosing it leaves evidence.
+///
+/// `mimeapps.list` rather than a compiled `mimeinfo.cache`: GIO reads the
+/// former directly, and `update-desktop-database` is not on every machine
+/// that runs this suite — checked on 2026-09-02 with `gio mime` before
+/// this fixture was written.
+fn with_a_fake_opener(home: &Path) {
+    arrange(home);
+    write_private_program(home, "fake-opener", OPENED_WITH);
+    let applications = home.join(DATA_HOME).join("applications");
+    std::fs::create_dir_all(&applications).unwrap();
+    std::fs::write(
+        applications.join("fake-opener.desktop"),
+        format!(
+            "[Desktop Entry]
+Type=Application
+Name=Fake Opener
+Exec={} %f
+MimeType=text/plain;
+",
+            home.join(PRIVATE_BIN).join("fake-opener").display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        applications.join("mimeapps.list"),
+        "[Added Associations]
+text/plain=fake-opener.desktop;
+",
+    )
+    .unwrap();
 }
 
 /// Same, with a second `.txt` so the extension keys have something to pick
@@ -347,6 +386,34 @@ fn the_menu_acts_on_what_is_marked_not_on_the_row_it_points_at() {
         !app.path("dst/notes.txt").exists(),
         "the menu copied the row it pointed at rather than the marked file"
     );
+}
+
+/// Where `Open with` sits in the row menu: right after `Open`.
+const MENU_OPEN_WITH: usize = 1;
+
+#[test]
+fn open_with_lists_the_desktops_applications_and_launches_the_chosen_one() {
+    // The one native piece a Linux desktop has to offer a context menu: the
+    // application registry a double-click consults. One application is
+    // registered for text/plain in the private home; the submenu must show
+    // it, and choosing it must launch it with the file's path — which the
+    // stand-in writes down, so the assertion is on what was actually opened
+    // rather than on what was shown.
+    let app = in_src_and_dst(with_a_fake_opener);
+    cursor_on_notes(&app);
+
+    app.key("shift+F10");
+    for _ in 0..MENU_OPEN_WITH {
+        app.key("Down");
+    }
+    // Into the submenu. GTK opens a submenu as a page with a "back" row at
+    // the top, and that row is what has the focus on arrival — so one Down
+    // reaches the first application, and Return chooses it.
+    app.key("Return");
+    app.settle();
+    app.keys(&["Down", "Return"]);
+
+    app.await_mentions(OPENED_WITH, "src/notes.txt");
 }
 
 /// Two points in the left pane far enough apart to be different rows, and

@@ -1283,6 +1283,22 @@ impl PaneView {
         self.shown.listing.current_path()
     }
 
+    /// The content type of the row under the cursor, when it is a **file**
+    /// on a real filesystem — what the desktop's application registry is
+    /// asked about for *Open with*.
+    ///
+    /// `None` on `..`, on a directory, and inside an archive: an entry in an
+    /// archive has no path an application could be handed
+    /// (`docs/archives.md`), so offering applications for it would offer to
+    /// open something of that name on the disk.
+    pub fn current_content_type(&self) -> Option<String> {
+        if self.in_archive() {
+            return None;
+        }
+        self.current_file()?;
+        Some(self.row_at(self.shown.listing.cursor()).content_type())
+    }
+
     /// Whether the last navigation failed and left the pane where it was.
     pub fn went_wrong(&self) -> bool {
         self.error.is_some()

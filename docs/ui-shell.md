@@ -391,6 +391,27 @@ on a row as well, and neither claims the sequence — the cell's gestures are
 left exactly as they were, and the check above is what keeps the two menus
 from both opening.
 
+**Open with ▸** is the one native piece a Linux desktop or a Mac has to
+offer a context menu, and it comes from `gio::AppInfo::all_for_type` on
+the row's content type — the freedesktop registry a double-click consults
+on Linux, Launch Services on macOS, the registry's associations on
+Windows. The submenu sits right after *Open*, and is left out entirely when
+the desktop knows no application for the type. Choosing one launches it
+through `AppInfo::launch` with the file as a `gio::File` built from the
+native path — a value, never a command line, which is the whole lesson of
+`Enter` on Windows ([windows.md](windows.md)). Only for a file on a real
+filesystem: `..`, a directory and anything inside an archive get no
+submenu, for the reason `F4` refuses there. GTK draws a submenu as a page
+with a back row at the top, and that row has the focus on arrival — one
+`Down` reaches the first application.
+
+The end-to-end test registers one application for `text/plain` in the
+private home's `mimeapps.list` — a `.desktop` file whose `Exec` is a script
+that writes down the path it was given — so the assertion is on what was
+launched, not on what was shown. GIO reads `mimeapps.list` directly, with
+no compiled `mimeinfo.cache`, which is what makes that fixture two files
+rather than a dependency on `update-desktop-database`.
+
 The platform's own menu on Windows is the rest of
 [the plan](plans/2026-09-01-context-menu.md).
 

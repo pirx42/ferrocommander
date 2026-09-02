@@ -580,6 +580,13 @@ pub const CSS_NAME_ROW: &str = "row";
 /// numbering: 1 is the primary button, 3 the secondary.
 pub const RIGHT_BUTTON: u32 = 3;
 
+/// The submenu of applications registered for the row's content type, and
+/// where it goes: right after `Open`, which is where Explorer and every
+/// desktop put it. Left out entirely when the desktop knows no application
+/// for the type — an empty submenu is a question with no answers.
+pub const MENU_OPEN_WITH: &str = "Open with";
+pub const MENU_OPEN_WITH_POSITION: i32 = 1;
+
 /// The action group the menu's entries speak to, and its one action.
 ///
 /// One action taking the entry's name as a string, rather than one action per
@@ -588,6 +595,10 @@ pub const RIGHT_BUTTON: u32 = 3;
 /// wants a menu model's action names written with — `menu.run`.
 pub const MENU_ACTION_GROUP: &str = "menu";
 pub const MENU_ACTION_RUN: &str = "run";
+/// The second action: open the cursor file with the application whose id
+/// is the parameter. Separate from `run` because its parameter is not an
+/// action name and must not be parsed as one.
+pub const MENU_ACTION_OPEN_WITH: &str = "open-with";
 
 /// Dialog titles.
 pub const TITLE_COPY: &str = "Copy";

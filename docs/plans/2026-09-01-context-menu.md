@@ -1,6 +1,6 @@
 # The context menu — the right button, and what the platform puts in it
 
-Status: **In progress**, 2026-09-01 — phases 1–3 done, phase 4 next.
+Status: **In progress**, 2026-09-01 — phases 1–4 done, phase 5 next.
 
 > display the context menu like in windows explorer when click with right
 > mouse button on an item (folder or file)
@@ -260,3 +260,16 @@ a cell had it, no `ListView` above means the header, else empty space. A
 click and a hold both open it, since there is nothing to mark. Two
 end-to-end tests, choosing New folder from each gesture: the dialog that
 opens says which menu it was.
+
+**Phase 4 — Open with ▸.** `gio::AppInfo::all_for_type` on the cursor
+row's content type, inserted after *Open* as a submenu, or left out when
+the registry has nothing; choosing an entry re-finds the application by
+id and launches it with a `gio::File` from the native path. The action is
+a second `SimpleAction` with a `(ss)` parameter — content type and id —
+kept apart from `run` so its parameter is never parsed as an action name.
+Only for a file on a real filesystem. Found by running it: GTK opens a
+submenu as a page whose back row has the focus, so the first application
+is one `Down` away, which the first draft of the test did not know. The
+fixture registers one application through `mimeapps.list` alone — checked
+with `gio mime` first — and its `Exec` writes the path it was given, so
+the test asserts on the launch.

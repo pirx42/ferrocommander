@@ -85,7 +85,7 @@ const XVFB_LOG: &str = "xvfb.log";
 /// read the settings file at `.config/ferrocommander/config.toml`, so pinning
 /// the variables to anything else would move the file out from under them.
 const CONFIG_HOME: &str = ".config";
-const DATA_HOME: &str = ".local/share";
+pub const DATA_HOME: &str = ".local/share";
 
 /// Where a fixture puts a stand-in for a program the app shells out to.
 /// Ahead of the real `PATH`, so the stand-in is the one that runs.

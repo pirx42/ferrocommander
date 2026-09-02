@@ -96,6 +96,10 @@ click deliberately does not: everything the right button leads to is about
 the row it landed on, and a menu drawn over one pane must never act on the
 other ([ui-shell.md](ui-shell.md)).
 
+The row menu carries an **Open with ▸** submenu listing the applications
+the desktop has registered for the file's type, which is the closest thing
+Linux and macOS have to Explorer's menu ([ui-shell.md](ui-shell.md)).
+
 **On the empty space below the last row** there is nothing to mark, so a
 click and a hold are the same thing: the background menu — Paste, New
 folder, Refresh, Show hidden files, and the four sort orders. The header
