@@ -18,14 +18,15 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
 use crate::actions::dispatch;
-use crate::constants::{MENU_ACTION_GROUP, MENU_ACTION_RUN, ROW_MENU};
+use crate::constants::{BACKGROUND_MENU, MENU_ACTION_GROUP, MENU_ACTION_RUN, ROW_MENU};
 use crate::keymap::{action_named, Keymap};
 use crate::shell::Shell;
 
 /// The menu model's attribute a popover reads the shortcut to show from.
 const ACCEL_ATTRIBUTE: &str = "accel";
 
-/// Opens the row menu on the active pane's cursor row — `Shift+F10`, `Menu`.
+/// Opens the row menu on the active pane's cursor row — `Shift+F10`, `Menu`,
+/// and a held right button.
 pub(crate) fn open_for_cursor_row(shell: &Rc<RefCell<Shell>>) {
     let (rows, at, model) = {
         let state = shell.borrow();
@@ -33,6 +34,18 @@ pub(crate) fn open_for_cursor_row(shell: &Rc<RefCell<Shell>>) {
         let at = cursor_row_bounds(state.window().as_ref(), &rows);
         (rows, at, build(ROW_MENU, &state.keymap))
     };
+    show(shell, &rows, at, model);
+}
+
+/// Opens the background menu on the active pane, at a point of its rows
+/// widget — where the right button landed on empty space.
+pub(crate) fn open_background_at(shell: &Rc<RefCell<Shell>>, x: f64, y: f64) {
+    let (rows, model) = {
+        let state = shell.borrow();
+        let rows = state.panes[state.active].rows().clone();
+        (rows, build(BACKGROUND_MENU, &state.keymap))
+    };
+    let at = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
     show(shell, &rows, at, model);
 }
 
@@ -134,7 +147,7 @@ mod tests {
     /// is what turns that into a failing test instead of a dead row.
     #[test]
     fn every_menu_entry_names_an_action() {
-        for section in ROW_MENU {
+        for section in ROW_MENU.iter().chain(BACKGROUND_MENU) {
             for (label, name) in section.iter() {
                 assert!(
                     action_named(name).is_some(),

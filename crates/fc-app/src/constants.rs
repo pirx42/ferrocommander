@@ -548,6 +548,34 @@ pub const ROW_MENU: &[&[(&str, &str)]] = &[
     &[("Count folder sizes", "folder_sizes")],
 ];
 
+/// The menu over the empty part of a pane, in the same shape as
+/// [`ROW_MENU`] and checked by the same test.
+///
+/// What Explorer offers on a folder's background, minus what has no
+/// meaning here: Paste is the one entry that belongs to *where* rather than
+/// to a row, and the rest are the pane's own — a new folder, a re-read, the
+/// dot-files, the sort order. The four sorts are a flat section rather than
+/// Explorer's submenu, so both menus are one shape and one test.
+pub const BACKGROUND_MENU: &[&[(&str, &str)]] = &[
+    &[("Paste", "clipboard_paste")],
+    &[
+        ("New folder\u{2026}", "create_dir"),
+        ("Refresh", "reread"),
+        ("Show hidden files", "toggle_hidden"),
+    ],
+    &[
+        ("Sort by name", "sort_by_name"),
+        ("Sort by extension", "sort_by_ext"),
+        ("Sort by size", "sort_by_size"),
+        ("Sort by date", "sort_by_date"),
+    ],
+];
+
+/// What GTK calls a row of a `ColumnView` in CSS, which is how a press is
+/// told apart from one on the empty space below the rows: the widget under
+/// the pointer, or one of its ancestors, is a `row` — or it is not.
+pub const CSS_NAME_ROW: &str = "row";
+
 /// The mouse button that marks a row and, held, asks for its menu. GDK's
 /// numbering: 1 is the primary button, 3 the secondary.
 pub const RIGHT_BUTTON: u32 = 3;

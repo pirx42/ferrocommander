@@ -380,7 +380,18 @@ pane". When the long press fires, GTK claims the sequence and the click
 gesture never sees its release — which is what keeps a hold from marking,
 and the end-to-end test that holds twice and then presses F5 is what pins it.
 
-The background menu and the platform's own menu on Windows are the rest of
+**The background menu** is a second table of the same shape,
+`constants::BACKGROUND_MENU`, checked by the same test, opened by a click
+*or* a hold on the empty space below the rows — with nothing to mark there,
+the click has no other meaning. Telling empty space from a row uses nothing
+private: the widget under the pointer is picked, and one of its ancestors
+is a `row` by GTK's own CSS contract, or none is a `ListView` (the header),
+or it is the background. Both gestures on the `ColumnView` fire for a press
+on a row as well, and neither claims the sequence — the cell's gestures are
+left exactly as they were, and the check above is what keeps the two menus
+from both opening.
+
+The platform's own menu on Windows is the rest of
 [the plan](plans/2026-09-01-context-menu.md).
 
 ## Active pane

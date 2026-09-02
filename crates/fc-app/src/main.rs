@@ -333,13 +333,16 @@ fn wire_row_gestures(shell: &Rc<RefCell<Shell>>, index: usize) {
             match gesture {
                 pane::RowGesture::Click(row) => state.panes[index].right_click(row),
                 pane::RowGesture::Hold(row) => state.panes[index].point_cursor_at(row),
+                pane::RowGesture::Background(..) => {}
             }
         }
-        // The cursor moved either way, and the preview follows the cursor.
+        // The cursor may have moved, and the preview follows the cursor.
         // Outside the borrow, because this takes its own — as `wire_selection`.
         actions::refresh_quick_view(&hooked);
-        if let pane::RowGesture::Hold(_) = gesture {
-            menu::open_for_cursor_row(&hooked);
+        match gesture {
+            pane::RowGesture::Click(_) => {}
+            pane::RowGesture::Hold(_) => menu::open_for_cursor_row(&hooked),
+            pane::RowGesture::Background(x, y) => menu::open_background_at(&hooked, x, y),
         }
     });
 }

@@ -480,6 +480,47 @@ fn a_right_click_in_the_other_pane_makes_it_the_active_one() {
     }
 }
 
+/// A point in the left pane well below its last row when the pane shows
+/// `arrange`'s four — empty space, where the background menu lives.
+const LEFT_PANE_BACKGROUND: (i32, i32) = (200, 450);
+
+/// Where `New folder…` sits in the background menu: second, after Paste.
+const BACKGROUND_MENU_NEW_FOLDER: usize = 1;
+
+#[test]
+fn a_right_click_on_empty_space_opens_the_background_menu() {
+    // Below the last row there is nothing to mark, so the button has one
+    // meaning there: the menu for *where*, not for a row. Its second entry
+    // is New folder, and the row menu's second is View — so the dialog that
+    // opens says which menu it was, and the directory that appears says the
+    // entry ran like F7 would.
+    let app = in_src_and_dst(arrange);
+
+    app.right_click(LEFT_PANE_BACKGROUND);
+    choose_menu_entry(&app, BACKGROUND_MENU_NEW_FOLDER);
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("from-the-background-menu");
+    app.key("Return");
+
+    app.await_exists("src/from-the-background-menu");
+}
+
+#[test]
+fn holding_the_right_button_on_empty_space_opens_the_same_menu() {
+    // A hold is what opens the menu on a row, so it opens this one too —
+    // a hand that learned one gesture must not find it dead on the space
+    // below the rows.
+    let app = in_src_and_dst(arrange);
+
+    app.right_hold(LEFT_PANE_BACKGROUND);
+    choose_menu_entry(&app, BACKGROUND_MENU_NEW_FOLDER);
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.type_text("from-a-held-button");
+    app.key("Return");
+
+    app.await_exists("src/from-a-held-button");
+}
+
 /// Waits until `dst` holds `count` files.
 fn await_until_dst_holds(app: &App, count: usize) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);

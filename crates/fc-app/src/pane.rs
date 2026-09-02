@@ -22,11 +22,11 @@ use crate::constants::{
     BRANCH_MARKER, CELL_REPAINT, CLASS_FILTER_BAR, CLASS_MARKED, CLASS_OUTPUT, CLASS_PANE,
     CLASS_PANE_ACTIVE, CLASS_PATH_BAR, CLASS_STATUS_LINE, COLUMN_TITLE_ATTR, COLUMN_TITLE_DATE,
     COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE,
-    COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER,
-    PAGE_OVERLAP_ROWS, PAGE_ROWS_FALLBACK, PANE_PAGE_LIST, PANE_PAGE_PREVIEW, PANE_SPACING,
-    PATH_BAR_ERROR_SEPARATOR, RIGHT_BUTTON, ROW_ICON_GAP, ROW_ICON_SIZE, ROW_REVISION,
-    SCROLL_RESTORE_PRIORITY, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT,
-    XALIGN_LEFT, XALIGN_RIGHT,
+    COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, CSS_NAME_ROW, DISK_SPACE,
+    FILTER_PLACEHOLDER, PAGE_OVERLAP_ROWS, PAGE_ROWS_FALLBACK, PANE_PAGE_LIST, PANE_PAGE_PREVIEW,
+    PANE_SPACING, PATH_BAR_ERROR_SEPARATOR, RIGHT_BUTTON, ROW_ICON_GAP, ROW_ICON_SIZE,
+    ROW_REVISION, SCROLL_RESTORE_PRIORITY, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING,
+    TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
@@ -300,12 +300,16 @@ type RenameHook = Rc<RefCell<Option<Box<dyn Fn(Renamed)>>>>;
 /// The pane reports which; what either means is the shell's, because the
 /// menu needs the shell and the mark needs nothing but the pane — and one
 /// hook rather than two keeps "which pane was pressed" in one place.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RowGesture {
     /// The button went down and up on the row.
     Click(usize),
     /// The button was held on the row long enough to mean "menu".
     Hold(usize),
+    /// The button landed on the empty part of the pane — below the last
+    /// row — at this point of the rows widget. A click and a hold are the
+    /// same thing there: with no row to mark, the button has one meaning.
+    Background(f64, f64),
 }
 
 /// Where the pane sends a right-button gesture. A slot, like [`RenameHook`]
@@ -461,6 +465,14 @@ impl PaneView {
 
         let rename_hook: RenameHook = Rc::new(RefCell::new(None));
         let row_hook: RowHook = Rc::new(RefCell::new(None));
+        // The right button on the widget as a whole, for the presses no cell
+        // takes: below the last row. Both gestures fire for a press on a row
+        // too — the cell's gesture handles that one, and nothing here claims
+        // the sequence, so the cell's is left exactly as it is — which is why
+        // each asks first whether the press really landed on empty space.
+        for gesture in background_gestures(&column_view, &row_hook) {
+            column_view.add_controller(gesture);
+        }
         let mut columns = Vec::new();
         for column in Column::ALL {
             // Only the name column is editable, so only it is handed the hook.
@@ -2078,6 +2090,49 @@ fn bind_name_cell(
         editor.select_region(0, stem);
     }
     label
+}
+
+/// The two right-button gestures for the empty part of the rows widget.
+fn background_gestures(view: &gtk::ColumnView, hook: &RowHook) -> [gtk::EventController; 2] {
+    let click = gtk::GestureClick::builder().button(RIGHT_BUTTON).build();
+    let (view_of, hook_of) = (view.clone(), hook.clone());
+    click.connect_released(move |_, _, x, y| background_pressed(&view_of, &hook_of, x, y));
+    let hold = gtk::GestureLongPress::builder()
+        .button(RIGHT_BUTTON)
+        .build();
+    let (view_of, hook_of) = (view.clone(), hook.clone());
+    hold.connect_pressed(move |_, x, y| background_pressed(&view_of, &hook_of, x, y));
+    [click.upcast(), hold.upcast()]
+}
+
+/// Reports a background press, if that is what the press at `(x, y)` was.
+///
+/// The widget under the pointer says: one of its ancestors is a `row`, and
+/// a cell already handled it; or it has no `ListView` above it, and it was
+/// the header; or it is the empty space, which is the one case reported.
+/// CSS names and widget types rather than anything private to GTK — a
+/// `ColumnView`'s rows are `row`s by its own stylesheet contract.
+fn background_pressed(view: &gtk::ColumnView, hook: &RowHook, x: f64, y: f64) {
+    let Some(picked) = view.pick(x, y, gtk::PickFlags::DEFAULT) else {
+        return;
+    };
+    let mut on_a_row = false;
+    let mut in_the_rows = false;
+    let mut widget = Some(picked);
+    while let Some(current) = widget {
+        if current == *view.upcast_ref::<gtk::Widget>() {
+            break;
+        }
+        on_a_row |= current.css_name() == CSS_NAME_ROW;
+        in_the_rows |= current.is::<gtk::ListView>();
+        widget = current.parent();
+    }
+    if on_a_row || !in_the_rows {
+        return;
+    }
+    if let Some(hook) = hook.borrow().as_ref() {
+        hook(RowGesture::Background(x, y));
+    }
 }
 
 /// Builds one column. `rename` is `Some` only for the name column, which is

@@ -1,6 +1,6 @@
 # The context menu — the right button, and what the platform puts in it
 
-Status: **In progress**, 2026-09-01 — phases 1–2 done, phase 3 next.
+Status: **In progress**, 2026-09-01 — phases 1–3 done, phase 4 next.
 
 > display the context menu like in windows explorer when click with right
 > mouse button on an item (folder or file)
@@ -248,3 +248,15 @@ marking, and the test that holds twice then presses F5 pins it. Four
 end-to-end tests, all green on the first run; the harness grew
 `right_click` and `right_hold`, the latter holding 900 ms against GTK's
 500 ms threshold so the two gestures are never a coin toss.
+
+**Phase 3 — the background menu.** A second table, `BACKGROUND_MENU`, in
+the row menu's shape and under its test — the four sorts as a flat section
+rather than a submenu, so one shape holds. Two more button-3 gestures, on
+the `ColumnView` itself; both fire for a press on a row too, and rather
+than claiming the sequence (which would have cost the cell gestures their
+release, or the long press its cancel of the click) the handler picks the
+widget under the pointer and reads its ancestry: a `row` by CSS name means
+a cell had it, no `ListView` above means the header, else empty space. A
+click and a hold both open it, since there is nothing to mark. Two
+end-to-end tests, choosing New folder from each gesture: the dialog that
+opens says which menu it was.
