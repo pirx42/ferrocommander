@@ -549,6 +549,13 @@ impl PaneView {
         self.root.upcast_ref()
     }
 
+    /// The rows themselves, for something that has to sit on them — the
+    /// context menu, which points at a row and is a child of the widget
+    /// that holds it.
+    pub fn rows(&self) -> &gtk::ColumnView {
+        &self.column_view
+    }
+
     /// The model behind the pane, for the pure functions that decide what a
     /// keystroke acts on.
     pub fn listing(&self) -> &Listing {

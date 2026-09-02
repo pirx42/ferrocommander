@@ -15,6 +15,7 @@ mod format;
 mod indicator;
 mod jobs;
 mod keymap;
+mod menu;
 mod navigation;
 mod pane;
 mod progress;
@@ -455,6 +456,12 @@ fn focused(controller: &gtk::EventControllerKey) -> Option<gtk::Widget> {
         .and_then(|window| gtk::prelude::GtkWindowExt::focus(&window))
 }
 
+/// Whether the keyboard focus is inside a popover — a menu, for now.
+fn inside_a_popover(controller: &gtk::EventControllerKey) -> bool {
+    focused(controller)
+        .is_some_and(|focused| focused.ancestor(gtk::Popover::static_type()).is_some())
+}
+
 /// Whether the keyboard focus is inside a text field.
 ///
 /// `gtk::Text` is the widget inside a `gtk::Entry` that actually holds the
@@ -515,6 +522,13 @@ fn key_controller(
             && modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK)
             && !owned_by_a_text_field(key, modifiers);
         if typing(controller) && !commanding {
+            return glib::Propagation::Proceed;
+        }
+        // A popover's keys are its own. The context menu is one, and this
+        // controller sits in the capture phase — so without this, `Down`
+        // inside the menu would move the pane's cursor behind it and `Return`
+        // would open a directory instead of choosing the entry.
+        if inside_a_popover(controller) {
             return glib::Propagation::Proceed;
         }
         let Some(action) = shell.borrow().keymap.action_for(key, modifiers) else {

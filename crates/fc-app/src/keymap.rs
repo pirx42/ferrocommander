@@ -140,6 +140,8 @@ pub enum Action {
     Compare,
     /// Ctrl+Q — show what the cursor is on in the *other* pane, following it.
     QuickView,
+    /// Shift+F10 / Menu — the context menu for the row under the cursor.
+    ContextMenu,
     Quit,
 }
 impl Action {
@@ -159,7 +161,7 @@ impl Action {
     /// `SortBy` is spelled out per key, because a sort key is part of the
     /// action rather than an argument to it.
     #[cfg(test)]
-    const ALL: [Action; 63] = [
+    const ALL: [Action; 64] = [
         Action::SwitchPane,
         Action::CursorUp,
         Action::CursorDown,
@@ -222,6 +224,7 @@ impl Action {
         Action::ToggleHidden,
         Action::Compare,
         Action::QuickView,
+        Action::ContextMenu,
         Action::Quit,
     ];
 }
@@ -641,6 +644,19 @@ static BINDINGS: &[Binding] = &[
         modifiers: ModifierType::CONTROL_MASK,
         action: Action::QuickView,
     },
+    // Both spellings the desktop world uses for "the menu for this": the
+    // key that is literally called Menu, and Shift+F10 for keyboards without
+    // one — which is most laptops.
+    Binding {
+        key: Key::F10,
+        modifiers: ModifierType::SHIFT_MASK,
+        action: Action::ContextMenu,
+    },
+    Binding {
+        key: Key::Menu,
+        modifiers: PLAIN,
+        action: Action::ContextMenu,
+    },
     // `Alt+F4`, not `Ctrl+Q`, since 2026-09-01: quick view took `Ctrl+Q`,
     // which is the key Total Commander gives it. On a desktop this binding
     // is mostly ceremony — the window manager takes `Alt+F4` before the
@@ -741,6 +757,7 @@ const ACTION_NAMES: &[(&str, Action)] = &[
     ("toggle_hidden", Action::ToggleHidden),
     ("compare", Action::Compare),
     ("quick_view", Action::QuickView),
+    ("context_menu", Action::ContextMenu),
     ("quit", Action::Quit),
 ];
 
@@ -852,10 +869,64 @@ impl Keymap {
         let stroke = normalize(key, modifiers & RELEVANT_MODIFIERS);
         self.bindings.get(&stroke).copied()
     }
+
+    /// The key that reaches `action`, in GTK's accelerator spelling
+    /// (`<Shift>F6`), for a menu entry to show beside its label.
+    ///
+    /// From the built keymap rather than from `BINDINGS`, so a user who moved
+    /// a command in `[keys]` sees the key they chose. When several keys reach
+    /// the action the one shown is its own default — the first of the
+    /// action's `BINDINGS` entries still bound to it, which is what a person
+    /// expects to read — and some other key only if every default was taken
+    /// away.
+    pub fn accelerator_for(&self, action: Action) -> Option<String> {
+        BINDINGS
+            .iter()
+            .filter(|binding| binding.action == action)
+            .map(|binding| (binding.key, binding.modifiers))
+            .chain(
+                self.bindings
+                    .iter()
+                    .filter(|(_, bound)| **bound == action)
+                    .map(|(stroke, _)| *stroke),
+            )
+            .find(|(key, modifiers)| self.action_for(*key, *modifiers) == Some(action))
+            .map(|(key, modifiers)| accelerator_spec(key, modifiers))
+    }
 }
 
+/// A stroke in GTK's accelerator spelling: `<Shift>F10`, `<Control>c`.
+///
+/// Written here rather than asked of `gtk::accelerator_name`, which insists
+/// on an initialised GTK — and the one thing this has to be is checkable
+/// without a display, like the rest of the keymap.
+fn accelerator_spec(key: Key, modifiers: ModifierType) -> String {
+    let mut spec = String::new();
+    for (name, modifier) in ACCELERATOR_MODIFIERS {
+        if modifiers.contains(modifier) {
+            spec.push_str(name);
+        }
+    }
+    // Every key in a keymap is a GDK keysym constant, so it has a name.
+    spec.push_str(&key.name().expect("a bound keysym has a name"));
+    spec
+}
+
+/// How GTK's accelerator syntax spells each modifier.
+const ACCELERATOR_MODIFIERS: [(&str, ModifierType); 4] = [
+    ("<Control>", ModifierType::CONTROL_MASK),
+    ("<Shift>", ModifierType::SHIFT_MASK),
+    ("<Alt>", ModifierType::ALT_MASK),
+    ("<Meta>", ModifierType::META_MASK),
+];
+
 /// The action written under `name`.
-fn action_named(name: &str) -> Option<Action> {
+///
+/// Crate-visible for the context menu, whose entries are written in these
+/// same names: a menu entry is a `[keys]` line without the key, and going
+/// through this one parser is what makes a menu that names a command that
+/// does not exist a test failure rather than a dead entry.
+pub(crate) fn action_named(name: &str) -> Option<Action> {
     ACTION_NAMES
         .iter()
         .find(|(candidate, _)| *candidate == name)
@@ -1133,6 +1204,8 @@ mod tests {
                 ModifierType::SHIFT_MASK.union(ModifierType::ALT_MASK),
                 Action::FolderSizes,
             ),
+            (Key::F10, ModifierType::SHIFT_MASK, Action::ContextMenu),
+            (Key::Menu, PLAIN, Action::ContextMenu),
         ];
         // The list is written out rather than read from `BINDINGS`, because a
         // test that takes its expectations from the code it checks can only
@@ -2042,5 +2115,39 @@ mod tests {
                 Some(Action::Quit)
             );
         }
+    }
+    /// What a menu entry shows beside its label: the default key, or the
+    /// key the user moved the command to — never a key that no longer
+    /// reaches it.
+    #[test]
+    fn a_menu_shows_the_key_that_reaches_the_action() {
+        let keymap = Keymap::default();
+        assert_eq!(keymap.accelerator_for(Action::Copy).as_deref(), Some("F5"));
+        assert_eq!(
+            keymap.accelerator_for(Action::RenameInline).as_deref(),
+            Some("<Shift>F6")
+        );
+        assert_eq!(
+            keymap.accelerator_for(Action::ContextMenu).as_deref(),
+            Some("<Shift>F10"),
+            "the first of two bindings, in BINDINGS order"
+        );
+
+        // Copy moved to Ctrl+J and F5 given away: the menu must say Ctrl+J,
+        // because F5 is what it would say if it read BINDINGS rather than
+        // the keymap.
+        let (keymap, complaints) = overridden("ctrl+j", "copy");
+        assert!(complaints.is_empty(), "{complaints:?}");
+        let mut keymap = keymap;
+        assert!(keymap.apply("F5", "reread").is_none());
+        assert_eq!(
+            keymap.accelerator_for(Action::Copy).as_deref(),
+            Some("<Control>j")
+        );
+        assert_eq!(
+            keymap.accelerator_for(Action::Reread).as_deref(),
+            Some("<Control>r"),
+            "the default is still bound, so it is the one shown"
+        );
     }
 }

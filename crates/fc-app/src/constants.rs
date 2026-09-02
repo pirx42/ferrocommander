@@ -514,6 +514,49 @@ pub const PROMPT_PATTERN: &str = "Pattern (* and ? are wildcards):";
 /// one keystroke from what anyone else wants.
 pub const PATTERN_DEFAULT: &str = "*.";
 
+/// The context menu over a row, as sections of `(label, action name)`.
+///
+/// **Names, not actions.** The right-hand side is what a `[keys]` line says
+/// on its right — the same names, through the same parser — so an entry
+/// here is a binding without a key. A test walks this table through
+/// `keymap::action_named` and fails on a name that reaches nothing, which is
+/// what keeps a menu from offering a command the program does not have.
+///
+/// Sections rather than one list, because a separator is information: the
+/// three groups are *look at it*, *move it*, *the clipboard*, and *get rid
+/// of it*, and a menu that runs them together reads as a keymap dump.
+///
+/// The shortcut beside each label is not here; it is read from the built
+/// keymap when the menu opens, so it follows the user's own `[keys]`.
+pub const ROW_MENU: &[&[(&str, &str)]] = &[
+    &[("Open", "activate"), ("View", "view"), ("Edit", "edit")],
+    &[
+        ("Copy\u{2026}", "copy"),
+        ("Move\u{2026}", "move"),
+        ("Rename", "rename_inline"),
+        ("Pack\u{2026}", "pack"),
+    ],
+    &[
+        ("Cut", "clipboard_cut"),
+        ("Copy to clipboard", "clipboard_copy"),
+        ("Paste", "clipboard_paste"),
+    ],
+    &[
+        ("Delete", "delete"),
+        ("Delete permanently", "delete_permanently"),
+    ],
+    &[("Count folder sizes", "folder_sizes")],
+];
+
+/// The action group the menu's entries speak to, and its one action.
+///
+/// One action taking the entry's name as a string, rather than one action per
+/// entry: the menu is a table of names already, and a `SimpleAction` per row
+/// would be that table transcribed a second time. The prefix is what GTK
+/// wants a menu model's action names written with — `menu.run`.
+pub const MENU_ACTION_GROUP: &str = "menu";
+pub const MENU_ACTION_RUN: &str = "run";
+
 /// Dialog titles.
 pub const TITLE_COPY: &str = "Copy";
 pub const TITLE_MOVE: &str = "Move / Rename";

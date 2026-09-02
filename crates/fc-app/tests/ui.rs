@@ -292,6 +292,84 @@ fn f7_creates_a_directory_in_the_active_panes_directory() {
     app.await_exists("src/made-by-f7");
 }
 
+/// Chooses the `index`th entry of a context menu that has just opened.
+///
+/// The menu opens with its first entry highlighted, so `Down` once per
+/// index reaches the entry and `Return` chooses it. Written out rather than
+/// read from the code, like every expectation here: which entry is where is
+/// exactly the fact the tests below are about.
+fn choose_menu_entry(app: &App, index: usize) {
+    for _ in 0..index {
+        app.key("Down");
+    }
+    app.key("Return");
+}
+
+/// Where `Copy…` sits in the row menu: fourth, after Open, View and Edit.
+const MENU_COPY: usize = 3;
+
+#[test]
+fn shift_f10_opens_a_menu_whose_entry_runs_like_its_key() {
+    // The menu is the action table drawn as a popover: choosing Copy must
+    // land in the same dialog F5 does, on the same row, and accepting it
+    // must copy the same file. Nothing in the menu is allowed to be a second
+    // way of doing anything.
+    let app = in_src_and_dst(arrange);
+    cursor_on_notes(&app);
+
+    app.key("shift+F10");
+    choose_menu_entry(&app, MENU_COPY);
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_contents("dst/notes.txt", SOURCE_TEXT);
+}
+
+#[test]
+fn the_menu_acts_on_what_is_marked_not_on_the_row_it_points_at() {
+    // Insert marks data.bin and steps the cursor down onto notes.txt, so the
+    // menu opens pointing at notes.txt while data.bin is the one marked. An
+    // entry chosen from it has to act on the marks, exactly as F5 would — a
+    // menu that quietly acted on the row it was drawn beside would copy a
+    // file nobody chose.
+    let app = in_src_and_dst(arrange);
+    // `..`, nested, data.bin, notes.txt.
+    app.keys(&["Home", "Down", "Down", "Insert"]);
+
+    app.key("shift+F10");
+    choose_menu_entry(&app, MENU_COPY);
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    app.await_exists("dst/data.bin");
+    app.settle();
+    assert!(
+        !app.path("dst/notes.txt").exists(),
+        "the menu copied the row it pointed at rather than the marked file"
+    );
+}
+
+#[test]
+fn the_menu_key_opens_the_same_menu_and_escape_hands_the_rows_back() {
+    // Two halves. `Menu` is the other spelling of Shift+F10, so the same
+    // entries are there; and Escape has to leave the keyboard with the rows,
+    // or the next key after a dismissed menu goes to a popover that is no
+    // longer on screen. F7 is the witness: it opens a dialog only if the
+    // pane heard it.
+    let app = in_src_and_dst(arrange);
+    cursor_on_notes(&app);
+
+    app.key("Menu");
+    app.settle();
+    app.key("Escape");
+    app.settle();
+    app.key("F7");
+
+    app.focus_dialog(DIALOG_NEW_DIR);
+    app.key("Escape");
+    app.await_dialog_closed(DIALOG_NEW_DIR);
+}
+
 #[test]
 fn f5_copies_the_cursor_entry_into_the_other_pane() {
     // The prefilled target is the other pane's directory, so accepting the

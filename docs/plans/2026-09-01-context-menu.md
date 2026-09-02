@@ -1,6 +1,6 @@
 # The context menu — the right button, and what the platform puts in it
 
-Status: **Draft**, 2026-09-01 — awaiting the owner's go.
+Status: **In progress**, 2026-09-01 — phase 1 done, phase 2 next.
 
 > display the context menu like in windows explorer when click with right
 > mouse button on an item (folder or file)
@@ -211,4 +211,28 @@ holds nothing else back.
 
 ## 7. Outcome
 
-_To be written when the phases are done._
+**Phase 0 — what was there.** Two end-to-end tests already reach a row
+by mouse (`a_click_then_f5_copies_the_row_that_was_clicked` and its
+type-ahead sibling), both through `harness::click`, which presses button 1
+and nothing else. Every default binding is pressed somewhere in the suite
+or excused by name (`every_binding_is_pressed_end_to_end_or_says_why_not`),
+and `docs/keymap.md`'s table is parsed against `BINDINGS` — so a new key
+fails two gates until it has a test and a row. No menu, popover or gesture
+existed anywhere in `fc-app`; the mouse reached the panes only through
+`SingleSelection`'s own click handling.
+
+**Phase 1 — the menu, from the keyboard.** `Shift+F10` and `Menu` open a
+`PopoverMenu` on the cursor row. Entries are `(label, action name)` pairs
+in `constants::ROW_MENU`, resolved through `keymap::action_named` and run
+by `dispatch` — one `menu.run` action with the name as its parameter,
+rather than one action per entry. The shortcut beside each entry comes
+from `Keymap::accelerator_for`, so a user's `[keys]` shows through.
+Three things found by running it under Xvfb rather than by reading:
+the popover opens with its first entry highlighted (so `Down`×n reaches
+entry n); GTK caps the popover to the room below the row and scrolls the
+rest; and the window's capture-phase key controller has to stand down
+while a popover has the focus, or `Down` moves the pane's cursor behind
+the menu. Tests: the model's shape and shortcut headlessly; the keymap's
+choice of shortcut under an override; and three end-to-end — an entry runs
+like its key, the menu acts on the marks rather than the row it points at,
+and `Escape` gives the rows the keyboard back.

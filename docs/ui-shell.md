@@ -334,6 +334,42 @@ Total Commander itself:
   smaller UI font than this desktop's default; the target was the density,
   not the pixel.
 
+## The context menu
+
+`Shift+F10` and the `Menu` key open a menu on the row under the cursor
+([keymap.md](keymap.md)). It is **the action table drawn as a popover**, and
+that is the whole design: every entry is a name from `constants::ROW_MENU` —
+the same name a `[keys]` line uses on its right — resolved through
+`keymap::action_named` and carried out by `dispatch`, exactly as a key is. So
+the menu cannot do anything a key cannot, it acts on what a key would act on
+(everything marked, or the cursor row — `jobs::sources`), and a unit test
+walks the table and fails on a name that reaches nothing.
+
+The shortcut beside each entry is read from the keymap the user built, not
+from the defaults: somebody who moved Copy to `Ctrl+J` in `[keys]` sees
+`Ctrl+J` there. `Keymap::accelerator_for` prefers the action's own default
+key while it still reaches the action, and shows another only when every
+default was taken away.
+
+Two things about the plumbing, both found by running it:
+
+- **One action for the whole menu**, `menu.run`, taking the entry's name as
+  its parameter. A `SimpleAction` per entry would be the table transcribed
+  a second time.
+- **The window's key controller stands down while a popover has the
+  focus.** It sits in the capture phase so the pane's cursor keys win over
+  the `ColumnView`'s own — which means that without the check, `Down`
+  inside the menu moved the pane's cursor behind it and `Return` opened a
+  directory instead of choosing the entry.
+
+The menu opens with its first entry highlighted, `Down` walks it, `Return`
+chooses, `Escape` closes and gives the keyboard back to the rows — the
+end-to-end tests press exactly that. A menu longer than the room below the
+row scrolls, which is GTK's answer and a reasonable one.
+
+The right mouse button, the background menu and the platform's own menu on
+Windows are the rest of [the plan](plans/2026-09-01-context-menu.md).
+
 ## Active pane
 
 Exactly one pane is active. It is marked by a style class on its **path bar**,

@@ -12,6 +12,7 @@ for every answer. **Nothing here touches the filesystem directly.**
 | `shell.rs` | what the program knows while it runs, and the machinery every action shares — the settings, the job queue, the listings in flight, the watches |
 | `actions.rs` | what each key *does*: one function per action, and the table that maps one to the other |
 | `keymap.rs` | which key is which action, the defaults, and the `[keys]` overrides |
+| `menu.rs` | the context menu: the action table as a popover, on the row it is about |
 | `pane.rs` | one pane: the widget, its listing, its backend, and the archives it walked into |
 | [dialogs/](dialogs/) | the modal windows — one shell, six windows with state of their own |
 | `navigation.rs` | where a navigation keystroke leads — pure, over a `Listing` |
