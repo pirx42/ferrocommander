@@ -84,6 +84,18 @@ wrong. `F3` still views it and `F4` still edits it with the editor from the
 settings ([viewer.md](viewer.md)): Enter is "open this", `F4` is "edit this",
 and they stay different questions even when one program answers both.
 
+## The right mouse button
+
+Total Commander's, not Explorer's. A **right click marks the row** under the
+pointer and puts the cursor on it — a toggle, like `Space`, so a second click
+takes the mark back. A **held right button** (GTK's long-press time, half a
+second by default) opens the context menu on that row without touching the
+marks; `Shift+F10` and `Menu` open the same menu from the keyboard. Either
+way the button makes the pane it landed in the active one, which a left
+click deliberately does not: everything the right button leads to is about
+the row it landed on, and a menu drawn over one pane must never act on the
+other ([ui-shell.md](ui-shell.md)).
+
 **Enter never executes the file itself**, whatever its permission bits say —
 it hands it over, and what the handler makes of it is the handler's answer.
 On Windows that answer starts a `.exe`, because that is what a double-click

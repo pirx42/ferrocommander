@@ -548,6 +548,10 @@ pub const ROW_MENU: &[&[(&str, &str)]] = &[
     &[("Count folder sizes", "folder_sizes")],
 ];
 
+/// The mouse button that marks a row and, held, asks for its menu. GDK's
+/// numbering: 1 is the primary button, 3 the secondary.
+pub const RIGHT_BUTTON: u32 = 3;
+
 /// The action group the menu's entries speak to, and its one action.
 ///
 /// One action taking the entry's name as a string, rather than one action per

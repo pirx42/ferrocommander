@@ -24,8 +24,9 @@ use crate::constants::{
     COLUMN_TITLE_EXT, COLUMN_TITLE_NAME, COLUMN_TITLE_SIZE, COLUMN_WIDTH_ATTR, COLUMN_WIDTH_DATE,
     COLUMN_WIDTH_EXT, COLUMN_WIDTH_NAME, COLUMN_WIDTH_SIZE, DISK_SPACE, FILTER_PLACEHOLDER,
     PAGE_OVERLAP_ROWS, PAGE_ROWS_FALLBACK, PANE_PAGE_LIST, PANE_PAGE_PREVIEW, PANE_SPACING,
-    PATH_BAR_ERROR_SEPARATOR, ROW_ICON_GAP, ROW_ICON_SIZE, ROW_REVISION, SCROLL_RESTORE_PRIORITY,
-    SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT, XALIGN_LEFT, XALIGN_RIGHT,
+    PATH_BAR_ERROR_SEPARATOR, RIGHT_BUTTON, ROW_ICON_GAP, ROW_ICON_SIZE, ROW_REVISION,
+    SCROLL_RESTORE_PRIORITY, SORT_MARKER_ASCENDING, SORT_MARKER_DESCENDING, TYPE_AHEAD_TIMEOUT,
+    XALIGN_LEFT, XALIGN_RIGHT,
 };
 use crate::navigation::{activation_step, adopted_cursor, focus_after_move, parent_target, Step};
 use crate::row::Row;
@@ -292,6 +293,25 @@ pub enum Renamed {
 /// until both panes do.
 type RenameHook = Rc<RefCell<Option<Box<dyn Fn(Renamed)>>>>;
 
+/// What the right mouse button did to a row.
+///
+/// Total Commander's button, not Explorer's: a click marks the row and
+/// puts the cursor on it, a held press asks for the context menu there.
+/// The pane reports which; what either means is the shell's, because the
+/// menu needs the shell and the mark needs nothing but the pane — and one
+/// hook rather than two keeps "which pane was pressed" in one place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowGesture {
+    /// The button went down and up on the row.
+    Click(usize),
+    /// The button was held on the row long enough to mean "menu".
+    Hold(usize),
+}
+
+/// Where the pane sends a right-button gesture. A slot, like [`RenameHook`]
+/// and for the same reason.
+type RowHook = Rc<RefCell<Option<Box<dyn Fn(RowGesture)>>>>;
+
 /// A pane and the directory model behind it.
 pub struct PaneView {
     root: gtk::Box,
@@ -360,6 +380,7 @@ pub struct PaneView {
     /// wired: the pane knows when a name was typed, and the shell is the only
     /// thing that can turn that into a job.
     rename_hook: RenameHook,
+    row_hook: RowHook,
     /// Kept so the two page keys that mark can measure a page; the model has
     /// no idea how tall the viewport is.
     scroller: gtk::ScrolledWindow,
@@ -439,11 +460,12 @@ impl PaneView {
         let column_view = gtk::ColumnView::new(Some(selection.clone()));
 
         let rename_hook: RenameHook = Rc::new(RefCell::new(None));
+        let row_hook: RowHook = Rc::new(RefCell::new(None));
         let mut columns = Vec::new();
         for column in Column::ALL {
             // Only the name column is editable, so only it is handed the hook.
             let hook = (column == Column::Name).then(|| rename_hook.clone());
-            let built = build_column(column, hook);
+            let built = build_column(column, hook, row_hook.clone());
             columns.push((column, built.clone()));
             column_view.append_column(&built);
         }
@@ -537,6 +559,7 @@ impl PaneView {
             watched: None,
             renaming: None,
             rename_hook,
+            row_hook,
             error,
         };
         pane.update_headers();
@@ -1201,6 +1224,32 @@ impl PaneView {
     }
 
     /// Installs what happens when an inline rename ends.
+    /// Tells the pane where to send what the right mouse button did.
+    pub fn on_row_gesture(&self, hook: impl Fn(RowGesture) + 'static) {
+        *self.row_hook.borrow_mut() = Some(Box::new(hook));
+    }
+
+    /// The right button clicked on `row`: the cursor goes there and the
+    /// row's mark is toggled — Total Commander's mouse.
+    ///
+    /// Through `marking`, like every key that marks, so the status line's
+    /// count and the view's scroll follow the same rule they do for `Space`.
+    pub fn right_click(&mut self, row: usize) {
+        self.marking(|listing| {
+            listing.set_cursor(row);
+            listing.toggle_selected(row);
+        });
+    }
+
+    /// Puts the cursor on `row` and nothing else — what a held right button
+    /// does before the menu opens on it. The marks are not touched: the menu
+    /// acts on them, and a hold that changed them would act on something
+    /// other than what the user saw when they pressed.
+    pub fn point_cursor_at(&mut self, row: usize) {
+        self.shown.listing.set_cursor(row);
+        self.sync_cursor();
+    }
+
     pub fn on_rename(&self, hook: impl Fn(Renamed) + 'static) {
         *self.rename_hook.borrow_mut() = Some(Box::new(hook));
     }
@@ -2037,7 +2086,11 @@ fn bind_name_cell(
 /// The editor is a `Stack` per *recycled cell*, not per entry: a `ColumnView`
 /// keeps widgets only for the rows on screen, so this is some forty entries
 /// deep rather than fifty thousand (`docs/performance.md`).
-fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewColumn {
+fn build_column(
+    column: Column,
+    rename: Option<RenameHook>,
+    rows: RowHook,
+) -> gtk::ColumnViewColumn {
     let factory = gtk::SignalListItemFactory::new();
     // One cache per column — which in practice means one, since only the name
     // column shows icons. Shared by every cell of it, because forty cells
@@ -2048,11 +2101,35 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
     let setup_rename = rename.clone();
     factory.connect_setup(move |_, item| {
         let item = list_item(item);
+        // The right button, on every cell of every column: a row is what the
+        // user sees, and which column the pointer happened to be over is not
+        // something they meant. The row is read from the `ListItem` at press
+        // time rather than captured here, because a recycled cell shows a
+        // different row every time it scrolls back in.
+        let click = gtk::GestureClick::builder().button(RIGHT_BUTTON).build();
+        let (hook, pressed) = (rows.clone(), item.clone());
+        click.connect_released(move |_, _, _, _| {
+            if let Some(hook) = hook.borrow().as_ref() {
+                hook(RowGesture::Click(pressed.position() as usize));
+            }
+        });
+        let hold = gtk::GestureLongPress::builder()
+            .button(RIGHT_BUTTON)
+            .build();
+        let (hook, pressed) = (rows.clone(), item.clone());
+        hold.connect_pressed(move |_, _, _| {
+            if let Some(hook) = hook.borrow().as_ref() {
+                hook(RowGesture::Hold(pressed.position() as usize));
+            }
+        });
+
         let label = gtk::Label::builder()
             .xalign(column.xalign())
             .ellipsize(gtk::pango::EllipsizeMode::Middle)
             .build();
         let Some(hook) = setup_rename.clone() else {
+            label.add_controller(click);
+            label.add_controller(hold);
             item.set_child(Some(&label));
             return;
         };
@@ -2091,6 +2168,8 @@ fn build_column(column: Column, rename: Option<RenameHook>) -> gtk::ColumnViewCo
         let cell = gtk::Box::new(gtk::Orientation::Horizontal, ROW_ICON_GAP);
         cell.append(&icon);
         cell.append(&stack);
+        cell.add_controller(click);
+        cell.add_controller(hold);
         item.set_child(Some(&cell));
     });
 

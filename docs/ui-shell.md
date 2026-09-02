@@ -367,8 +367,21 @@ chooses, `Escape` closes and gives the keyboard back to the rows — the
 end-to-end tests press exactly that. A menu longer than the room below the
 row scrolls, which is GTK's answer and a reasonable one.
 
-The right mouse button, the background menu and the platform's own menu on
-Windows are the rest of [the plan](plans/2026-09-01-context-menu.md).
+**The right mouse button reaches the same menu.** A `GestureClick` and a
+`GestureLongPress`, both for button 3, on every cell of every column — a row
+is what the user sees, not a column — read the row from the `ListItem` at
+press time, because a recycled cell shows a different row every time it
+scrolls back in. The pane reports a `RowGesture` through a hook the shell
+fills at startup, the way the inline rename does: a click puts the cursor
+on the row and toggles its mark through the same `marking` path `Space`
+uses; a hold puts the cursor there and opens the menu. Both make the pressed
+pane the active one first, because everything after acts on "the active
+pane". When the long press fires, GTK claims the sequence and the click
+gesture never sees its release — which is what keeps a hold from marking,
+and the end-to-end test that holds twice and then presses F5 is what pins it.
+
+The background menu and the platform's own menu on Windows are the rest of
+[the plan](plans/2026-09-01-context-menu.md).
 
 ## Active pane
 

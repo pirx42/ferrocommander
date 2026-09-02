@@ -106,6 +106,16 @@ const RESIZE_SETTLE: Duration = Duration::from_millis(500);
 /// pointer that travelled rather than one that teleported.
 const DRAG_STEPS: i32 = 8;
 
+/// How long the right button is held to mean "menu" rather than "mark".
+///
+/// GTK's `gtk-long-press-time` defaults to 500 ms; this is comfortably past
+/// it, because a hold that lands exactly on the threshold is a coin toss
+/// between the two gestures and the test would be about the coin.
+const LONG_PRESS_HOLD: Duration = Duration::from_millis(900);
+
+/// The secondary mouse button, as `xdotool` numbers it.
+const RIGHT_BUTTON: &str = "3";
+
 /// How many times a launch is retried when it could not reach the display.
 ///
 /// See the retry in [`App::start`] for what it is for. Three rather than one,
@@ -298,6 +308,24 @@ impl App {
     pub fn click(&self, at: (i32, i32)) {
         self.pointer(&["mousemove", &at.0.to_string(), &at.1.to_string()]);
         self.pointer(&["click", "1"]);
+        self.settle();
+    }
+
+    /// Clicks the right button once at a point in the window — Total
+    /// Commander's mark. The same caveat as [`click`](Self::click): which row
+    /// that is depends on the row height, and a test must not assert on it.
+    pub fn right_click(&self, at: (i32, i32)) {
+        self.pointer(&["mousemove", &at.0.to_string(), &at.1.to_string()]);
+        self.pointer(&["click", RIGHT_BUTTON]);
+        self.settle();
+    }
+
+    /// Holds the right button at a point long enough to open the menu there.
+    pub fn right_hold(&self, at: (i32, i32)) {
+        self.pointer(&["mousemove", &at.0.to_string(), &at.1.to_string()]);
+        self.pointer(&["mousedown", RIGHT_BUTTON]);
+        std::thread::sleep(LONG_PRESS_HOLD);
+        self.pointer(&["mouseup", RIGHT_BUTTON]);
         self.settle();
     }
 

@@ -349,6 +349,150 @@ fn the_menu_acts_on_what_is_marked_not_on_the_row_it_points_at() {
     );
 }
 
+/// Two points in the left pane far enough apart to be different rows, and
+/// far enough down to be `row*.txt` in a tall directory. Which rows they
+/// are is not asserted anywhere — only that they differ.
+const LEFT_PANE_ROW: (i32, i32) = (200, 500);
+const LEFT_PANE_OTHER_ROW: (i32, i32) = (200, 300);
+
+/// Every file that has arrived in `dst`, sorted.
+fn arrived_in_dst(app: &App) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(app.path("dst"))
+        .expect("dst exists")
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_right_click_marks_the_row_and_a_second_row_joins_it() {
+    // Total Commander's mouse: the right button marks. Two clicks on two
+    // rows leave two marks, and F5 then copies exactly those two — a cursor
+    // that merely moved would copy one. `Home` parks the model on `..`
+    // first, so a click that never reached the model copies nothing at all.
+    let app = in_src_and_dst(with_a_tall_directory);
+    app.key("Home");
+
+    app.right_click(LEFT_PANE_ROW);
+    app.right_click(LEFT_PANE_OTHER_ROW);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    await_any_copy(&app);
+    app.settle();
+    let arrived = arrived_in_dst(&app);
+    assert_eq!(arrived.len(), 2, "two right clicks, two marks: {arrived:?}");
+    assert!(
+        arrived.iter().all(|name| name.starts_with("row")),
+        "{arrived:?}"
+    );
+}
+
+#[test]
+fn a_second_right_click_on_the_same_row_takes_the_mark_back() {
+    // A toggle, like Space. Twice on one row leaves nothing marked, so F5
+    // falls back to the cursor row — which is that row, because the click
+    // moved the cursor there — and copies it alone.
+    let app = in_src_and_dst(with_a_tall_directory);
+    app.key("Home");
+
+    app.right_click(LEFT_PANE_ROW);
+    app.right_click(LEFT_PANE_ROW);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    let copied = await_any_copy(&app);
+    app.settle();
+    assert_eq!(arrived_in_dst(&app).len(), 1, "the mark was not taken back");
+    assert!(
+        copied.starts_with("row"),
+        "F5 copied {copied:?}, not the clicked row"
+    );
+}
+
+#[test]
+fn holding_the_right_button_opens_the_menu_on_that_row_and_marks_nothing() {
+    // The other half of TC's button: held, it opens the menu on the row
+    // under the pointer, and it does *not* mark — a hold that marked would
+    // make the menu act on something other than what was on screen when the
+    // button went down. Two holds on two rows, both dismissed, then F5:
+    // one file, the cursor's, is the proof that neither hold marked. Then a
+    // hold that is not dismissed chooses Copy from the menu it opened.
+    let app = in_src_and_dst(with_a_tall_directory);
+    app.key("Home");
+
+    app.right_hold(LEFT_PANE_ROW);
+    app.key("Escape");
+    app.right_hold(LEFT_PANE_OTHER_ROW);
+    app.key("Escape");
+    app.settle();
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+    let first = await_any_copy(&app);
+    app.settle();
+    assert_eq!(
+        arrived_in_dst(&app).len(),
+        1,
+        "a held right button marked the row"
+    );
+    assert!(first.starts_with("row"), "{first:?}");
+
+    app.right_hold(LEFT_PANE_ROW);
+    choose_menu_entry(&app, MENU_COPY);
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    await_until_dst_holds(&app, 2);
+}
+
+#[test]
+fn a_right_click_in_the_other_pane_makes_it_the_active_one() {
+    // The button acts on the pane it landed in — TC switches panes on a
+    // right click, and a menu opened over one pane must never act on the
+    // other. The left pane is active and in `src`; a right click on a row
+    // of the right pane, in `dst`, marks it there and makes that pane
+    // active, so F5 copies the row *from* dst *into* src.
+    let app = in_src_and_dst(with_a_tall_destination);
+
+    app.right_click(RIGHT_PANE_ROW);
+    app.key("F5");
+    app.focus_dialog(DIALOG_COPY);
+    app.key("Return");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let landed = std::fs::read_dir(app.path("src"))
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .any(|entry| entry.file_name().to_string_lossy().starts_with("row"));
+        if landed {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "nothing arrived in src: the right click did not make the right pane active"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// Waits until `dst` holds `count` files.
+fn await_until_dst_holds(app: &App, count: usize) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while arrived_in_dst(app).len() < count {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "dst holds {:?}, not {count} files",
+            arrived_in_dst(app)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
 #[test]
 fn the_menu_key_opens_the_same_menu_and_escape_hands_the_rows_back() {
     // Two halves. `Menu` is the other spelling of Shift+F10, so the same

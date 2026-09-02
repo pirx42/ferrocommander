@@ -1,6 +1,6 @@
 # The context menu — the right button, and what the platform puts in it
 
-Status: **In progress**, 2026-09-01 — phase 1 done, phase 2 next.
+Status: **In progress**, 2026-09-01 — phases 1–2 done, phase 3 next.
 
 > display the context menu like in windows explorer when click with right
 > mouse button on an item (folder or file)
@@ -236,3 +236,15 @@ the menu. Tests: the model's shape and shortcut headlessly; the keymap's
 choice of shortcut under an override; and three end-to-end — an entry runs
 like its key, the menu acts on the marks rather than the row it points at,
 and `Escape` gives the rows the keyboard back.
+
+**Phase 2 — the right button.** A `GestureClick` and a `GestureLongPress`
+for button 3 on every cell, reporting a `RowGesture` through a hook the
+shell fills — the inline rename's pattern. A click puts the cursor on the
+row and toggles its mark through `marking`, so the count and the scroll
+follow `Space`'s rule; a hold puts the cursor there and opens phase 1's
+menu. Both make the pressed pane active first, which a left click does
+not. GTK claiming the sequence on the long press is what stops a hold from
+marking, and the test that holds twice then presses F5 pins it. Four
+end-to-end tests, all green on the first run; the harness grew
+`right_click` and `right_hold`, the latter holding 900 ms against GTK's
+500 ms threshold so the two gestures are never a coin toss.

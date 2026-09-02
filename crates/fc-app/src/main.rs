@@ -162,6 +162,7 @@ fn build_window(app: &gtk::Application) {
     wire_command_line(&shell);
     for index in 0..PANE_COUNT {
         wire_inline_rename(&shell, index);
+        wire_row_gestures(&shell, index);
         wire_column_widths(&shell, index);
         watch_pane(&shell, index);
     }
@@ -309,6 +310,38 @@ fn wire_inline_rename(shell: &Rc<RefCell<Shell>>, index: usize) {
         );
     };
     shell.borrow().panes[index].on_rename(accept);
+}
+
+/// Connects the right mouse button: a click marks, a held press opens the
+/// menu, and either makes the pressed pane the active one.
+///
+/// Active first, because both act on "the active pane" from there on — the
+/// mark through the pane itself, the menu through `dispatch` — and a menu
+/// drawn over one pane that acted on the other would be the worst kind of
+/// wrong. A left click does *not* switch panes here and never has; the right
+/// button does because Total Commander's does, and because everything it
+/// leads to is about the row it landed on.
+fn wire_row_gestures(shell: &Rc<RefCell<Shell>>, index: usize) {
+    let hooked = shell.clone();
+    shell.borrow().panes[index].on_row_gesture(move |gesture| {
+        {
+            let mut state = hooked.borrow_mut();
+            if state.active != index {
+                state.active = index;
+                state.update_active();
+            }
+            match gesture {
+                pane::RowGesture::Click(row) => state.panes[index].right_click(row),
+                pane::RowGesture::Hold(row) => state.panes[index].point_cursor_at(row),
+            }
+        }
+        // The cursor moved either way, and the preview follows the cursor.
+        // Outside the borrow, because this takes its own — as `wire_selection`.
+        actions::refresh_quick_view(&hooked);
+        if let pane::RowGesture::Hold(_) = gesture {
+            menu::open_for_cursor_row(&hooked);
+        }
+    });
 }
 
 /// Keeps the two panes' column widths equal to each other and to the file.
