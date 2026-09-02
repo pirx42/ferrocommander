@@ -331,12 +331,15 @@ fn f7_creates_a_directory_in_the_active_panes_directory() {
     app.await_exists("src/made-by-f7");
 }
 
-/// Chooses the `index`th entry of a context menu that has just opened.
+/// Chooses the `index`th entry of a context menu that is up.
 ///
 /// The menu opens with its first entry highlighted, so `Down` once per
 /// index reaches the entry and `Return` chooses it. Written out rather than
 /// read from the code, like every expectation here: which entry is where is
-/// exactly the fact the tests below are about.
+/// exactly the fact the tests below are about. Up, not opening: the caller
+/// opens the menu through `App::menu_after`, which waits until it is really
+/// there — the keys below go to whatever has the keyboard, and a pane that
+/// still has it would read them as its own.
 fn choose_menu_entry(app: &App, index: usize) {
     for _ in 0..index {
         app.key("Down");
@@ -356,7 +359,7 @@ fn shift_f10_opens_a_menu_whose_entry_runs_like_its_key() {
     let app = in_src_and_dst(arrange);
     cursor_on_notes(&app);
 
-    app.key("shift+F10");
+    app.menu_after(|app| app.key("shift+F10"));
     choose_menu_entry(&app, MENU_COPY);
     app.focus_dialog(DIALOG_COPY);
     app.key("Return");
@@ -375,7 +378,7 @@ fn the_menu_acts_on_what_is_marked_not_on_the_row_it_points_at() {
     // `..`, nested, data.bin, notes.txt.
     app.keys(&["Home", "Down", "Down", "Insert"]);
 
-    app.key("shift+F10");
+    app.menu_after(|app| app.key("shift+F10"));
     choose_menu_entry(&app, MENU_COPY);
     app.focus_dialog(DIALOG_COPY);
     app.key("Return");
@@ -402,7 +405,7 @@ fn open_with_lists_the_desktops_applications_and_launches_the_chosen_one() {
     let app = in_src_and_dst(with_a_fake_opener);
     cursor_on_notes(&app);
 
-    app.key("shift+F10");
+    app.menu_after(|app| app.key("shift+F10"));
     for _ in 0..MENU_OPEN_WITH {
         app.key("Down");
     }
@@ -491,9 +494,9 @@ fn holding_the_right_button_opens_the_menu_on_that_row_and_marks_nothing() {
     let app = in_src_and_dst(with_a_tall_directory);
     app.key("Home");
 
-    app.right_hold(LEFT_PANE_ROW);
+    app.menu_after(|app| app.right_hold(LEFT_PANE_ROW));
     app.key("Escape");
-    app.right_hold(LEFT_PANE_OTHER_ROW);
+    app.menu_after(|app| app.right_hold(LEFT_PANE_OTHER_ROW));
     app.key("Escape");
     app.settle();
     app.key("F5");
@@ -508,7 +511,7 @@ fn holding_the_right_button_opens_the_menu_on_that_row_and_marks_nothing() {
     );
     assert!(first.starts_with("row"), "{first:?}");
 
-    app.right_hold(LEFT_PANE_ROW);
+    app.menu_after(|app| app.right_hold(LEFT_PANE_ROW));
     choose_menu_entry(&app, MENU_COPY);
     app.focus_dialog(DIALOG_COPY);
     app.key("Return");
@@ -563,7 +566,7 @@ fn a_right_click_on_empty_space_opens_the_background_menu() {
     // entry ran like F7 would.
     let app = in_src_and_dst(arrange);
 
-    app.right_click(LEFT_PANE_BACKGROUND);
+    app.menu_after(|app| app.right_click(LEFT_PANE_BACKGROUND));
     choose_menu_entry(&app, BACKGROUND_MENU_NEW_FOLDER);
     app.focus_dialog(DIALOG_NEW_DIR);
     app.type_text("from-the-background-menu");
@@ -579,7 +582,7 @@ fn holding_the_right_button_on_empty_space_opens_the_same_menu() {
     // below the rows.
     let app = in_src_and_dst(arrange);
 
-    app.right_hold(LEFT_PANE_BACKGROUND);
+    app.menu_after(|app| app.right_hold(LEFT_PANE_BACKGROUND));
     choose_menu_entry(&app, BACKGROUND_MENU_NEW_FOLDER);
     app.focus_dialog(DIALOG_NEW_DIR);
     app.type_text("from-a-held-button");
@@ -611,8 +614,7 @@ fn the_menu_key_opens_the_same_menu_and_escape_hands_the_rows_back() {
     let app = in_src_and_dst(arrange);
     cursor_on_notes(&app);
 
-    app.key("Menu");
-    app.settle();
+    app.menu_after(|app| app.key("Menu"));
     app.key("Escape");
     app.settle();
     app.key("F7");

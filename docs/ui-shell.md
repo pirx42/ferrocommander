@@ -367,6 +367,15 @@ chooses, `Escape` closes and gives the keyboard back to the rows — the
 end-to-end tests press exactly that. A menu longer than the room below the
 row scrolls, which is GTK's answer and a reasonable one.
 
+**The tests wait for the menu to be a window before they press anything
+in it.** A popover is a window of its own to X, so the app's visible
+windows go from one to two when one opens, and `App::menu_after` waits for
+that count rather than a settle. The reason is a failure only the CI
+runner produced: keys sent straight after `Shift+F10` reached the pane
+before the popover had the keyboard, and `Return` on a file row opened it
+with the runner's browser — a `firefox` window in the failure message of a
+test about a menu. Six green gate runs on a faster machine never saw it.
+
 **The right mouse button reaches the same menu.** A `GestureClick` and a
 `GestureLongPress`, both for button 3, on every cell of every column — a row
 is what the user sees, not a column — read the row from the `ListItem` at

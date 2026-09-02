@@ -116,6 +116,11 @@ const LONG_PRESS_HOLD: Duration = Duration::from_millis(900);
 /// The secondary mouse button, as `xdotool` numbers it.
 const RIGHT_BUTTON: &str = "3";
 
+/// What X calls the app's windows — every one of them, a popover included:
+/// GDK stamps the class on each surface it maps, which is what makes a menu
+/// countable from outside.
+const APP_WINDOW_CLASS: &str = "ferrocommander";
+
 /// How many times a launch is retried when it could not reach the display.
 ///
 /// See the retry in [`App::start`] for what it is for. Three rather than one,
@@ -309,6 +314,38 @@ impl App {
         self.pointer(&["mousemove", &at.0.to_string(), &at.1.to_string()]);
         self.pointer(&["click", "1"]);
         self.settle();
+    }
+
+    /// Does `open`, which is expected to put a menu up, and returns once the
+    /// menu is really there.
+    ///
+    /// A popover is a window of its own to X, so the app's visible windows go
+    /// from one to two when one opens — and *that* is waited for, rather than
+    /// a settle. The CI runner is slower than a developer's machine by enough
+    /// that keys sent straight after `Shift+F10` reached the pane before the
+    /// popover had the keyboard: `Return` on a file row then opened it with
+    /// the runner's browser, which is how a `firefox` window came to be in a
+    /// failure message. Six green gate runs here never once saw it.
+    pub fn menu_after(&self, open: impl FnOnce(&App)) {
+        let before = self.visible_app_windows();
+        open(self);
+        await_until(EFFECT_TIMEOUT, || self.visible_app_windows() > before).unwrap_or_else(|| {
+            panic!("no menu appeared; the app has {before} visible window(s) as before")
+        });
+        // Mapped is not focused: the popover takes the keyboard a frame or
+        // two after it is on screen, and a settle after the count is what
+        // covers that gap.
+        self.settle();
+    }
+
+    /// How many of the app's windows X currently shows.
+    fn visible_app_windows(&self) -> usize {
+        let found = Command::new("xdotool")
+            .env("DISPLAY", &self.display)
+            .args(["search", "--onlyvisible", "--class", APP_WINDOW_CLASS])
+            .output()
+            .expect("xdotool lists windows");
+        String::from_utf8_lossy(&found.stdout).lines().count()
     }
 
     /// Clicks the right button once at a point in the window — Total
