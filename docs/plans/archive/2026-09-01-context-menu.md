@@ -1,6 +1,7 @@
 # The context menu — the right button, and what the platform puts in it
 
-Status: **In progress**, 2026-09-01 — phases 1–5 done, phase 6 next.
+Status: **Done**, 2026-09-02 — six phases, each behind a green gate;
+the Windows half awaits its first round on a real desktop. Outcome in § 7.
 
 > display the context menu like in windows explorer when click with right
 > mouse button on an item (folder or file)
@@ -54,7 +55,7 @@ Finder.
    never changed by opening the menu.
 3. **In an archive there is no shell menu** — an entry in an archive has no
    operating-system path, the rule `Enter` and `F4` already follow
-   ([archives.md](../archives.md)). The GTK menu is shown instead, with
+   ([archives.md](../../archives.md)). The GTK menu is shown instead, with
    the actions that work there (view, copy out, unpack); on Windows too.
 4. **In branch view (`Ctrl+B`) the Windows menu is the row's alone.**
    `IShellFolder::GetUIObjectOf` takes children of *one* folder, and a
@@ -99,7 +100,7 @@ Finder.
    description and its bound key. So the menu cannot name a command that
    does not exist, its shortcuts follow the user's `[keys]`, and the gate
    that counts which bindings the suite presses covers menu entries for
-   free ([keymap.md](../keymap.md)).
+   free ([keymap.md](../../keymap.md)).
 
 ## 4. Phases
 
@@ -144,7 +145,7 @@ helper window → `TrackPopupMenuEx(TPM_RETURNCMD)` → `InvokeCommand`, with
 `IContextMenu3::HandleMenuMsg2` forwarded from the helper's procedure.
 The folder's own menu for the background. The pane refreshes afterwards
 the way it does for any external change — the watcher
-([watching.md](../watching.md)) — so a shell *Delete* or *New folder*
+([watching.md](../../watching.md)) — so a shell *Delete* or *New folder*
 appears without this code knowing what the verb did.
 
 **What CI can check on Windows, and will:** everything up to the popup.
@@ -207,7 +208,7 @@ holds nothing else back.
 - **Speed.** A menu built from the action table is a dozen `gio::MenuItem`s,
   built once per popup; the shell menu is whatever the machine's
   extensions cost, which Explorer pays too. Nothing here is on the
-  keystroke path of a pane ([performance.md](../performance.md)).
+  keystroke path of a pane ([performance.md](../../performance.md)).
 
 ## 7. Outcome
 
@@ -290,3 +291,28 @@ is the crate `trash` already builds, pinned once in the workspace;
 `gdk4-win32` yields the `HWND`. The two calls no test here can run —
 `TrackPopupMenuEx` and `InvokeCommand` — are named as such, and the first
 Windows round will say what they do.
+
+**Phase 6 — docs and audit.** The audit found little to change, which is
+what nine hours of small phases with a gate between each buys: one
+qualified-action-name helper for a `format!` written twice, and the
+`(ss)` type signature named. What it *decided*, and where it is written:
+
+- The menu acts on **what the keys act on** — everything marked, or the
+  cursor row — rather than Explorer's "the marks if the row is one of
+  them, else the row alone" from this plan's first draft. One rule for
+  keys and menu, `jobs::sources`, was worth more than a second rule that
+  agreed with Explorer; the end-to-end test that marks one row and opens
+  the menu on another pins it.
+- The long press was an inference and stayed: it is the only way from the
+  mouse to the menu under Total Commander's button, and the owner did not
+  strike it.
+- What "native" means on Linux and macOS is written into
+  [ui-shell.md](../../ui-shell.md): the desktop's application registry
+  through `gio`, because neither platform has a menu to borrow.
+- The Windows popup stops the GTK loop while it is up, and the two calls
+  no CI can run are named in [windows.md](../../windows.md).
+
+**Effort.** Six phases, six gate runs of about eleven minutes each, and
+the reading between them: a little under the nine and a half hours
+estimated, before the Windows rounds — which, as the estimate said, no
+figure here can size.

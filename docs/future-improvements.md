@@ -209,6 +209,19 @@ free-space one should have stopped failing on 2026-09-01, unverified.
 *Home:* whenever Windows gets a session of its own.
 *From:* the first Windows test run, 2026-08-30.
 
+**The context menu's two unproven calls, and one unmade choice.**
+The Windows shell menu is tested up to the popup on the Windows CI job;
+`TrackPopupMenuEx` and `InvokeCommand` need a desktop and have been run
+on none yet ([windows.md](windows.md)). And a right click still marks
+even in the pane that is not active — Total Commander's behaviour, chosen
+on 2026-09-01 — while the menu's own rule is "what the keys act on"; a
+person arriving from Explorer expects the row under the pointer alone
+when it is unmarked, and that reading was decided against rather than
+forgotten ([the plan](plans/archive/2026-09-01-context-menu.md)).
+*Home:* the first Windows round for the calls; a taste question for the
+rule.
+*From:* the context-menu plan, 2026-09-02.
+
 **Which bindings the suite presses is now counted, not claimed.**
 Kept as a record of a gap that closed, because the entry outlived it in both
 directions and the replacement overclaimed in turn. `Backspace` was listed

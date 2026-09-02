@@ -30,6 +30,16 @@ use crate::shell::Shell;
 /// The menu model's attribute a popover reads the shortcut to show from.
 const ACCEL_ATTRIBUTE: &str = "accel";
 
+/// The type of the *open with* action's parameter: the content type and
+/// the application's id, in that order — the two things [`launch`] needs
+/// to find the application again.
+const OPEN_WITH_PARAMETER: &str = "(ss)";
+
+/// An action's name as a menu model refers to it: group-qualified.
+fn qualified(action: &str) -> String {
+    format!("{MENU_ACTION_GROUP}.{action}")
+}
+
 /// What asked for a menu, which decides where it is drawn: a key means the
 /// row it is about, the mouse means the pointer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,7 +94,7 @@ fn open_with_menu(content_type: String) -> Option<gio::Menu> {
         return None;
     }
     let menu = gio::Menu::new();
-    let target = format!("{MENU_ACTION_GROUP}.{MENU_ACTION_OPEN_WITH}");
+    let target = qualified(MENU_ACTION_OPEN_WITH);
     for application in applications {
         // An application without an id cannot be found again; the list
         // from `all_for_type` is of installed ones, which always have one.
@@ -179,7 +189,7 @@ fn cursor_row_bounds(
 /// stands for and the key that reaches it.
 fn build(sections: &[&[(&str, &str)]], keymap: &Keymap) -> gio::Menu {
     let menu = gio::Menu::new();
-    let target = format!("{MENU_ACTION_GROUP}.{MENU_ACTION_RUN}");
+    let target = qualified(MENU_ACTION_RUN);
     for section in sections {
         let part = gio::Menu::new();
         for (label, name) in section.iter() {
@@ -220,7 +230,7 @@ fn show(
     });
     let open_with = gio::SimpleAction::new(
         MENU_ACTION_OPEN_WITH,
-        Some(glib::VariantTy::new("(ss)").expect("a pair of strings is a type")),
+        Some(glib::VariantTy::new(OPEN_WITH_PARAMETER).expect("a pair of strings is a type")),
     );
     let launching = shell.clone();
     open_with.connect_activate(move |_, parameter| {
