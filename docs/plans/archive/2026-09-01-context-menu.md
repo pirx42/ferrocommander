@@ -1,7 +1,7 @@
 # The context menu — the right button, and what the platform puts in it
 
-Status: **Done**, 2026-09-02 — six phases, each behind a green gate;
-the Windows half awaits its first round on a real desktop. Outcome in § 7.
+Status: **Done**, 2026-09-02 — six phases, each behind a green gate, and
+the Windows half confirmed working on a real desktop. Outcome in § 7.
 
 > display the context menu like in windows explorer when click with right
 > mouse button on an item (folder or file)
@@ -289,8 +289,11 @@ the shell showed its menu, or draw ours — and an archive entry, the `..`
 row, a branch view's marks and any failure all land on ours. `windows`
 is the crate `trash` already builds, pinned once in the workspace;
 `gdk4-win32` yields the `HWND`. The two calls no test here can run —
-`TrackPopupMenuEx` and `InvokeCommand` — are named as such, and the first
-Windows round will say what they do.
+`TrackPopupMenuEx` and `InvokeCommand` — were named as such, and the
+first Windows round said what they do: the owner reported the menu
+working as expected on 2026-09-02, first try, with no round of fixes.
+The four COM tests had run green on the Windows CI job the same morning
+(run #37), which is what made that likely rather than lucky.
 
 **Phase 6 — docs and audit.** The audit found little to change, which is
 what nine hours of small phases with a gate between each buys: one

@@ -234,8 +234,12 @@ to the popup: a real temporary file becomes a PIDL, the PIDL's folder hands
 out an `IContextMenu` for it, the menu fills an `HMENU`, and *delete* is
 among the verbs in it; the same for two files of one folder, and for a
 folder's background through its `IShellView`. `TrackPopupMenuEx` and
-`InvokeCommand` are the two calls that need a desktop, and the two the
-owner tries.
+`InvokeCommand` are the two calls that need a desktop, and no gate
+anywhere runs them — **the owner confirmed both on Windows 11 on
+2026-09-02**, the menu appearing and its verbs doing what they say. That
+is the whole of the evidence for those two, and it is a person rather
+than a test: a change to the popup or the invocation is checked by
+somebody opening a menu, or it is not checked.
 
 Three details of the plumbing, each the answer to a way this goes wrong:
 

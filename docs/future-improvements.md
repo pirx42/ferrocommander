@@ -209,17 +209,21 @@ free-space one should have stopped failing on 2026-09-01, unverified.
 *Home:* whenever Windows gets a session of its own.
 *From:* the first Windows test run, 2026-08-30.
 
-**The context menu's two unproven calls, and one unmade choice.**
-The Windows shell menu is tested up to the popup on the Windows CI job;
-`TrackPopupMenuEx` and `InvokeCommand` need a desktop and have been run
-on none yet ([windows.md](windows.md)). And a right click still marks
-even in the pane that is not active — Total Commander's behaviour, chosen
-on 2026-09-01 — while the menu's own rule is "what the keys act on"; a
-person arriving from Explorer expects the row under the pointer alone
-when it is unmarked, and that reading was decided against rather than
-forgotten ([the plan](plans/archive/2026-09-01-context-menu.md)).
-*Home:* the first Windows round for the calls; a taste question for the
-rule.
+**The context menu's two calls that only a person checks.**
+The Windows shell menu is tested up to the popup on the Windows CI job,
+and the two calls past it — `TrackPopupMenuEx` and `InvokeCommand` —
+need a desktop. The owner ran them on Windows 11 on 2026-09-02 and the
+menu worked as expected, which is the only evidence there is or will be
+([windows.md](windows.md)): they stay unautomated, so a change to the
+popup or the invocation is checked by somebody opening a menu.
+
+**One reading of the right button was decided against, not forgotten.**
+A right click marks, in either pane, which is Total Commander's
+behaviour and was chosen on 2026-09-01 — while the menu itself acts on
+"what the keys act on". A person arriving from Explorer expects the row
+under the pointer alone when it is unmarked
+([the plan](plans/archive/2026-09-01-context-menu.md)).
+*Home:* a taste question, whenever the two behaviours next rub.
 *From:* the context-menu plan, 2026-09-02.
 
 **Which bindings the suite presses is now counted, not claimed.**
