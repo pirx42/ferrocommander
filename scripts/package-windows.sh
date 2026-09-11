@@ -23,6 +23,12 @@ readonly EXE=ferrocommander.exe
 readonly LAUNCHER=ferrocommander.cmd
 readonly NOTES=README.txt
 readonly SCHEMAS=share/glib-2.0/schemas/gschemas.compiled
+# The icon theme the rows draw from, and one icon out of it that the check
+# below looks for by name. Found the same way the schemas are — GLib on
+# Windows derives its data directories from where the binary sits, so a
+# `share/` beside the .exe is what the app reads.
+readonly ICONS=share/icons/Adwaita
+readonly ICON_PRESENT=share/icons/Adwaita/16x16/places/folder.png
 
 # The only toolchain that can link against MSYS2's GTK4. The Rust installer
 # defaults to the MSVC host, which cannot, and says so at link time rather
@@ -120,12 +126,34 @@ mkdir -p "$staged/$(dirname "$SCHEMAS")"
 glib-compile-schemas "$mingw/share/glib-2.0/schemas" \
     --targetdir "$staged/$(dirname "$SCHEMAS")"
 
-# No icon theme, and no gdk-pixbuf loaders. Not an oversight, and not a few
-# megabytes saved on a hunch: the app names no icon and loads no image — a
-# grep for `icon_name`, `IconTheme`, `Pixbuf` and `Image::` over
-# `crates/fc-app/src` finds nothing — and the iconography GTK's own widgets
-# use is compiled into libgtk-4-1.dll as a GResource. The smoke test below is
-# what keeps that claim honest rather than merely stated.
+# The icon theme, at one size and nothing else.
+#
+# **This used to be nothing at all**, on the strength of a comment saying the
+# app named no icon and loaded no image — true when it was written, false
+# from 2026-09-01, when rows gained a leading icon for their file type
+# (`docs/ui-shell.md`). Nothing noticed, because a claim in a comment is not
+# a check. What shipped in between draws the broken-image glyph on every
+# row: measured, not feared, by running the app with an empty
+# `XDG_DATA_DIRS`, which is exactly what this bundle amounted to.
+#
+# `16x16` alone, because that is the size a row draws at — and leaving the
+# `scalable` SVGs out is what keeps **librsvg and its dependency tail** out
+# of the download. The PNGs need no gdk-pixbuf loaders either: GDK reads PNG
+# itself, which was checked by running the app on this trim with
+# `GDK_PIXBUF_MODULE_FILE` pointed at an empty file — every icon still drew.
+# The whole of it is about 300 KB.
+#
+# The check further down is what keeps *this* comment from rotting the way
+# the last one did.
+mkdir -p "$staged/$ICONS"
+cp "$mingw/$ICONS/index.theme" "$staged/$ICONS/"
+cp -r "$mingw/$ICONS/16x16" "$staged/$ICONS/"
+# Adwaita inherits from hicolor, and the spec wants that theme present.
+if [ -f "$mingw/share/icons/hicolor/index.theme" ]; then
+    mkdir -p "$staged/share/icons/hicolor"
+    cp "$mingw/share/icons/hicolor/index.theme" "$staged/share/icons/hicolor/"
+fi
+
 
 # Both files below go out with CRLF endings. Not tidiness: `cmd.exe` reads a
 # batch file line by line as it runs it, and bare LF endings are a documented
@@ -185,7 +213,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 # Nothing installed.
-for path in "$EXE" "$LAUNCHER" "$NOTES" "$SCHEMAS"; do
+for path in "$EXE" "$LAUNCHER" "$NOTES" "$SCHEMAS" "$ICON_PRESENT"; do
     if [ ! -f "$staged/$path" ]; then
         echo "FAIL: $path is not in the bundle" >&2
         exit 1

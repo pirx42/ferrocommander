@@ -110,6 +110,27 @@ name of the folder inside the archive — `ferrocommander-0.1.0-186\` — while
 the archive itself keeps a fixed name, for the reason under *The asset has no
 version in its name* below.
 
+## The zip carries an icon theme, at one size
+
+The panes draw a leading icon per row from the desktop's icon theme
+([ui-shell.md](ui-shell.md)), and a theme is not something Windows has —
+so the bundle brings one: Adwaita's `16x16` and its `index.theme`, about
+300 KB, into `share/icons` beside the `.exe`, where GLib looks because it
+derives its data directories from the binary's own location.
+
+**One size, and no `scalable`.** 16 px is what a row draws at, and the SVGs
+would drag librsvg and its dependency tail into the download for art nobody
+renders. The PNGs need no gdk-pixbuf loaders either — GDK reads PNG itself,
+which was checked rather than assumed: the app on this exact trim, with
+`GDK_PIXBUF_MODULE_FILE` pointed at an empty file, still drew every icon.
+
+This is also a small lesson about comments. The bundle shipped no icons at
+all until 2026-09-11, justified by a comment that said the app named none —
+true the day it was written, false the day rows gained icons, and nothing
+noticed for ten days because a claim in a comment is not a check. What
+replaced it is a line in the script's "nothing installed" list naming one
+icon that has to arrive.
+
 ## Ubuntu 24.04, and why not 22.04
 
 24.04 ships GTK 4.14; 22.04 ships 4.6, and this needs 4.12
