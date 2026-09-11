@@ -267,6 +267,42 @@ pulls in, pinned once in the workspace so the two cannot become two copies.
 placement and for the shell's own dialogs — *Properties* — to be parented
 on.
 
+## The icon lives in the `.exe`, not in the toolkit
+
+Windows draws an application's icon — the taskbar button, `Alt+Tab`, the
+file in Explorer — from an **icon resource inside the executable**. There
+is no GTK call that supplies one: `gtk_window_set_icon_list` is gone in
+GTK4, and the icon-name a window carries is a *theme* lookup, which is a
+different question with a different answer on this platform. Until
+2026-09-11 the `.exe` carried no resource, so the program showed the
+shell's default icon everywhere it appeared.
+
+`packaging/ferrocommander.rc` names the committed `.ico`
+([packaging.md](packaging.md)), and `crates/fc-app/build.rs` compiles it
+with `windres` and hands the object to the linker through
+`cargo:rustc-link-arg-bins`. Three details are deliberate:
+
+- **Resource id 1**, because Windows shows the *lowest-numbered* icon
+  resource wherever it needs one.
+- **Keyed on `CARGO_CFG_TARGET_OS`, not `cfg!(windows)`.** A build script
+  runs on the machine doing the building; the host's platform is the wrong
+  question.
+- **No fallback when `windres` is missing.** It ships with the
+  `mingw-w64-x86_64-toolchain` this document already requires, so its
+  absence means the toolchain is wrong — and a build that quietly produced
+  an iconless binary would hide the bug this fixes.
+
+**The mechanism was verified from Linux**, which is unusual for anything
+in this file and was worth the ten minutes: with the MinGW cross toolchain
+installed, the build script — the real one, run with the environment cargo
+gives it — compiled the resource, and the object was linked into a
+throwaway Windows `.exe` whose PE resource directory came back holding
+`RT_ICON` and `RT_GROUP_ICON`. So the resource is right; what a Linux box
+still cannot answer is whether GDK sets a window class icon of its own,
+which would take precedence over the executable's. If it does, the answer
+is `WM_SETICON` on the `HWND` — which costs nothing to reach, since
+`gdk4-win32` and `windows` are already dependencies for the shell menu.
+
 ## The free-space figure, and its one Win32 call
 
 The status line's `free of total` was blank on Windows until 2026-09-01:

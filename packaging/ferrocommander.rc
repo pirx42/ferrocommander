@@ -1,0 +1,10 @@
+// The application icon, as Windows reads it: a resource inside the .exe.
+//
+// Id 1 because Windows shows the *lowest-numbered* icon resource of an
+// executable wherever it needs one — the taskbar button, Alt+Tab, and the
+// file itself in Explorer. GTK has nothing to do with it: on this platform
+// the icon belongs to the executable, not to the window.
+//
+// Compiled by `windres` from `crates/fc-app/build.rs`, and only for a
+// Windows target. See docs/windows.md.
+1 ICON "st.rose.Ferrocommander.ico"

@@ -26,8 +26,22 @@ const BUILD_NUMBER_ARGS: &[&str] = &["rev-list", "--count", "HEAD"];
 /// Short enough to read off a title bar, long enough to find the commit.
 const BUILD_HASH_ARGS: &[&str] = &["rev-parse", "--short", "HEAD"];
 
+/// The resource script, the icon it names, and what `windres` makes of them.
+const ICON_SCRIPT: &str = "ferrocommander.rc";
+const ICON_FILE: &str = "st.rose.Ferrocommander.ico";
+const ICON_OBJECT: &str = "ferrocommander-icon.o";
+
+/// `windres` under the two names it goes by: MSYS2 installs it plain, a
+/// cross toolchain on Linux prefixes it with the target triple.
+const WINDRES: &str = "windres";
+const CROSS_WINDRES: &str = "x86_64-w64-mingw32-windres";
+
+/// The object format a Windows linker reads.
+const COFF: &str = "coff";
+
 fn main() {
     watch_head();
+    embed_icon();
     // One finished string rather than two values for the crate to assemble,
     // so the title is a `&'static str` constant and nothing is put together at
     // run time.
@@ -41,6 +55,79 @@ fn main() {
         _ => String::new(),
     };
     println!("cargo:rustc-env=TC_BUILD_STAMP={stamp}");
+}
+
+/// The Windows icon resource: what the taskbar and `Alt+Tab` draw.
+///
+/// **Windows takes an application's icon from the executable**, not from
+/// the toolkit — there is no GTK call that supplies one, and without this
+/// the program shows the shell's default icon everywhere it appears
+/// (`docs/windows.md`). `windres` turns `packaging/ferrocommander.rc` and
+/// the `.ico` beside it into an object file, and the linker puts it in the
+/// binary as `RT_ICON` and `RT_GROUP_ICON`.
+///
+/// Keyed on the **target**, not on the host: a build script runs on the
+/// machine doing the building, and `cfg!(windows)` there would answer for
+/// the wrong one.
+///
+/// No fallback when `windres` is missing. It ships with the
+/// `mingw-w64-x86_64-toolchain` that a Windows build already requires, so
+/// its absence means the toolchain is wrong — and a build that quietly
+/// produced an iconless binary would hide exactly the bug this fixes.
+fn embed_icon() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
+    let packaging = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("the crate sits two levels under the workspace root")
+        .join("packaging");
+    let script = packaging.join(ICON_SCRIPT);
+    let icon = packaging.join(ICON_FILE);
+    println!("cargo:rerun-if-changed={}", script.display());
+    println!("cargo:rerun-if-changed={}", icon.display());
+
+    let object =
+        Path::new(&std::env::var("OUT_DIR").expect("cargo sets OUT_DIR")).join(ICON_OBJECT);
+    // Named differently by the MSYS2 toolchain a Windows build uses and by
+    // the cross toolchain a Linux box installs, and the same program either
+    // way.
+    let tool = [WINDRES, CROSS_WINDRES]
+        .into_iter()
+        .find(|name| which(name))
+        .unwrap_or_else(|| {
+            panic!("neither {WINDRES} nor {CROSS_WINDRES} is on PATH; see docs/windows.md")
+        });
+    let status = Command::new(tool)
+        // The `.rc` names the icon beside it, so the search path is its own
+        // directory — nothing here depends on the working directory cargo
+        // happens to run a build script in.
+        .arg("--include-dir")
+        .arg(&packaging)
+        .arg(&script)
+        .arg("-O")
+        .arg(COFF)
+        .arg("-o")
+        .arg(&object)
+        .status()
+        .unwrap_or_else(|reason| panic!("{tool}: {reason}"));
+    assert!(
+        status.success(),
+        "{tool} could not compile {}",
+        script.display()
+    );
+    // `-bins`, not `-link-arg`: the object belongs in the program, and a
+    // test binary that linked it would carry a copy for nothing.
+    println!("cargo:rustc-link-arg-bins={}", object.display());
+}
+
+/// Whether a program is on `PATH`.
+fn which(name: &str) -> bool {
+    Command::new(name)
+        .arg("--version")
+        .output()
+        .is_ok_and(|answer| answer.status.success())
 }
 
 /// Rebuilds when the commit changes, and only then.
