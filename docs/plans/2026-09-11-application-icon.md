@@ -57,10 +57,17 @@ needed): a 256 px PNG is faithful, and a six-size `.ico` (16…256) comes to
 
 1. **The rendered icons are committed, and a script in the repository is
    what renders them.** `scripts/render-icons.py` turns the one SVG into
-   the `.ico`, the `.icns` and the PNG sizes; its output is committed
-   beside the source. No runner grows a dependency, the build stays
-   reproducible, and "re-render by hand" means running one script that is
-   in the tree rather than remembering a command line (skill 68).
+   the `.ico` and the `.icns`, and those two are committed beside the
+   source. No runner grows a dependency, the build stays reproducible, and
+   "re-render by hand" means running one script that is in the tree rather
+   than remembering a command line (skill 68).
+
+   **The intermediate PNGs are not committed**, which this plan first said
+   they would be: nothing reads them. The `.deb` installs the SVG, the zip
+   wants an icon *theme* rather than our art, and the `.icns` carries its
+   own copies — so a committed PNG would be a file with no reader, which
+   is what this project spends its comments arguing against. They are
+   rendered into a temporary directory and assembled from there.
 2. **The `.icns` is assembled by that script**, not by `iconutil`: the
    format is a magic word and a list of typed PNG chunks, the macOS runner
    is not where the assets are made, and a container format nobody can
@@ -127,9 +134,11 @@ each platform does with an icon is not something this gate can see.
   cache have to go into the zip as well — visible on the runner, invisible
   from here.
 - **`.icns` written by hand.** Apple's own tool is not involved, so a
-  wrong chunk type means an icon that silently does not appear. The
-  committed PNGs are the fallback: `iconutil` on the runner can rebuild
-  from them if the file is refused.
+  wrong chunk type means an icon that silently does not appear. Answered
+  as far as it can be from here: `--check` reads the file back and asserts
+  every chunk's type against the pixel size of the PNG inside it, and the
+  gate runs it. What that cannot prove is that Apple agrees with Apple's
+  own documentation about which type means which size.
 - **The trim is a rule, and rules rot** — which is the whole lesson of the
   comment this plan is fixing. Hence decision 6: the check is what keeps it
   honest, not the comment.

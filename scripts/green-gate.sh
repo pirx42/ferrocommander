@@ -42,6 +42,11 @@ step "links"          python3 scripts/check-links.py
 # somebody copying the spelling in the file next to them — so the rule is
 # checked rather than remembered.
 step "naming"         python3 scripts/check-naming.py
+# The icon in the two container formats Windows and macOS read is committed
+# rather than rendered on each runner, so what keeps those files honest is a
+# check that they still hold the sizes they claim — an `.icns` chunk whose
+# type and size disagree is an icon macOS declines to draw without a word.
+step "icons"          python3 scripts/render-icons.py --check
 
 printf '\n===============================\n'
 if [ ${#failed[@]} -eq 0 ]; then

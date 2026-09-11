@@ -37,6 +37,35 @@ runner sees it.
 The description and the file list are `[package.metadata.deb]` in
 `crates/fc-app/Cargo.toml`, beside the crate they describe.
 
+## The icon: one drawing, three formats, two of them committed
+
+`packaging/st.rose.Ferrocommander.svg` is the source and the only thing
+anybody should edit. Linux takes it as it is — a freedesktop icon theme
+wants scalable art and every renderer there reads SVG — while the other two
+platforms want container formats of their own:
+
+| | | read by |
+|---|---|---|
+| `.svg` | the drawing | the `.deb`, into `hicolor/scalable/apps` |
+| `.ico` | 16, 32, 48, 64, 128 and 256 px in one file | Windows, from inside the `.exe` |
+| `.icns` | eleven chunks, 16 px to 1024 | macOS, from inside the `.app` |
+
+**The last two are committed, and `scripts/render-icons.py` is what makes
+them.** Rendering during packaging instead would put ImageMagick into
+MSYS2 and librsvg into the macOS runner's Homebrew — two dependencies, on
+two machines, for an image that changes about never. Committed, the build
+is reproducible and neither runner grows a tool. The cost is that changing
+the drawing means running the script and committing what it writes, which
+is why it is a script in the tree rather than a command line in this
+paragraph.
+
+The gate runs `render-icons.py --check`, which reads both files back and
+asserts the sizes they hold — the `.ico`'s six, and each `.icns` chunk's
+type against the pixel width of the PNG inside it. That is the failure
+worth catching, because it is the silent one: macOS answers a malformed
+chunk by drawing no icon at all. What no check here can catch is the SVG
+being redrawn and the script not being run.
+
 ## The dependencies are derived, not written
 
 `depends = "$auto"` runs `dpkg-shlibdeps` over the built binary, the way
