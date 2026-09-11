@@ -96,8 +96,8 @@ and fails loudly if any failed. Typing the chain by hand is how a red clippy
 gets hidden behind a green test run — that has happened, which is why the
 script exists.
 
-**Two checks need no toolchain and take a second each**, and the gate runs
-both at the end:
+**Three checks need no toolchain and take a second each**, and the gate runs
+all of them at the end:
 
 - `python3 scripts/check-links.py` — every relative Markdown link in the
   repository that goes nowhere. Documentation rots by moving, not by being
@@ -107,6 +107,11 @@ both at the end:
   documents name the program this one imitates, and is what the check allows.
   It exists because the rename was 441 substitutions and nothing would have
   noticed one coming back.
+- `python3 scripts/render-icons.py --check` — the committed `.ico` and
+  `.icns` still hold the sizes they claim. Rendering them *does* want
+  ImageMagick; checking them is arithmetic on two file headers. It exists
+  because a malformed `.icns` chunk is an icon macOS declines to draw
+  without a word ([docs/packaging.md](docs/packaging.md)).
 
 ## Search Defaults (Grep/Glob/Find)
 

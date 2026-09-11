@@ -1,6 +1,7 @@
 # The application icon — and the icons the zip forgot to bring
 
-Status: **Draft**, 2026-09-11 — awaiting the owner's go.
+Status: **Done**, 2026-09-11 — five phases, each behind a green gate.
+What a taskbar makes of it is the owner's to see; outcome in § 6.
 
 > the app has no icon in the os tab bar or if i switch between app using
 > alt+tab
@@ -42,7 +43,7 @@ and no gdk-pixbuf loaders, on the strength of this comment:
 > nothing
 
 That was true when it was written and stopped being true on 2026-09-01,
-when rows gained a leading icon ([ui-shell.md](../ui-shell.md)). Running
+when rows gained a leading icon ([ui-shell.md](../../ui-shell.md)). Running
 the app with an empty `XDG_DATA_DIRS` — which is what the zip amounts to —
 every row draws the broken-image glyph instead of a folder or a file type.
 The owner has not seen it because a machine that *built* the app has
@@ -75,7 +76,7 @@ needed): a 256 px PNG is faithful, and a six-size `.ico` (16…256) comes to
 3. **The `.exe` gets its icon through a resource compiled by `windres`**,
    from `build.rs`, linked with `cargo:rustc-link-arg-bins`. `windres`
    ships with the `mingw-w64-x86_64-toolchain` the Windows build already
-   requires ([windows.md](../windows.md)), so this adds no dependency
+   requires ([windows.md](../../windows.md)), so this adds no dependency
    either. Windows uses the lowest-numbered icon resource in an executable,
    which is why the `.rc` names it `1`.
 4. **Nothing is done to Linux**, because § 1 measured that there is nothing
@@ -146,3 +147,50 @@ each platform does with an icon is not something this gate can see.
   somebody looking at a taskbar. The gate can prove the `.ico` is in the
   binary and the `.icns` in the bundle; it cannot prove Windows likes
   either.
+
+## 6. Outcome
+
+**Everything in § 1 held**, and two estimates did not.
+
+**The Windows resource was verified from Linux**, which § 5 did not expect.
+With the MinGW cross toolchain installed here, the real build script ran
+with the environment cargo gives it, compiled `ferrocommander.rc`, and the
+object linked into a throwaway `.exe` whose PE resource directory came back
+holding `RT_ICON` and `RT_GROUP_ICON`. So the mechanism is proven and only
+the question § 5 named is open: whether GDK sets a window class icon that
+takes precedence.
+
+**The theme trim is 300 KB, not one to three megabytes.** Dropping
+`scalable` drops librsvg with it, and 16 px PNGs turn out to need no
+gdk-pixbuf loaders either — GDK reads PNG itself, which was checked by
+running the app on this exact trim with `GDK_PIXBUF_MODULE_FILE` pointed at
+an empty file. Every icon still drew. The second risk in § 5 therefore
+never materialised.
+
+**The intermediate PNGs are not committed** as decision 1 first said they
+would be: nothing reads them, and a file with no reader is what this
+project spends its comments arguing against. `render-icons.py` renders them
+into a temporary directory and assembles from there.
+
+**The audit found two things.** `write_ico` took a scratch directory it
+never used, to look like its sibling — symmetry is not a reason for a
+parameter. And the renderer was **not reproducible**: ImageMagick stamps
+every PNG with the second it was made, so re-running the script rewrote
+the `.icns` with 77 bytes of new timestamps and nothing else. That matters
+more than it looks. A committed artifact whose provenance cannot be
+re-derived is one nobody can check — "is this file what the SVG says it
+should be" would have had no answer but trust, which is the opposite of
+why it is committed. `-strip` settles it: two renders now agree byte for
+byte, and the file lost 5 KB of metadata on the way.
+
+Worth keeping for the next person: `png:exclude-chunk=date,time` is *not*
+enough on ImageMagick 6 — it reaches the `tIME` chunk and leaves a pair of
+`tEXt` timestamps behind. That was measured, twice, rather than assumed.
+
+**What is still owed to a person.** Three of the four visible outcomes here
+cannot be seen from this machine: the Windows taskbar and `Alt+Tab`, the
+macOS Dock and Command-Tab, and the row icons in the published zip. The
+gate proves the `.ico` is in the binary, the `.icns` in the bundle, and one
+named icon in the staged tree — no more than that, which is why each is
+recorded in [future-improvements.md](../../future-improvements.md) rather
+than called done.

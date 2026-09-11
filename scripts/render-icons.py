@@ -65,6 +65,18 @@ ICNS_CHUNKS = (
 # different grid does not quietly come out at the wrong scale.
 POINTS_PER_INCH = 72
 
+# Drops everything ImageMagick would write about *when* rather than *what*:
+# a `tIME` chunk and a pair of `tEXt` timestamps per image.
+#
+# Here so that rendering the same drawing twice gives the same bytes.
+# Without it the `.icns` came out different on every run — eleven images,
+# each with the second it was made — and an artifact that cannot be
+# reproduced is one whose provenance nobody can check: "is this file what
+# the SVG says it should be" would have no answer but trust. `png:exclude-
+# chunk` is not enough on ImageMagick 6; it reaches `tIME` and leaves the
+# `tEXt` pair, which was measured rather than assumed.
+STRIP_METADATA = "-strip"
+
 
 def viewbox_size() -> int:
     """The SVG's square extent, from its own `viewBox`."""
@@ -95,6 +107,7 @@ def render(tool: str, extent: int, size: int, into: Path) -> Path:
             "-density", str(size * POINTS_PER_INCH // extent),
             str(SOURCE),
             "-resize", f"{size}x{size}",
+            STRIP_METADATA,
             str(out),
         ],
         check=True,
@@ -102,20 +115,21 @@ def render(tool: str, extent: int, size: int, into: Path) -> Path:
     return out
 
 
-def write_ico(tool: str, extent: int, into: Path) -> None:
-    """ImageMagick writes a multi-size `.ico` itself, from one source."""
+def write_ico(tool: str, extent: int) -> None:
+    """ImageMagick writes a multi-size `.ico` itself, from one source — so
+    unlike the `.icns` there is nothing here to assemble."""
     subprocess.run(
         [
             tool,
             "-background", "none",
             "-density", str(max(ICO_SIZES) * POINTS_PER_INCH // extent),
             str(SOURCE),
+            STRIP_METADATA,
             "-define", f"icon:auto-resize={','.join(str(s) for s in reversed(ICO_SIZES))}",
             str(ICO),
         ],
         check=True,
     )
-    _ = into
 
 
 def write_icns(tool: str, extent: int, into: Path) -> None:
@@ -194,9 +208,8 @@ def main(argv: list[str]) -> None:
     tool = magick()
     extent = viewbox_size()
     with tempfile.TemporaryDirectory() as scratch:
-        into = Path(scratch)
-        write_ico(tool, extent, into)
-        write_icns(tool, extent, into)
+        write_ico(tool, extent)
+        write_icns(tool, extent, Path(scratch))
     check()
     for made in (ICO, ICNS):
         print(f"  {made.relative_to(ROOT)}  {made.stat().st_size:>8} bytes")

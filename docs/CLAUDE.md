@@ -104,6 +104,8 @@ cross-references instead of duplication.
   | [Enter on Windows](plans/archive/2026-09-01-windows-enter-and-quoting.md) | the round before's Windows fix, shipped on a smoke start and broken in three ways on arrival — the VFS path, POSIX quotes and `Command::arg`'s C-runtime quoting, all three of them a string a Linux test could have read — so `Enter` stopped building a command line at all and the `windows` job started running the command tests |
   | [the context menu](plans/archive/2026-09-01-context-menu.md) | the right mouse button and what each platform puts in its menu: the action table as a popover with the user's own shortcuts beside each entry, Total Commander's button (a click marks, a hold opens the menu), a background menu, *Open with* from the desktop's registry through `gio`, and Explorer's real menu on Windows over COM — in a crate of its own, so it is type-checked from Linux and tested on the Windows job up to the popup |
 
+  | [the application icon](plans/archive/2026-09-11-application-icon.md) | no icon in the taskbar or Alt+Tab: the `.exe` carried no resource and the `.app` no `.icns`, while Linux turned out to be right already — GTK4's X11 backend sets no `_NET_WM_ICON` at all, proven with an icon name that certainly resolves. Plus the one nobody reported: the Windows zip shipped no icon theme, on the strength of a comment whose grep expired the day rows gained icons |
+
   3b and 3c were not foreseen. Each exists because a key in the phase before
   it could not be built without them.
 

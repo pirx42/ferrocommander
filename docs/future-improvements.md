@@ -217,6 +217,19 @@ menu worked as expected, which is the only evidence there is or will be
 ([windows.md](windows.md)): they stay unautomated, so a change to the
 popup or the invocation is checked by somebody opening a menu.
 
+**Three icons nobody off the target platform has seen.**
+The gate proves the `.ico` is inside the `.exe`, the `.icns` inside the
+`.app`, and Adwaita's `16x16` in the staged Windows tree — and nothing
+more. Whether Windows draws the first in its taskbar and `Alt+Tab`,
+whether the Dock draws the second, and whether the rows of the published
+zip draw the third are three things only somebody looking at a screen can
+answer ([packaging.md](packaging.md)). One of them has a named fallback if
+it fails: GDK may set a window class icon that takes precedence over the
+executable's, and the answer to that is `WM_SETICON` on the `HWND`
+([windows.md](windows.md)).
+*Home:* the next Windows round, and whenever a Mac is next opened.
+*From:* the application-icon plan, 2026-09-11.
+
 **One reading of the right button was decided against, not forgotten.**
 A right click marks, in either pane, which is Total Commander's
 behaviour and was chosen on 2026-09-01 — while the menu itself acts on
