@@ -34,6 +34,12 @@ readonly LAUNCHER=Contents/MacOS/ferrocommander
 readonly PLIST=Contents/Info.plist
 readonly NOTES=README.txt
 readonly SCHEMAS=Contents/Resources/glib-2.0/schemas/gschemas.compiled
+# The icon, which macOS reads from inside the bundle rather than from the
+# toolkit — the Dock, Command-Tab and Finder all draw this file. Committed
+# and rendered from the one SVG by `scripts/render-icons.py`, so nothing
+# here needs a rasteriser (docs/packaging.md).
+readonly ICON=Contents/Resources/st.rose.Ferrocommander.icns
+readonly ICON_SOURCE=packaging/st.rose.Ferrocommander.icns
 
 # Native, not cross: the arm64 runner's host is the target. The guard stays
 # anyway — it costs three lines, and CI run #17 is what a wrong host looks
@@ -187,6 +193,8 @@ codesign --force -s - "$app/Contents/MacOS/$BIN"
 # the schemas are missing. Compiled here rather than copied, for the .deb
 # script's reason: one code path that is always right, instead of a copy
 # that depends on a package post-install hook having run.
+cp "$ICON_SOURCE" "$app/$ICON"
+
 mkdir -p "$app/$(dirname "$SCHEMAS")"
 glib-compile-schemas "$brew_prefix/share/glib-2.0/schemas" \
     --targetdir "$app/$(dirname "$SCHEMAS")"
@@ -213,6 +221,7 @@ cat > "$app/$PLIST" <<PLIST_EOF
 <dict>
     <key>CFBundleExecutable</key>      <string>ferrocommander</string>
     <key>CFBundleIdentifier</key>      <string>st.rose.Ferrocommander</string>
+    <key>CFBundleIconFile</key>        <string>st.rose.Ferrocommander</string>
     <key>CFBundleName</key>            <string>FerroCommander</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
     <key>CFBundleShortVersionString</key> <string>${version}</string>
@@ -272,7 +281,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 # Nothing installed.
-for path in "Contents/MacOS/$BIN" "$LAUNCHER" "$PLIST" "$SCHEMAS"; do
+for path in "Contents/MacOS/$BIN" "$LAUNCHER" "$PLIST" "$SCHEMAS" "$ICON"; do
     if [ ! -f "$app/$path" ]; then
         echo "FAIL: $path is not in the bundle" >&2
         exit 1

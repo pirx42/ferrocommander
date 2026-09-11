@@ -261,6 +261,18 @@ finished bundle and fails on any reference that still names the Homebrew
 prefix — the one miss the smoke test cannot catch, because on the build
 machine the absolute path still resolves.
 
+## The icon is a file in the bundle, and a line in the plist
+
+`Contents/Resources/st.rose.Ferrocommander.icns`, copied from the
+committed render, plus `CFBundleIconFile` in `Info.plist` naming it
+**without the extension** — the key takes a base name and macOS appends
+`.icns` itself. Either half alone shows the generic application icon:
+a file nothing points at, or a pointer to nothing.
+
+Both are in the script's "nothing installed" list, which is the same guard
+the launcher and the schemas get, because this is the failure class that
+list exists for — a bundle that starts perfectly well and looks wrong.
+
 ## The launcher, the signature, and the Gatekeeper sentence
 
 The launcher exists for the `.cmd`'s reason with a macOS cause: GLib finds
