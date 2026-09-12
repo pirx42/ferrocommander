@@ -119,7 +119,11 @@ const RIGHT_BUTTON: &str = "3";
 /// What X calls the app's windows — every one of them, a popover included:
 /// GDK stamps the class on each surface it maps, which is what makes a menu
 /// countable from outside.
-const APP_WINDOW_CLASS: &str = "ferrocommander";
+///
+/// The application id, because that is what the program sets its prgname to
+/// — and the reason it does is that a desktop shell matches this string
+/// against the desktop entry to find the icon (`docs/ui-shell.md`).
+const APP_WINDOW_CLASS: &str = "st.rose.Ferrocommander";
 
 /// How many times a launch is retried when it could not reach the display.
 ///
@@ -343,6 +347,21 @@ impl App {
         // two after it is on screen, and a settle after the count is what
         // covers that gap.
         self.settle();
+    }
+
+    /// Whether X knows a visible window of exactly this class.
+    ///
+    /// Anchored, so it answers about the whole string rather than a part of
+    /// it: `xdotool search --class` takes a regex, and the wrong class was a
+    /// substring of the right one — a test that missed the anchors would
+    /// have passed before the fix as well as after it.
+    pub fn has_window_of_class(&self, class: &str) -> bool {
+        let found = Command::new("xdotool")
+            .env("DISPLAY", &self.display)
+            .args(["search", "--onlyvisible", "--class", &format!("^{class}$")])
+            .output()
+            .expect("xdotool lists windows");
+        !String::from_utf8_lossy(&found.stdout).trim().is_empty()
     }
 
     /// How many of the app's windows X currently shows.

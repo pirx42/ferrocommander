@@ -44,6 +44,17 @@ use pane::PaneView;
 use shell::{remember, remember_on_close, remember_window_size, submit, watch_pane, Shell, Writes};
 
 fn main() -> glib::ExitCode {
+    // **What the window calls itself, which is how a desktop finds its
+    // icon.** GTK takes `WM_CLASS` on X11 and the Wayland `app_id` from the
+    // program name, which is the basename of argv[0] — `ferrocommander` —
+    // while the desktop entry a shell reads is named after the application
+    // id. A shell that cannot match the two shows a placeholder, which is
+    // exactly what Ubuntu did with the `.deb` installed and everything in
+    // it correct (`docs/ui-shell.md`).
+    //
+    // Set before the application is built, because prgname is read when the
+    // first surface is created and there is no second chance.
+    glib::set_prgname(Some(APP_ID));
     let app = gtk::Application::builder().application_id(APP_ID).build();
     app.connect_startup(|_| load_stylesheet());
     app.connect_activate(build_window);

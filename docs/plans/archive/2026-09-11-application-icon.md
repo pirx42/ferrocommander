@@ -15,6 +15,17 @@ the bundled theme to **the sizes and categories the rows use**.
 
 Every line of this section is a probe, not a reading.
 
+> **§ 1's first paragraph was wrong, and the next day proved it.** The
+> measurement in it holds — GTK4 sets no `_NET_WM_ICON` — but the conclusion
+> drawn from it did not: the window reported `ferrocommander` while the
+> entry is named `st.rose.Ferrocommander.desktop`, so the `StartupWMClass`
+> line was the only thing bridging them, and on Ubuntu with the `.deb`
+> installed that bridge did not carry. One line — `glib::set_prgname` —
+> and a test that would have caught it are in
+> [ui-shell.md](../../ui-shell.md). Left standing below rather than edited,
+> because a plan that quietly agrees with what happened afterwards is worth
+> nothing to the next person reading it.
+
 **Linux is already right, and no code change can improve it.** GTK4's X11
 backend sets **no `_NET_WM_ICON` at all**: with the window's `icon-name`
 set to `folder` — an icon that certainly exists in the installed Adwaita —

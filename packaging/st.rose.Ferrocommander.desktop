@@ -9,4 +9,4 @@ Terminal=false
 Categories=System;FileTools;FileManager;Utility;
 Keywords=file;manager;commander;dual;pane;
 StartupNotify=true
-StartupWMClass=ferrocommander
+StartupWMClass=st.rose.Ferrocommander

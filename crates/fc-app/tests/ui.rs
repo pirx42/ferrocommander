@@ -363,6 +363,46 @@ fn choose_menu_entry(app: &App, index: usize) {
 /// reason this constant can be a constant is written down.
 const MENU_COPY: usize = 4;
 
+/// What the application id is, and where the desktop entry lives. Spelled
+/// out rather than imported, like every other expectation here.
+const APPLICATION_ID: &str = "st.rose.Ferrocommander";
+/// From the crate's own directory, because that is where a test runs — not
+/// from the workspace root, which is where the path reads as if it were.
+const DESKTOP_ENTRY: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../packaging/st.rose.Ferrocommander.desktop"
+);
+
+#[test]
+fn the_window_calls_itself_what_the_desktop_entry_calls_it() {
+    // How a desktop finds an application's icon: it matches what the window
+    // says it is against the entry in `/usr/share/applications`, and takes
+    // `Icon=` from there. GTK takes that string from the program name, which
+    // is the basename of argv[0] — so until 2026-09-12 the window said
+    // `ferrocommander` while the entry was named for the application id, and
+    // Ubuntu showed a placeholder with the `.deb` installed and every file
+    // in it correct.
+    //
+    // Two halves, because either alone can drift: the window reports the
+    // application id, and the entry that ships says the same thing.
+    let app = App::launch(arrange);
+
+    assert!(
+        app.has_window_of_class(APPLICATION_ID),
+        "no window of class {APPLICATION_ID}: a shell would find no icon for it"
+    );
+
+    let entry = std::fs::read_to_string(DESKTOP_ENTRY).expect("the desktop entry ships");
+    let claimed = entry
+        .lines()
+        .find_map(|line| line.strip_prefix("StartupWMClass="))
+        .expect("the entry names a window class");
+    assert_eq!(
+        claimed, APPLICATION_ID,
+        "the desktop entry looks for a class the window does not report"
+    );
+}
+
 #[test]
 fn shift_f10_opens_a_menu_whose_entry_runs_like_its_key() {
     // The menu is the action table drawn as a popover: choosing Copy must

@@ -435,6 +435,35 @@ entries get, and what anything gets when the shell declines. `menu.rs`
 asks with a `bool` back, and every reason the shell might say no lands on
 this program's own menu rather than on nothing.
 
+## What the window calls itself
+
+`WM_CLASS` on X11, `app_id` on Wayland — one string, and it is how a desktop
+finds the application's icon: the shell matches it against the entry in
+`/usr/share/applications` and takes `Icon=` from there. GTK takes that string
+from the **program name**, which by default is the basename of `argv[0]`, so
+the window said `ferrocommander` while the entry is named for the application
+id. Nothing matched, and Ubuntu drew a placeholder with the `.deb` installed
+and every file in it correct.
+
+One line fixes it, before the application is built, because the program name
+is read when the first surface is created and there is no second chance:
+
+```rust
+glib::set_prgname(Some(APP_ID));
+```
+
+The desktop entry's `StartupWMClass` now says the same thing, and
+`the_window_calls_itself_what_the_desktop_entry_calls_it` asserts both halves
+— that the window reports the application id, and that the entry which ships
+looks for it. Either alone can drift; together they are what an icon depends
+on.
+
+**This is not `_NET_WM_ICON`,** and no amount of `set_icon_name` would have
+helped: GTK4's X11 backend sets that property under no circumstances, which
+was measured with an icon name that certainly resolves. On this platform an
+application does not carry its icon — it carries its name, and the icon is
+looked up from that.
+
 ## Active pane
 
 Exactly one pane is active. It is marked by a style class on its **path bar**,
