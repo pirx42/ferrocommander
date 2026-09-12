@@ -142,6 +142,7 @@ The project is in its build-up phase; this table grows with the code.
 | Favourite directories (Ctrl+D): the list, and where it lives | [docs/keymap.md](docs/keymap.md) + [docs/config.md](docs/config.md) |
 | Settings: where they live, what survives a restart | [docs/config.md](docs/config.md) |
 | Building the Ubuntu package, the Windows zip or the macOS app, and what is in each | [docs/packaging.md](docs/packaging.md) |
+| Remaking the README screenshot, and why it is cropped | [docs/ui-shell.md](docs/ui-shell.md) § *The README screenshot* |
 | Building or testing on Windows, and why it just failed | [docs/windows.md](docs/windows.md) |
 | The command line, `cd`, history, command output | [docs/command-line.md](docs/command-line.md) |
 | `Ctrl+C`/`X`/`V`, and talking to other file managers | [docs/clipboard.md](docs/clipboard.md) |

@@ -773,3 +773,46 @@ the matching test red.
 key controller for Escape to work turned out to be false — removing the phase
 left every test green, so the line went and the comment with it. A test suite
 is also how you find out which of your explanations were guesses.
+
+## The README screenshot
+
+`assets/screenshot-panes.png` is what [the README](../README.md) opens with,
+and `scripts/render-screenshot.sh` is what makes it: the real binary on a
+private X server, driven with the same `xdotool` key presses the end-to-end
+suite uses. A picture posed by hand is a picture that stops being true the
+first time the UI moves, and nobody finds out — whereas this one is a minute's
+work to remake, so there is no reason not to.
+
+It shows three marked rows and one of them counted: `Space` on `crates`, which
+is the one thing a still picture can say about a file manager that a list of
+key names cannot. The status line underneath does the explaining —
+`3 of 12 selected — 939.2 KiB of 993.1 KiB` — because the counted folder is
+the difference between the two figures.
+
+**The tree is invented.** Sizes come from `truncate`, so the 5 GB iso in the
+right pane costs no disk and the folder count stays instant, and every mtime is
+set one by one: a listing where every row carries the same minute looks like
+exactly what it is. What is *not* invented is any pixel — the app read that
+tree and drew what it found.
+
+**The drive bar is cropped off**, and not for looks. A drive button is
+labelled with the mount it stands for (§ *The drive bar*), so the bar
+photographs whatever the machine that took the picture happens to have
+mounted — on a build container, the build container. The crop finds the bar
+rather than assuming its height: the first coloured row down the left edge is
+the top of the path bar, and everything above it goes.
+
+Two things follow from the fixture root being **visible in the image**, in the
+path bar and on the command line. It defaults to `/home/pirx` rather than to a
+temporary directory nobody would want to read; and because that is a directory
+somebody may already own, the script writes into it only when an earlier run
+left its marker there, or when nothing is there at all.
+
+Unlike the icons ([packaging.md](packaging.md)), the result is not checked by
+the gate. Two renders on one machine are **pixel**-identical — that is how the
+committed image was confirmed to be the one this script makes, with
+`compare -metric AE` reporting 0 — but the PNG bytes differ, because
+ImageMagick stamps the file, and on another machine the free-space figure in
+the status line comes from another disk. So there is nothing here for a
+`--check` to compare against. Re-render when the pane's appearance changes,
+not on a schedule.

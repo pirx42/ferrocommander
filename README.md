@@ -6,6 +6,14 @@ every operation on a key, and no waiting.
 
 Built from scratch in Rust and GTK4.
 
+![Two panes side by side: a project tree on the left with three rows marked and one folder showing a counted size, a downloads folder on the right](assets/screenshot-panes.png)
+
+Three rows are marked, and `Space` on `crates` has counted what that folder
+actually holds — `955 080` in the Size column, where every other folder still
+says `<DIR>`. The picture is rendered from the real binary by
+[`scripts/render-screenshot.sh`](scripts/render-screenshot.sh), driven with
+real key presses, so it can be remade the day the panes look different.
+
 ## Install on Ubuntu
 
 The latest build of `main` is published as a `.deb`:
