@@ -387,7 +387,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ```
 
 Copy the tree into the Linux filesystem rather than building on `/mnt/c` —
-9p makes a suite that already takes nine minutes very much worse — and run the
+9p makes a suite that already takes twelve minutes very much worse — and run the
 tests as a **non-root** user, or the permission-denial tests pass for the
 wrong reason.
 

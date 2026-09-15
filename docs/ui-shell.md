@@ -725,18 +725,27 @@ suite went from all-green to eight failures and back between runs, always with
 apps dying at startup on a display that had just answered. A suite that fails
 randomly teaches people to ignore red, so a mutex makes them queue.
 
-The cost is the suite's whole runtime: **160 tests × about 3.3 s each,
-measured at 527 s here on 2026-08-30**. It was "about half a minute" when that
-sentence was written and the suite had a handful of tests; nobody updated it
-as the suite grew, and an outside reader measured 530 s at 138 tests before we
-did.
+The cost is the suite's whole runtime: **187 tests, measured at 702.84 s here
+on 2026-09-12 and 741.15 s on 2026-09-15**. It was "about half a minute" when that sentence was written
+and the suite had a handful of tests; nobody updated it as the suite grew, and
+an outside reader measured 530 s at 138 tests before we did.
 
-**Dating the measurement did not keep it true.** The 138 above stood while the
-suite reached 160, in this file and in two others, each with a different
-number — which is the whole of what a documentation review is for. The
-per-test cost is the figure that holds across all of them: 3.20 s at 138,
-3.30 s at 160. Multiply it by whatever `cargo test -p fc-app --test ui`
-reports today rather than trusting the total here.
+**Dating the measurement did not keep it true — twice.** The 138 above stood
+while the suite reached 160, in this file and in two others, each carrying a
+different number, which is the whole of what a documentation review is for.
+Then the 160 stood while the suite reached 187, in the same three files, and a
+second review found it the same way.
+
+What failed the second time was the repair made the first: this paragraph used
+to offer the per-test cost as the figure that holds across all of them. It
+does not hold. 3.20 s at 138, 3.29 s at 160, 3.76 s at 187 — up a sixth across
+the three, and the three come from three different containers, so how much of
+the rise is the suite and how much is the machine is not something they can
+separate. The two runs three days apart settle at least that much: **the same
+187 tests took 702.84 s and 741.15 s on the same machine**, 3.76 s and 3.96 s
+per test, so a 5 % spread is in the measurement before the suite has changed
+at all. Multiply the per-test cost by what `cargo test -p fc-app --test ui`
+reports today if you want an estimate, and treat it as one.
 
 Four things the harness learned the hard way, each now a check rather than a
 sleep:

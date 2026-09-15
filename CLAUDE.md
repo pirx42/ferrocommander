@@ -82,12 +82,13 @@ its own shebang with `/usr/bin/env: 'bash\r'` — a failure that says nothing
 about what it is really about.
 
 The end-to-end suite (`cargo test -p fc-app --test ui`) drives the real
-binary with real key presses on a private X server and takes **about nine
-minutes**: 160 tests that each start an X server and an app, one at a time on
-purpose. Measured 527 s here on 2026-08-30; it costs about 3.3 s per test, so
-scale that by whatever the suite holds when you read this rather than trusting
-the total. Budget for it before running the gate. See
-[docs/ui-shell.md](docs/ui-shell.md).
+binary with real key presses on a private X server and takes **about twelve
+minutes**: 187 tests that each start an X server and an app, one at a time on
+purpose. Measured twice here, at 702.84 s on 2026-09-12 and 741.15 s on
+2026-09-15 — about 3.8 to 4.0 s per test. Scale that by whatever the suite
+holds when you read this rather than trusting the total, and see
+[docs/ui-shell.md](docs/ui-shell.md) for why even that is an estimate. Budget
+for it before running the gate.
 
 The full sequence must be green before every commit — see
 [docs/skills/25-green-suite-before-commit.md](docs/skills/25-green-suite-before-commit.md).

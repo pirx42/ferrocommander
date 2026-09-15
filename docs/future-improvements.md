@@ -227,12 +227,15 @@ answer ([packaging.md](packaging.md)). One of them has a named fallback if
 it fails: GDK may set a window class icon that takes precedence over the
 executable's, and the answer to that is `WM_SETICON` on the `HWND`
 ([windows.md](windows.md)).
-**The third was seen on 2026-09-12, and was broken**: Ubuntu showed a
-placeholder for the application itself, because the window reported a
-different name than the desktop entry it had to be matched against
-([ui-shell.md](ui-shell.md)). Fixed, with a test — and worth remembering as
-what this entry is for: the gate proving a file is in a package says
-nothing about what a desktop does with it.
+**A fourth case, which this entry did not list, was seen on 2026-09-12 and
+was broken**: on Ubuntu the desktop drew a placeholder for the application
+itself. Not one of the three above — the app's own icon, on the platform the
+entry treated as the settled one — because the window reported a different
+name than the desktop entry it had to be matched against
+([ui-shell.md](ui-shell.md)). Fixed, with a test, and it earns this entry its
+keep twice over: the gate proving a file is in a package says nothing about
+what a desktop does with it, and a list of the places nobody has looked is not
+a list of the places that are wrong.
 *Home:* the next Windows round, and whenever a Mac is next opened.
 *From:* the application-icon plan, 2026-09-11.
 
