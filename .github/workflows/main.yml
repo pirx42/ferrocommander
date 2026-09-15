@@ -12,6 +12,12 @@ on:
   push:
     branches: [main]
   # So the packaging can be exercised without waiting for a commit.
+  #
+  # **A dispatch from any branch publishes.** Neither the `create` in `linux`
+  # nor the two uploads is guarded on the ref, so exercising the packaging
+  # from a topic branch replaces the rolling release that the README's
+  # download URLs point at, with a build of that branch. Dispatch from `main`,
+  # or expect to have published whatever you dispatched.
   workflow_dispatch:
 
 # Read-only except for the one thing this has to do: replace a release. A

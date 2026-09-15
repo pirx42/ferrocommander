@@ -267,6 +267,64 @@ pulls in, pinned once in the workspace so the two cannot become two copies.
 placement and for the shell's own dialogs — *Properties* — to be parented
 on.
 
+## GTK 4.24 broke the link, and `gdk4-win32` cannot follow
+
+**CI run #44, 2026-09-15.** The windows job failed at *Package* with a linker
+error and nothing else changed:
+
+```
+undefined reference to `gdk_win32_display_get_win32hcursor'
+```
+
+The cause is not in this repository. Two runs three days apart, on the same
+`Cargo.lock` and the same Rust sources, differ in exactly one thing:
+
+| run | MSYS2 package | windows job |
+|---|---|---|
+| #43, 2026-09-12 | `mingw-w64-x86_64-gtk4-4.22.4-1` | green |
+| #44, 2026-09-15 | `mingw-w64-x86_64-gtk4-4.24.0-1` | the link error above |
+
+The workflow installs MSYS2 with `update: true`, so the runner takes whatever
+GTK4 MSYS2 ships that morning. GTK 4.24 no longer exports
+`gdk_win32_display_get_win32hcursor`, and `gdk4-win32 0.11.0` declares it
+**unconditionally** — `gdk4-win32-sys/src/lib.rs` has the `extern`, and
+`src/auto/win32_display.rs` calls it from `Win32Display::win32hcursor`. No
+feature gates it; the crate's features are only `v4_4`, `v4_8`, `v4_20`, `egl`
+and `win32`. So every build of the crate emits the reference whether or not
+this program ever asks for a cursor — and this program does not. It uses
+`gdk4-win32` for one line, in `menu.rs`:
+
+```rust
+let surface = surface.downcast::<gdk4_win32::Win32Surface>().ok()?;
+Some(surface.handle().0 as isize)
+```
+
+the `HWND` the shell context menu is owned by (§ *The context menu is
+Explorer's*).
+
+**There is no version to upgrade to.** `0.11.0` is the newest `gdk4-win32` on
+crates.io — the published list ends `0.10.1, 0.10.3, 0.11.0-alpha.1,
+0.11.0-alpha.2, 0.11.0-alpha.3, 0.11.0`. gtk-rs has not yet shipped a release
+built against GTK 4.24.
+
+That leaves two repairs, and they differ in kind:
+
+- **Pin the runner's GTK4 to 4.22.4.** No application code changes. It needs a
+  downloadable `mingw-w64-x86_64-gtk4-4.22.4-1-any.pkg.tar.zst`, and MSYS2's
+  repository carries current packages only — whether a historical archive
+  holds it, and at what URL, is the open question. It also freezes the
+  published Windows build on a GTK that MSYS2 has already moved past.
+- **Stop depending on `gdk4-win32`.** The `HWND` is one hand-declared
+  `extern "C"` away, and this file already hand-declares `ShellExecuteW` and
+  `CoInitializeEx` for the same reason. It removes two dependencies and this
+  entire class of version skew. It cannot be checked by the Linux gate, which
+  cross-*lints* `fc-core` for `x86_64-pc-windows-gnu` and never links
+  `fc-app`, so the first real check is either a Windows machine or a CI run.
+
+Whichever wins, the lesson is the one the gate cannot enforce: **the Windows
+build links against a rolling GTK that nothing in this repository pins**, and
+a binding crate that must track GTK's ABI is the part that notices first.
+
 ## The icon lives in the `.exe`, not in the toolkit
 
 Windows draws an application's icon — the taskbar button, `Alt+Tab`, the

@@ -239,6 +239,25 @@ a list of the places that are wrong.
 *Home:* the next Windows round, and whenever a Mac is next opened.
 *From:* the application-icon plan, 2026-09-11.
 
+**Nothing pins the GTK the Windows build links against.**
+The windows job installs MSYS2 with `update: true`, so it takes whatever
+`mingw-w64-x86_64-gtk4` MSYS2 ships that morning. On 2026-09-15 that became
+4.24.0, which no longer exports `gdk_win32_display_get_win32hcursor`, and the
+job has failed at *Package* ever since: `gdk4-win32 0.11.0` declares that
+symbol unconditionally, no newer release of the crate exists, and this program
+uses the crate for exactly one line — the `HWND` the shell context menu is
+owned by ([windows.md](windows.md)).
+
+The two repairs differ in kind — pin the runner's GTK, or stop depending on
+`gdk4-win32` and hand-declare the one call — and **neither can be checked
+here**: the Linux gate cross-lints `fc-core` for the Windows target and never
+links `fc-app`, so the first real check is a Windows machine or a CI run. The
+pin additionally needs an old MSYS2 package that the repository may no longer
+carry.
+*Home:* the next Windows round, or the day gtk-rs releases a `gdk4-win32`
+built against GTK 4.24.
+*From:* CI run #44, 2026-09-15.
+
 **One reading of the right button was decided against, not forgotten.**
 A right click marks, in either pane, which is Total Commander's
 behaviour and was chosen on 2026-09-01 — while the menu itself acts on
