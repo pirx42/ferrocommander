@@ -267,9 +267,12 @@ fn show(
 #[cfg(windows)]
 mod windows {
     use std::cell::RefCell;
+    use std::ffi::c_void;
     use std::rc::Rc;
 
+    use glib::translate::ToGlibPtr;
     use gtk::prelude::*;
+    use gtk::{gdk, glib};
 
     use fc_shellmenu::{Menu, Where};
 
@@ -352,10 +355,25 @@ mod windows {
     }
 
     /// The window's `HWND`, through GDK's Win32 surface.
+    ///
+    /// The call is declared here rather than reached through `gdk4-win32`.
+    /// That crate binds the whole backend, and its bindings name symbols this
+    /// program never calls — one of which GTK stopped exporting in 4.24, so a
+    /// program that asks for no cursors stopped linking over a cursor
+    /// function ([`docs/windows.md`]). One `extern` for the one thing wanted
+    /// cannot rot that way, and this is how the rest of Win32 is reached
+    /// here already (`command.rs`).
     fn window_handle(window: &gtk::ApplicationWindow) -> Option<isize> {
         let surface = window.surface()?;
-        let surface = surface.downcast::<gdk4_win32::Win32Surface>().ok()?;
-        Some(surface.handle().0 as isize)
+        // SAFETY: the surface outlives the call, which reads the handle GDK
+        // already holds — it takes no ownership and frees nothing.
+        let handle = unsafe { gdk_win32_surface_get_handle(surface.to_glib_none().0) };
+        Some(handle as isize)
+    }
+
+    extern "C" {
+        /// GDK's Win32 backend, in the `gtk-4` the program already links.
+        fn gdk_win32_surface_get_handle(surface: *mut gdk::ffi::GdkSurface) -> *mut c_void;
     }
 }
 

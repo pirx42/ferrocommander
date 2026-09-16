@@ -32,7 +32,6 @@ windows = { version = "0.56", features = [
 # The one thing the application itself needs from Win32: the window's
 # `HWND`, which the shell menu is placed relative to and the shell's own
 # dialogs are parented on.
-gdk4-win32 = "0.11"
 tempfile = "3"
 # Percent-encoding for the `file://` URIs the clipboard carries. A path with
 # a space in it is ordinary, and encoding one by hand is the kind of small
